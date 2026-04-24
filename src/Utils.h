@@ -5,26 +5,25 @@
 #include <sstream>
 #include <iomanip>
 #include <SFML/System/Vector2.hpp>
+#include <SFML/Graphics/Rect.hpp>
+
 
 // ─────────────────────────────────────────────────────────────
-//  Random number generator  (single global instance)
+//  Random number generator
 // ─────────────────────────────────────────────────────────────
 inline std::mt19937& rng() {
     static std::mt19937 gen{ std::random_device{}() };
     return gen;
 }
 
-/// Integer in [lo, hi]
 inline int randInt(int lo, int hi) {
     return std::uniform_int_distribution<int>{ lo, hi }(rng());
 }
 
-/// Float in [lo, hi)
 inline float randFloat(float lo, float hi) {
     return std::uniform_real_distribution<float>{ lo, hi }(rng());
 }
 
-/// True with probability p  (0.0 – 1.0)
 inline bool chance(float p) {
     return randFloat(0.f, 1.f) < p;
 }
@@ -55,24 +54,20 @@ inline float distance(sf::Vector2f a, sf::Vector2f b) {
     return std::sqrt(distanceSq(a, b));
 }
 
-/// Clamp a value between lo and hi
 template<typename T>
 inline T clamp(T val, T lo, T hi) {
     return val < lo ? lo : (val > hi ? hi : val);
 }
 
-/// Linear interpolation
 inline float lerp(float a, float b, float t) {
     return a + (b - a) * clamp(t, 0.f, 1.f);
 }
 
 // ─────────────────────────────────────────────────────────────
-//  Number formatting helpers
+//  Number formatting
 // ─────────────────────────────────────────────────────────────
-
-/// "1.23M", "456K", "789" etc.
 inline std::string formatBig(double val) {
-    const double T  = 1e12, B = 1e9, M = 1e6, K = 1e3;
+    const double T = 1e12, B = 1e9, M = 1e6, K = 1e3;
     std::ostringstream ss;
     ss << std::fixed << std::setprecision(2);
     if      (val >= T) { ss << val / T << "T"; }
@@ -83,12 +78,10 @@ inline std::string formatBig(double val) {
     return ss.str();
 }
 
-/// Price tag:  "123" or "1.50K" etc.
 inline std::string formatCost(double cost) {
     return formatBig(cost);
 }
 
-/// Percentage with one decimal:  "12.5%"
 inline std::string pct(float val) {
     std::ostringstream ss;
     ss << std::fixed << std::setprecision(1) << val * 100.f << "%";
@@ -96,21 +89,35 @@ inline std::string pct(float val) {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  Upgrade cost scaling  (base * multiplier ^ level)
+//  Upgrade cost scaling
 // ─────────────────────────────────────────────────────────────
 inline double upgradeCost(double base, double mult, int level) {
     return base * std::pow(mult, static_cast<double>(level));
 }
 
 // ─────────────────────────────────────────────────────────────
-//  Angle helpers (degrees ↔ radians)
+//  Angle helpers
 // ─────────────────────────────────────────────────────────────
 constexpr float PI = 3.14159265358979f;
 
 inline float toRad(float deg) { return deg * PI / 180.f; }
 inline float toDeg(float rad) { return rad * 180.f / PI; }
 
-/// Angle (radians) from point a toward point b
 inline float angleTo(sf::Vector2f a, sf::Vector2f b) {
     return std::atan2(b.y - a.y, b.x - a.x);
 }
+
+// ─────────────────────────────────────────────────────────────
+//  SFML 3 helpers  — vervangt veelgebruikte SFML 2 patronen
+// ─────────────────────────────────────────────────────────────
+
+/// Maak een sf::FloatRect aan (SFML 3 gebruikt {pos, size})
+inline sf::FloatRect makeRect(float x, float y, float w, float h) {
+    return sf::FloatRect({ x, y }, { w, h });
+}
+
+/// rect.left  → rect.position.x  (shortcuts voor leesbaarheid)
+inline float rectLeft  (const sf::FloatRect& r) { return r.position.x; }
+inline float rectTop   (const sf::FloatRect& r) { return r.position.y; }
+inline float rectWidth (const sf::FloatRect& r) { return r.size.x; }
+inline float rectHeight(const sf::FloatRect& r) { return r.size.y; }

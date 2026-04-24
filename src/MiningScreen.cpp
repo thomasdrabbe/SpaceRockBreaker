@@ -2,7 +2,6 @@
 #include "Utils.h"
 #include <cmath>
 #include <sstream>
-#include <iomanip>
 #include <algorithm>
 
 // ═════════════════════════════════════════════════════════════
@@ -24,9 +23,12 @@ void MiningScreen::init(sf::Font& font,
     m_w    = panelW;
     m_h    = panelH;
 
-    // Collector sits at centre-bottom of the mining panel
-    m_player.init(m_x + m_w * 0.5f, m_y + m_h * 0.5f);
-	m_collectorPos = m_player.pos;
+    m_collectorPos = { m_x + m_w * 0.5f,
+                       m_y + m_h * 0.5f };
+
+    m_player.init(m_x + m_w * 0.5f,
+                  m_y + m_h * 0.5f);
+
     buildStarfield();
 }
 
@@ -54,11 +56,10 @@ void MiningScreen::syncTurrets(const GameState& state) {
     }
 }
 
-// ═════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────
 //  targetAsteroidCount
-// ═════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────
 int MiningScreen::targetAsteroidCount(int turrets) {
-    // More turrets → more targets, capped at MAX_ASTEROIDS
     return std::min(6 + turrets * 3, MAX_ASTEROIDS);
 }
 
@@ -70,36 +71,37 @@ void MiningScreen::update(float      dt,
                             double&    creditsEarned,
                             double&    oreEarned) {
 
-    // ── Sync turret layout ─────────────────────────────────
+    // ── Sync turrets ──────────────────────────────────────
     syncTurrets(state);
-    // Turrets volgen de speler
-  m_turrets.followPlayer(m_player.pos);
-	// ── Player update ──────────────────────────────────────
-	m_player.update(dt,
-					1.f / state.fireRatePerSec(),
-					state.gunDamage(),
-					state.critChance(),
-					state.critMult(),
-					state.splitShot(),
-					m_w, m_h,
-					m_asteroids,
-					m_bullets,
-					m_particles);
 
-	// Collector volgt speler
-	m_collectorPos = m_player.pos;
+    // ── Player update ─────────────────────────────────────
+    m_player.update(dt,
+                    1.f / state.fireRatePerSec(),
+                    state.gunDamage(),
+                    state.critChance(),
+                    state.critMult(),
+                    state.splitShot(),
+                    m_w, m_h,
+                    m_asteroids,
+                    m_bullets,
+                    m_particles);
 
-    // ── HP multiplier for asteroids ────────────────────────
+    // Collector volgt speler
+    m_collectorPos = m_player.pos;
+
+    // Turrets volgen speler
+    m_turrets.followPlayer(m_player.pos);
+
+    // ── HP multiplier ─────────────────────────────────────
     float hpMult = std::max(0.1f,
         1.f - state.levelOf(UpgradeID::ASTEROID_HP) * 0.1f);
 
-    // ── Maintain asteroid field ────────────────────────────
+    // ── Asteroid field ────────────────────────────────────
     int target = targetAsteroidCount(state.turretCount());
     m_asteroids.maintainField(target, m_w, m_h, hpMult);
-
-    // ── Update sub-systems ────────────────────────────────
     m_asteroids.update(dt, m_w, m_h);
 
+    // ── Turrets ───────────────────────────────────────────
     m_turrets.update(dt,
                      1.f / state.fireRatePerSec(),
                      state.gunDamage(),
@@ -110,27 +112,26 @@ void MiningScreen::update(float      dt,
                      m_bullets,
                      m_particles);
 
+    // ── Bullets ───────────────────────────────────────────
     m_bullets.update(dt, m_w, m_h);
 
-    // ── Bullet ↔ Asteroid collisions ──────────────────────
-    resolveCollisions(state, creditsEarned);
+    // ── Collisions ────────────────────────────────────────
+    resolveCollisions(state);
 
-    // ── Ore collection ────────────────────────────────────
+    // ── Ore collectie (alleen ore, geen credits) ──────────
     double oreThisFrame = 0.0;
-
     m_ores.update(dt,
-                m_collectorPos,
-                state.autoCollectRadius(),
-                oreThisFrame,
-                state.bulkProcess(),
-                m_particles);
-
+                  m_collectorPos,
+                  state.autoCollectRadius(),
+                  oreThisFrame,
+                  state.bulkProcess(),
+                  m_particles);
     oreEarned += oreThisFrame;
 
     // ── Particles ─────────────────────────────────────────
     m_particles.update(dt);
 
-    // ── Scroll stars (slow parallax downward) ─────────────
+    // ── Sterren scrollen ──────────────────────────────────
     for (auto& s : m_stars) {
         s.pos.y += s.speed * dt;
         if (s.pos.y > m_y + m_h + 4.f)
@@ -141,8 +142,7 @@ void MiningScreen::update(float      dt,
 // ═════════════════════════════════════════════════════════════
 //  resolveCollisions
 // ═════════════════════════════════════════════════════════════
-void MiningScreen::resolveCollisions(GameState& state,
-                                      double&    creditsEarned) {
+void MiningScreen::resolveCollisions(GameState& state) {
     for (auto& bullet : m_bullets.all()) {
         if (!bullet.alive) continue;
 
@@ -150,25 +150,22 @@ void MiningScreen::resolveCollisions(GameState& state,
             if (!asteroid.alive) continue;
 
             float dist = distance(bullet.pos, asteroid.pos);
-            if (dist > bullet.radius + asteroid.radius) continue;
+            if (dist > bullet.radius + asteroid.radius)
+                continue;
 
-            // Hit!
             bullet.alive = false;
 
-            bool destroyed = asteroid.hit(bullet.damage, m_particles);
-
+            bool destroyed = asteroid.hit(bullet.damage,
+                                           m_particles);
             if (destroyed) {
-                // Drop ore pieces
                 m_ores.drop(
                     asteroid.pos,
                     asteroid.oreDrop.color,
-                    asteroid.oreDrop.value,
                     asteroid.oreDrop.count,
-                    state.oreValueMult(),
                     state.oreLuckBonus(),
                     m_particles);
             }
-            break;   // one bullet hits one asteroid
+            break;
         }
     }
 }
@@ -186,7 +183,6 @@ void MiningScreen::collectAllOre(double&          oreOut,
 // ═════════════════════════════════════════════════════════════
 void MiningScreen::clearAll() {
     m_ores.clearAll();
-    // Bullets and asteroids will naturally repopulate next frame
     for (auto& b : m_bullets.all()) b.alive = false;
     for (auto& a : m_asteroids.all()) a.alive = false;
 }
@@ -197,7 +193,6 @@ void MiningScreen::clearAll() {
 void MiningScreen::draw(sf::RenderTarget& target,
                          const GameState&  state) const {
 
-    // Clip rendering to the mining panel via a sub-view
     sf::View oldView = target.getView();
 
     float vpX = m_x / WINDOW_WIDTH;
@@ -205,13 +200,15 @@ void MiningScreen::draw(sf::RenderTarget& target,
     float vpW = m_w / WINDOW_WIDTH;
     float vpH = m_h / WINDOW_HEIGHT;
 
-    sf::View mineView(sf::FloatRect(m_x, m_y, m_w, m_h));
-    mineView.setViewport(sf::FloatRect(vpX, vpY, vpW, vpH));
+    sf::View mineView(sf::FloatRect(
+        { m_x, m_y }, { m_w, m_h }));
+    mineView.setViewport(sf::FloatRect(
+        { vpX, vpY }, { vpW, vpH }));
     target.setView(mineView);
 
     // ── Background ────────────────────────────────────────
-    sf::RectangleShape bg({ m_w, m_h });
-    bg.setPosition(m_x, m_y);
+    sf::RectangleShape bg(sf::Vector2f{ m_w, m_h });
+    bg.setPosition({ m_x, m_y });
     bg.setFillColor(sf::Color(4, 6, 16));
     target.draw(bg);
 
@@ -219,16 +216,17 @@ void MiningScreen::draw(sf::RenderTarget& target,
     drawCollectRing(target, state);
     drawCollector(target);
 
-    // ── Game entities ─────────────────────────────────────
+    // ── Entities ──────────────────────────────────────────
     m_asteroids.draw(target);
     m_ores.draw(target);
     m_bullets.draw(target);
     m_turrets.draw(target);
-	m_player.draw(target);
+    m_player.draw(target);
     m_particles.draw(target, *m_font);
 
-    // ── HUD overlay ───────────────────────────────────────
     target.setView(oldView);
+
+    // ── HUD (buiten clipped view) ─────────────────────────
     drawHUD(target, state);
 }
 
@@ -239,23 +237,22 @@ void MiningScreen::drawStarfield(sf::RenderTarget& target) const {
     sf::CircleShape star;
     for (const auto& s : m_stars) {
         star.setRadius(s.radius);
-        star.setOrigin(s.radius, s.radius);
+        star.setOrigin({ s.radius, s.radius });
         star.setPosition(s.pos);
-        star.setFillColor(sf::Color(s.brightness,
-                                     s.brightness,
-                                     s.brightness, 200));
+        star.setFillColor(sf::Color(
+            s.brightness, s.brightness,
+            s.brightness, 200));
         target.draw(star);
     }
 }
 
 // ─────────────────────────────────────────────────────────────
-//  drawCollector  — the base that collects ore
+//  drawCollector
 // ─────────────────────────────────────────────────────────────
 void MiningScreen::drawCollector(sf::RenderTarget& target) const {
-
-    // Outer ring (pulsing handled by caller if desired)
+    // Outer ring
     sf::CircleShape outer(18.f);
-    outer.setOrigin(18.f, 18.f);
+    outer.setOrigin({ 18.f, 18.f });
     outer.setPosition(m_collectorPos);
     outer.setFillColor(sf::Color(20, 30, 60, 200));
     outer.setOutlineColor(sf::Color(80, 140, 255, 200));
@@ -264,28 +261,28 @@ void MiningScreen::drawCollector(sf::RenderTarget& target) const {
 
     // Inner core
     sf::CircleShape inner(9.f);
-    inner.setOrigin(9.f, 9.f);
+    inner.setOrigin({ 9.f, 9.f });
     inner.setPosition(m_collectorPos);
     inner.setFillColor(sf::Color(100, 160, 255, 230));
     target.draw(inner);
 
     // Centre dot
     sf::CircleShape dot(3.5f);
-    dot.setOrigin(3.5f, 3.5f);
+    dot.setOrigin({ 3.5f, 3.5f });
     dot.setPosition(m_collectorPos);
     dot.setFillColor(sf::Color(220, 235, 255));
     target.draw(dot);
 }
 
 // ─────────────────────────────────────────────────────────────
-//  drawCollectRing  — shows auto-collect radius
+//  drawCollectRing
 // ─────────────────────────────────────────────────────────────
 void MiningScreen::drawCollectRing(sf::RenderTarget& target,
                                     const GameState&  state) const {
     float r = state.autoCollectRadius();
 
     sf::CircleShape ring(r);
-    ring.setOrigin(r, r);
+    ring.setOrigin({ r, r });
     ring.setPosition(m_collectorPos);
     ring.setFillColor(sf::Color::Transparent);
     ring.setOutlineColor(sf::Color(80, 140, 255, 35));
@@ -294,43 +291,46 @@ void MiningScreen::drawCollectRing(sf::RenderTarget& target,
 }
 
 // ─────────────────────────────────────────────────────────────
-//  drawHUD  — top-left info overlay
+//  drawHUD
 // ─────────────────────────────────────────────────────────────
 void MiningScreen::drawHUD(sf::RenderTarget& target,
                              const GameState&  state) const {
-    sf::Text txt;
-    txt.setFont(*m_font);
-    txt.setCharacterSize(13);
-
-    float hx = m_x + 10.f;
-    float hy = m_y + 8.f;
-    float lineH = 17.f;
-
-    auto drawLine = [&](const std::string& s,
-                         sf::Color col = sf::Color(200, 210, 240)) {
-        txt.setString(s);
-        txt.setFillColor(col);
-        txt.setPosition(hx, hy);
-        target.draw(txt);
-        hy += lineH;
-    };
-
-    // Semi-transparent HUD background
-    sf::RectangleShape hudBg({ 210.f, 90.f });
-    hudBg.setPosition(m_x + 5.f, m_y + 4.f);
+    // HUD achtergrond
+    sf::RectangleShape hudBg(sf::Vector2f{ 220.f, 96.f });
+    hudBg.setPosition({ m_x + 5.f, m_y + 4.f });
     hudBg.setFillColor(sf::Color(4, 6, 16, 170));
     hudBg.setOutlineColor(sf::Color(40, 60, 100, 120));
     hudBg.setOutlineThickness(1.f);
     target.draw(hudBg);
 
-    drawLine("Asteroids : " + std::to_string(m_asteroids.aliveCount()),
+    float hx    = m_x + 10.f;
+    float hy    = m_y + 8.f;
+    float lineH = 17.f;
+
+    auto drawLine = [&](const std::string& s,
+                         sf::Color col = sf::Color(200, 210, 240)) {
+        sf::Text txt(*m_font);
+        txt.setCharacterSize(13);
+        txt.setString(s);
+        txt.setFillColor(col);
+        txt.setPosition({ hx, hy });
+        target.draw(txt);
+        hy += lineH;
+    };
+
+    drawLine("Asteroids : " +
+             std::to_string(m_asteroids.aliveCount()),
              sf::Color(180, 200, 255));
-    drawLine("Bullets   : " + std::to_string(m_bullets.aliveCount()),
+    drawLine("Bullets   : " +
+             std::to_string(m_bullets.aliveCount()),
              sf::Color(160, 230, 255));
-    drawLine("Ore drops : " + std::to_string(m_ores.aliveCount()),
+    drawLine("Ore drops : " +
+             std::to_string(m_ores.aliveCount()),
              sf::Color(200, 220, 140));
-    drawLine("Particles : " + std::to_string(m_particles.alive()),
+    drawLine("Particles : " +
+             std::to_string(m_particles.alive()),
              sf::Color(160, 160, 180));
-    drawLine("Turrets   : " + std::to_string(m_turrets.activeCount()),
+    drawLine("Turrets   : " +
+             std::to_string(m_turrets.activeCount()),
              sf::Color(255, 180, 100));
 }

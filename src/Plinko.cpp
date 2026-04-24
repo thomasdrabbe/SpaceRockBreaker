@@ -13,7 +13,7 @@ PlinkoBoard::PlinkoBoard() {
 }
 
 // ═════════════════════════════════════════════════════════════
-//  build  — (re)create peg grid and slot row
+//  build
 // ═════════════════════════════════════════════════════════════
 void PlinkoBoard::build(int   rows,
                          float boardX, float boardY,
@@ -30,21 +30,20 @@ void PlinkoBoard::build(int   rows,
 }
 
 // ─────────────────────────────────────────────────────────────
-//  buildPegs  — triangle grid (row i has i+2 pegs)
+//  buildPegs
 // ─────────────────────────────────────────────────────────────
 void PlinkoBoard::buildPegs() {
     m_pegs.clear();
 
-    float usableH = m_boardH - SLOT_HEIGHT - 30.f;   // leave room for slots
+    float usableH = m_boardH - SLOT_HEIGHT - 30.f;
     float rowStep = usableH / static_cast<float>(m_rows + 1);
 
     for (int row = 0; row < m_rows; row++) {
-        int pegsInRow = row + 2;
-        float y       = m_boardY + rowStep * (row + 1);
-        float spacing = m_boardW / static_cast<float>(pegsInRow + 1);
-
-        // Odd rows offset by half a spacing for the triangle pattern
-        float xOffset = (row % 2 == 1) ? spacing * 0.5f : 0.f;
+        int   pegsInRow = row + 2;
+        float y         = m_boardY + rowStep * (row + 1);
+        float spacing   = m_boardW /
+                          static_cast<float>(pegsInRow + 1);
+        float xOffset   = (row % 2 == 1) ? spacing * 0.5f : 0.f;
 
         for (int col = 0; col < pegsInRow; col++) {
             Peg peg;
@@ -59,21 +58,14 @@ void PlinkoBoard::buildPegs() {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  slotMult  — centre slots pay most, edges less (luck skews up)
+//  slotMult
 // ─────────────────────────────────────────────────────────────
 float PlinkoBoard::slotMult(int slotIdx, int totalSlots,
                               float bonus, float luck) {
-    // Normalised distance from centre [0=centre, 1=edge]
     float centre = (totalSlots - 1) * 0.5f;
     float dist   = std::abs(slotIdx - centre) / centre;
-
-    // Base multiplier: centre=8x, edge=0.5x  (log curve)
-    float base = 8.f * std::pow(1.f - dist, 2.2f) + 0.5f;
-
-    // Luck pulls the curve upward uniformly
+    float base   = 8.f * std::pow(1.f - dist, 2.2f) + 0.5f;
     base += luck * 3.f;
-
-    // Apply bonus multiplier from upgrades
     return base * bonus;
 }
 
@@ -83,19 +75,17 @@ float PlinkoBoard::slotMult(int slotIdx, int totalSlots,
 void PlinkoBoard::buildSlots(float multBonus, float plinkoLuck) {
     m_slots.clear();
 
-    // Number of slots = pegs in last row + 1
-    int numSlots   = m_rows + 2;
-    float slotW    = m_boardW / static_cast<float>(numSlots);
-    float slotTopY = m_boardY + m_boardH - SLOT_HEIGHT;
+    int   numSlots  = m_rows + 2;
+    float slotW     = m_boardW / static_cast<float>(numSlots);
+    float slotTopY  = m_boardY + m_boardH - SLOT_HEIGHT;
 
-    // Colour palette: centre = gold, edges = blue/purple
     for (int i = 0; i < numSlots; i++) {
         PlinkoSlot s;
-        s.pos   = { m_boardX + i * slotW, slotTopY };
-        s.width = slotW;
-        s.multiplier = slotMult(i, numSlots, multBonus, plinkoLuck);
+        s.pos        = { m_boardX + i * slotW, slotTopY };
+        s.width      = slotW;
+        s.multiplier = slotMult(i, numSlots,
+                                multBonus, plinkoLuck);
 
-        // Colour: interpolate gold (centre) → teal (edge)
         float t = std::abs(i - (numSlots - 1) * 0.5f)
                   / ((numSlots - 1) * 0.5f);
         s.color = sf::Color(
@@ -129,9 +119,9 @@ bool PlinkoBoard::dropBall(double oreValue, float dropX) {
     PlinkoBall* b = claimBall();
     if (!b) return false;
 
-    // Default drop position: random across top of board
     float x = (dropX < 0.f)
-               ? randFloat(m_boardX + 20.f, m_boardX + m_boardW - 20.f)
+               ? randFloat(m_boardX + 20.f,
+                            m_boardX + m_boardW - 20.f)
                : dropX;
 
     b->pos      = { x, m_boardY + 5.f };
@@ -169,18 +159,14 @@ void PlinkoBoard::resolvePegCollision(PlinkoBall& ball) {
         float        minD = ball.radius + PLINKO_PEG_RADIUS;
 
         if (dist < minD && dist > 0.001f) {
-            // Push ball out of peg
             sf::Vector2f normal = diff / dist;
             ball.pos = peg.pos + normal * (minD + 0.5f);
 
-            // Reflect velocity with energy loss
             float vDotN = dot(ball.vel, normal);
             ball.vel   -= normal * (1.f + PEG_BOUNCE) * vDotN;
-
-            // Add small random horizontal nudge for natural feel
             ball.vel.x += randFloat(-25.f, 25.f);
 
-            peg.hitFlash = 0.12f;   // visual flash
+            peg.hitFlash = 0.12f;
         }
     }
 }
@@ -203,7 +189,7 @@ void PlinkoBoard::resolveWallCollision(PlinkoBall& ball) {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  findSlot  — which bucket index does x land in?
+//  findSlot
 // ─────────────────────────────────────────────────────────────
 int PlinkoBoard::findSlot(float x) const {
     for (int i = 0; i < static_cast<int>(m_slots.size()); i++) {
@@ -211,7 +197,6 @@ int PlinkoBoard::findSlot(float x) const {
         float right = left + m_slots[i].width;
         if (x >= left && x < right) return i;
     }
-    // Clamp to edges
     return (x < m_boardX + m_boardW * 0.5f)
            ? 0
            : static_cast<int>(m_slots.size()) - 1;
@@ -223,52 +208,47 @@ int PlinkoBoard::findSlot(float x) const {
 void PlinkoBoard::update(float dt, double& creditsOut,
                           float creditMult, int bulkMult,
                           ParticleSystem& particles) {
-
     float slotTopY = m_boardY + m_boardH - SLOT_HEIGHT;
 
-    // Fade peg flashes
     for (auto& peg : m_pegs)
         if (peg.hitFlash > 0.f) peg.hitFlash -= dt;
 
-    // Fade slot flashes
     for (auto& s : m_slots)
         if (s.flashTimer > 0.f) s.flashTimer -= dt;
 
     for (auto& ball : m_balls) {
         if (!ball.alive) continue;
 
-        // ── Gravity ───────────────────────────────────────
+        // Physics
         ball.vel.y += PLINKO_GRAVITY * dt;
         ball.vel   *= BALL_FRICTION;
         ball.pos   += ball.vel * dt;
 
-        // ── Collisions ────────────────────────────────────
         resolvePegCollision(ball);
         resolveWallCollision(ball);
 
-        // ── Scoring: ball enters a slot ───────────────────
+        // Scoring
         if (!ball.scored && ball.pos.y >= slotTopY) {
-            ball.scored = true;
-            int slotIdx = findSlot(ball.pos.x);
+            ball.scored  = true;
+            int slotIdx  = findSlot(ball.pos.x);
 
-            if (slotIdx >= 0 && slotIdx < static_cast<int>(m_slots.size())) {
+            if (slotIdx >= 0 &&
+                slotIdx < static_cast<int>(m_slots.size())) {
                 auto& slot = m_slots[slotIdx];
 
                 double earned = ball.oreValue
-                                * static_cast<double>(slot.multiplier)
-                                * static_cast<double>(creditMult)
-                                * static_cast<double>(bulkMult);
+                    * static_cast<double>(slot.multiplier)
+                    * static_cast<double>(creditMult)
+                    * static_cast<double>(bulkMult);
 
-                creditsOut += earned;
-                slot.flashTimer = 0.6f;
+                creditsOut      += earned;
+                slot.flashTimer  = 0.6f;
 
-                // Credit burst particles
                 particles.emitExplosion(ball.pos, 18.f,
                                          slot.color, 12);
             }
         }
 
-        // ── Kill ball when it leaves the bottom ───────────
         if (ball.pos.y > m_boardY + m_boardH + 20.f)
             ball.alive = false;
     }
@@ -279,10 +259,9 @@ void PlinkoBoard::update(float dt, double& creditsOut,
 // ═════════════════════════════════════════════════════════════
 void PlinkoBoard::draw(sf::RenderTarget& target,
                         sf::Font&         font) const {
-
     // ── Board background ──────────────────────────────────
-    sf::RectangleShape bg({ m_boardW, m_boardH });
-    bg.setPosition(m_boardX, m_boardY);
+    sf::RectangleShape bg(sf::Vector2f{ m_boardW, m_boardH });
+    bg.setPosition({ m_boardX, m_boardY });
     bg.setFillColor(sf::Color(10, 12, 25, 220));
     bg.setOutlineColor(sf::Color(60, 80, 140, 180));
     bg.setOutlineThickness(2.f);
@@ -290,13 +269,13 @@ void PlinkoBoard::draw(sf::RenderTarget& target,
 
     // ── Pegs ──────────────────────────────────────────────
     sf::CircleShape pegShape(PLINKO_PEG_RADIUS);
-    pegShape.setOrigin(PLINKO_PEG_RADIUS, PLINKO_PEG_RADIUS);
+    pegShape.setOrigin({ PLINKO_PEG_RADIUS, PLINKO_PEG_RADIUS });
 
     for (const auto& peg : m_pegs) {
-        bool  flash = peg.hitFlash > 0.f;
-        uint8_t r   = flash ? 255 : 140;
-        uint8_t g   = flash ? 255 : 160;
-        uint8_t b   = flash ? 255 : 200;
+        bool    flash = peg.hitFlash > 0.f;
+        uint8_t r     = flash ? 255 : 140;
+        uint8_t g     = flash ? 255 : 160;
+        uint8_t b     = flash ? 255 : 200;
 
         pegShape.setPosition(peg.pos);
         pegShape.setFillColor(sf::Color(r, g, b));
@@ -306,38 +285,43 @@ void PlinkoBoard::draw(sf::RenderTarget& target,
     }
 
     // ── Slots ─────────────────────────────────────────────
-    sf::Text label;
-    label.setFont(font);
-    label.setCharacterSize(11);
-    label.setStyle(sf::Text::Bold);
-
     for (const auto& slot : m_slots) {
-        float flash  = clamp(slot.flashTimer / 0.6f, 0.f, 1.f);
+        float   flash = clamp(slot.flashTimer / 0.6f, 0.f, 1.f);
         uint8_t alpha = static_cast<uint8_t>(160 + 95 * flash);
 
-        sf::RectangleShape bucket({ slot.width - 2.f, SLOT_HEIGHT });
-        bucket.setPosition(slot.pos.x + 1.f, slot.pos.y);
+        sf::RectangleShape bucket(
+            sf::Vector2f{ slot.width - 2.f, SLOT_HEIGHT });
+        bucket.setPosition({
+            slot.pos.x + 1.f, slot.pos.y });
         bucket.setFillColor(sf::Color(
-            static_cast<uint8_t>(slot.color.r * 0.4f + flash * slot.color.r * 0.6f),
-            static_cast<uint8_t>(slot.color.g * 0.4f + flash * slot.color.g * 0.6f),
-            static_cast<uint8_t>(slot.color.b * 0.4f + flash * slot.color.b * 0.6f),
+            static_cast<uint8_t>(
+                slot.color.r * 0.4f + flash * slot.color.r * 0.6f),
+            static_cast<uint8_t>(
+                slot.color.g * 0.4f + flash * slot.color.g * 0.6f),
+            static_cast<uint8_t>(
+                slot.color.b * 0.4f + flash * slot.color.b * 0.6f),
             alpha));
-        bucket.setOutlineColor(sf::Color(slot.color.r, slot.color.g,
-                                          slot.color.b, 180));
+        bucket.setOutlineColor(sf::Color(
+            slot.color.r, slot.color.g, slot.color.b, 180));
         bucket.setOutlineThickness(1.f);
         target.draw(bucket);
 
         // Multiplier label
         std::ostringstream ss;
-        ss << std::fixed << std::setprecision(1) << slot.multiplier << "x";
-        label.setString(ss.str());
-        label.setFillColor(sf::Color(255, 255, 255,
-                                      static_cast<uint8_t>(200 + 55 * flash)));
+        ss << std::fixed << std::setprecision(1)
+           << slot.multiplier << "x";
 
-        // Centre the label in the slot
-        float lw = label.getLocalBounds().width;
-        label.setPosition(slot.pos.x + (slot.width - lw) * 0.5f,
-                           slot.pos.y + SLOT_HEIGHT * 0.25f);
+        sf::Text label(font);
+        label.setString(ss.str());
+        label.setCharacterSize(11);
+        label.setStyle(sf::Text::Bold);
+        label.setFillColor(sf::Color(255, 255, 255,
+            static_cast<uint8_t>(200 + 55 * flash)));
+
+        float lw = label.getLocalBounds().size.x;
+        label.setPosition({
+            slot.pos.x + (slot.width - lw) * 0.5f,
+            slot.pos.y + SLOT_HEIGHT * 0.25f });
         target.draw(label);
     }
 
@@ -350,14 +334,14 @@ void PlinkoBoard::draw(sf::RenderTarget& target,
         // Glow
         float glowR = ball.radius + 5.f;
         ballShape.setRadius(glowR);
-        ballShape.setOrigin(glowR, glowR);
+        ballShape.setOrigin({ glowR, glowR });
         ballShape.setPosition(ball.pos);
         ballShape.setFillColor(sf::Color(180, 120, 255, 50));
         target.draw(ballShape);
 
         // Core
         ballShape.setRadius(ball.radius);
-        ballShape.setOrigin(ball.radius, ball.radius);
+        ballShape.setOrigin({ ball.radius, ball.radius });
         ballShape.setPosition(ball.pos);
         ballShape.setFillColor(sf::Color(200, 150, 255));
         ballShape.setOutlineColor(sf::Color(255, 220, 255, 160));
@@ -367,9 +351,10 @@ void PlinkoBoard::draw(sf::RenderTarget& target,
         // Specular
         float specR = ball.radius * 0.35f;
         ballShape.setRadius(specR);
-        ballShape.setOrigin(specR, specR);
-        ballShape.setPosition(ball.pos.x - ball.radius * 0.28f,
-                               ball.pos.y - ball.radius * 0.28f);
+        ballShape.setOrigin({ specR, specR });
+        ballShape.setPosition({
+            ball.pos.x - ball.radius * 0.28f,
+            ball.pos.y - ball.radius * 0.28f });
         ballShape.setFillColor(sf::Color(255, 255, 255, 180));
         ballShape.setOutlineThickness(0.f);
         target.draw(ballShape);

@@ -6,12 +6,10 @@
 // ═════════════════════════════════════════════════════════════
 //  Constructor
 // ═════════════════════════════════════════════════════════════
-OreManager::OreManager() {
-    // pool zero-initialised; alive=false for all slots
-}
+OreManager::OreManager() {}
 
 // ─────────────────────────────────────────────────────────────
-//  claim  — next free slot
+//  claim
 // ─────────────────────────────────────────────────────────────
 Ore* OreManager::claim() {
     for (auto& o : m_pool)
@@ -20,17 +18,14 @@ Ore* OreManager::claim() {
 }
 
 // ═════════════════════════════════════════════════════════════
-//  drop  — spawn ore pieces at an asteroid death position
+//  drop
 // ═════════════════════════════════════════════════════════════
 void OreManager::drop(sf::Vector2f    pos,
                        sf::Color       color,
-                       double          baseValue,
                        int             count,
-                       float           oreValueMult,
                        float           oreLuckBonus,
                        ParticleSystem& particles) {
-
-    // Luck: chance to double the drop count
+    // Luck: kans om dubbel te droppen
     int finalCount = count;
     if (chance(oreLuckBonus))
         finalCount *= 2;
@@ -39,34 +34,28 @@ void OreManager::drop(sf::Vector2f    pos,
         Ore* o = claim();
         if (!o) return;
 
-        // Random burst velocity
         float angle = randFloat(0.f, 2.f * PI);
         float speed = randFloat(30.f, 100.f);
 
-        o->pos      = pos + sf::Vector2f(
-                            randFloat(-8.f, 8.f),
-                            randFloat(-8.f, 8.f));
-        o->vel      = { std::cos(angle) * speed,
-                        std::sin(angle) * speed };
-        o->color    = sf::Color(
-                        static_cast<uint8_t>(clamp(
-                            color.r + randInt(-20, 20), 0, 255)),
-                        static_cast<uint8_t>(clamp(
-                            color.g + randInt(-20, 20), 0, 255)),
-                        static_cast<uint8_t>(clamp(
-                            color.b + randInt(-20, 20), 0, 255)));
+        o->pos = pos + sf::Vector2f(randFloat(-8.f, 8.f),
+                                     randFloat(-8.f, 8.f));
+        o->vel = { std::cos(angle) * speed,
+                   std::sin(angle) * speed };
 
-        // Value scales with oreValueMult + random ±10 %
-        o->value    = baseValue * oreValueMult
-                      * randFloat(0.9f, 1.1f);
+        o->color = sf::Color(
+            static_cast<uint8_t>(clamp(
+                color.r + randInt(-20, 20), 0, 255)),
+            static_cast<uint8_t>(clamp(
+                color.g + randInt(-20, 20), 0, 255)),
+            static_cast<uint8_t>(clamp(
+                color.b + randInt(-20, 20), 0, 255)));
 
-        o->radius   = randFloat(4.f, 9.f);
-        o->lifetime = ORE_LIFETIME + randFloat(-2.f, 2.f);
-        o->bobTimer = randFloat(0.f, 2.f * PI);   // stagger bob phase
-        o->alive       = true;
-        o->collecting  = false;
+        o->radius     = randFloat(4.f, 9.f);
+        o->lifetime   = ORE_LIFETIME + randFloat(-2.f, 2.f);
+        o->bobTimer   = randFloat(0.f, 2.f * PI);
+        o->alive      = true;
+        o->collecting = false;
 
-        // Small collect-sparkle emitted immediately
         particles.emitOreCollect(o->pos,
                                   pos + sf::Vector2f(0, -40),
                                   o->color, 1);
@@ -76,38 +65,41 @@ void OreManager::drop(sf::Vector2f    pos,
 // ═════════════════════════════════════════════════════════════
 //  update
 // ═════════════════════════════════════════════════════════════
-void OreManager::update(float        dt,
-                         sf::Vector2f collectorPos,
-                         float        collectRadius,
-                         double&      oreOut,
-                         int          bulkMultiplier,
-                         ParticleSystem& particles) {
+void OreManager::update(float           dt,
+                          sf::Vector2f    collectorPos,
+                          float           collectRadius,
+                          double&         oreOut,
+                          int             bulkMultiplier,
+                          ParticleSystem& particles) {
     m_alive = 0;
 
     for (auto& o : m_pool) {
         if (!o.alive) continue;
 
+        // ── Lifetime ──────────────────────────────────────
         o.lifetime -= dt;
         if (o.lifetime <= 0.f) {
             o.alive = false;
             continue;
         }
 
+        // ── Check collect radius ──────────────────────────
         float dist = distance(o.pos, collectorPos);
         if (dist <= collectRadius)
             o.collecting = true;
 
+        // ── Movement ──────────────────────────────────────
         if (o.collecting) {
             sf::Vector2f dir = normalize(collectorPos - o.pos);
             o.pos += dir * COLLECT_PULL_SPEED * dt;
 
             if (distance(o.pos, collectorPos) < 8.f) {
-                // ── Alleen ore tellen, GEEN credits ──────
+                // ── Alleen ore tellen, GEEN credits ───────
                 oreOut += static_cast<double>(bulkMultiplier);
 
-                particles.emitSpark(o.pos,
-                                    normalize(collectorPos - o.pos),
-                                    3);
+                particles.emitSpark(
+                    o.pos,
+                    normalize(collectorPos - o.pos), 3);
                 o.alive = false;
                 continue;
             }
@@ -122,36 +114,36 @@ void OreManager::update(float        dt,
         m_alive++;
     }
 }
+
 // ═════════════════════════════════════════════════════════════
 //  draw
 // ═════════════════════════════════════════════════════════════
 void OreManager::draw(sf::RenderTarget& target) const {
     sf::CircleShape glow;
     sf::CircleShape core;
+    sf::CircleShape spec;
 
     for (const auto& o : m_pool) {
         if (!o.alive) continue;
 
-        // Fade out in last 3 seconds
-        float alpha = 1.f;
-        if (o.lifetime < 3.f)
-            alpha = o.lifetime / 3.f;
-
-        uint8_t a = static_cast<uint8_t>(255 * alpha);
+        // Fade in laatste 3 seconden
+        float   alpha = (o.lifetime < 3.f)
+                        ? o.lifetime / 3.f : 1.f;
+        uint8_t a     = static_cast<uint8_t>(255 * alpha);
 
         // Outer glow
         float glowR = o.radius + 5.f;
         glow.setRadius(glowR);
-        glow.setOrigin(glowR, glowR);
+        glow.setOrigin({ glowR, glowR });
         glow.setPosition(o.pos);
         glow.setFillColor(sf::Color(
             o.color.r, o.color.g, o.color.b,
             static_cast<uint8_t>(60 * alpha)));
         target.draw(glow);
 
-        // Core gem shape  (slightly squashed circle)
+        // Core
         core.setRadius(o.radius);
-        core.setOrigin(o.radius, o.radius);
+        core.setOrigin({ o.radius, o.radius });
         core.setPosition(o.pos);
         core.setFillColor(sf::Color(
             o.color.r, o.color.g, o.color.b, a));
@@ -160,20 +152,22 @@ void OreManager::draw(sf::RenderTarget& target) const {
         core.setOutlineThickness(1.5f);
         target.draw(core);
 
-        // Bright specular dot
+        // Specular dot
         float specR = o.radius * 0.3f;
-        sf::CircleShape spec(specR);
-        spec.setOrigin(specR, specR);
-        spec.setPosition(o.pos.x - o.radius * 0.25f,
-                         o.pos.y - o.radius * 0.25f);
+        spec.setRadius(specR);
+        spec.setOrigin({ specR, specR });
+        spec.setPosition({
+            o.pos.x - o.radius * 0.25f,
+            o.pos.y - o.radius * 0.25f });
         spec.setFillColor(sf::Color(255, 255, 255,
             static_cast<uint8_t>(180 * alpha)));
+        spec.setOutlineThickness(0.f);
         target.draw(spec);
     }
 }
 
 // ═════════════════════════════════════════════════════════════
-//  collectAll  — vacuum everything on screen
+//  collectAll
 // ═════════════════════════════════════════════════════════════
 void OreManager::collectAll(double& oreOut,
                               int     bulkMultiplier) {

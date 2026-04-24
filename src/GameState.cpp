@@ -9,53 +9,57 @@
 // ═════════════════════════════════════════════════════════════
 const std::array<UpgradeDef, static_cast<int>(UpgradeID::UPGRADE_COUNT)>
 GameState::upgradeCatalog = {{
-    // ── Weapons ──────────────────────────────────────────────
-    { "Gun Damage",        "+{val} base damage per shot",      50.0,    1.55, 0 },
-    { "Fire Rate",         "+{val} shots/sec",                 80.0,    1.60, 0 },
-    { "Turret Count",      "Add 1 turret (total: {val})",     200.0,    2.20, 0 },
-    { "Crit Chance",       "+5% crit chance (now {val})",     120.0,    1.70, 0 },
-    { "Crit Multiplier",   "+0.5x crit damage (now {val}x)", 150.0,    1.75, 0 },
-    { "Split Shot",        "Bullets split into {val}",        500.0,    2.50, 0 },
-    // ── Mining ───────────────────────────────────────────────
-    { "Ore Value",         "+20% ore value (now {val}x)",     100.0,    1.60, 0 },
-    { "Collect Radius",    "+30px collect radius ({val}px)",   90.0,    1.50, 0 },
-    { "Ore Luck",          "+5% bonus ore drop ({val}%)",     110.0,    1.65, 0 },
-    { "Asteroid HP",       "-10% asteroid HP (now {val}x)",   130.0,    1.70, 0 },
-    // ── Plinko ───────────────────────────────────────────────
-    { "Plinko Rows",       "Add 1 row to Plinko ({val})",     300.0,    2.00, 8  },
-    { "Plinko Multiplier", "+10% slot multipliers ({val}x)",  200.0,    1.80, 0  },
-    { "Plinko Balls",      "+1 max ball at once ({val})",     180.0,    1.85, 0  },
-    { "Plinko Luck",       "+5% high-slot luck ({val}%)",     160.0,    1.70, 0  },
-    // ── Economy ──────────────────────────────────────────────
-    { "Credit Multiplier", "+25% all credits ({val}x)",       250.0,    1.90, 0 },
-    { "Bulk Processor",    "Convert {val}x ore per drop",     400.0,    2.10, 0 },
-    { "Auto-Plinko",       "Auto-drop balls (speed: {val})",  750.0,    2.30, 0 },
+    // Weapons
+    { "Gun Damage",        "+8 base damage per shot",         50.0,  1.55, 0 },
+    { "Fire Rate",         "+0.4 shots/sec",                  80.0,  1.60, 0 },
+    { "Turret Count",      "Add 1 turret",                   200.0,  2.20, 0 },
+    { "Crit Chance",       "+5% crit chance",                120.0,  1.70, 0 },
+    { "Crit Multiplier",   "+0.5x crit damage",              150.0,  1.75, 0 },
+    { "Split Shot",        "Bullets split +1",               500.0,  2.50, 0 },
+    // Mining
+    { "Ore Value",         "+20% ore value",                 100.0,  1.60, 0 },
+    { "Collect Radius",    "+30px collect radius",            90.0,  1.50, 0 },
+    { "Ore Luck",          "+5% bonus ore drop",             110.0,  1.65, 0 },
+    { "Asteroid HP",       "-10% asteroid HP",               130.0,  1.70, 0 },
+    // Plinko
+    { "Plinko Rows",       "Add 1 row to Plinko",            300.0,  2.00, 8  },
+    { "Plinko Multiplier", "+10% slot multipliers",          200.0,  1.80, 0  },
+    { "Plinko Balls",      "+1 max ball at once",            180.0,  1.85, 0  },
+    { "Plinko Luck",       "+5% high-slot luck",             160.0,  1.70, 0  },
+    // Economy
+    { "Credit Multiplier", "+25% all credits",               250.0,  1.90, 0 },
+    { "Bulk Processor",    "Convert more ore per drop",      400.0,  2.10, 0 },
+    { "Auto-Plinko",       "Auto-drop balls",                750.0,  2.30, 0 },
 }};
 
 const std::array<PrestigeUpgradeDef,
     static_cast<int>(PrestigeUpgradeID::PRESTIGE_UPGRADE_COUNT)>
 GameState::prestigeCatalog = {{
-    { "Crystal Damage",    "+15% gun damage permanently",   1.0, 1.80, 0 },
-    { "Crystal Mining",    "+15% ore value permanently",    1.0, 1.80, 0 },
-    { "Crystal Economy",   "+15% all credits permanently",  1.0, 1.80, 0 },
-    { "Crystal Plinko",    "+15% plinko multipliers",       1.0, 1.80, 0 },
-    { "Deep Retention",    "Keep 2 extra upgrades/level",   3.0, 2.50, 0 },
+    { "Crystal Damage",  "+15% gun damage permanently",  1.0, 1.80, 0 },
+    { "Crystal Mining",  "+15% ore value permanently",   1.0, 1.80, 0 },
+    { "Crystal Economy", "+15% all credits permanently", 1.0, 1.80, 0 },
+    { "Crystal Plinko",  "+15% plinko multipliers",      1.0, 1.80, 0 },
+    { "Deep Retention",  "Keep 2 extra upgrades/level",  3.0, 2.50, 0 },
 }};
 
 // ═════════════════════════════════════════════════════════════
-//  Crystal prestige bonuses
+//  Crystal bonuses
 // ═════════════════════════════════════════════════════════════
-float GameState::_crystalDamageBonus()  const {
-    return 1.f + prestigeLevels[static_cast<int>(PrestigeUpgradeID::CRYSTAL_DAMAGE)]  * 0.15f;
+float GameState::_crystalDamageBonus() const {
+    return 1.f + prestigeLevels[static_cast<int>(
+        PrestigeUpgradeID::CRYSTAL_DAMAGE)] * 0.15f;
 }
-float GameState::_crystalMiningBonus()  const {
-    return 1.f + prestigeLevels[static_cast<int>(PrestigeUpgradeID::CRYSTAL_MINING)]  * 0.15f;
+float GameState::_crystalMiningBonus() const {
+    return 1.f + prestigeLevels[static_cast<int>(
+        PrestigeUpgradeID::CRYSTAL_MINING)] * 0.15f;
 }
 float GameState::_crystalEconomyBonus() const {
-    return 1.f + prestigeLevels[static_cast<int>(PrestigeUpgradeID::CRYSTAL_ECONOMY)] * 0.15f;
+    return 1.f + prestigeLevels[static_cast<int>(
+        PrestigeUpgradeID::CRYSTAL_ECONOMY)] * 0.15f;
 }
-float GameState::_crystalPlinkoBonus()  const {
-    return 1.f + prestigeLevels[static_cast<int>(PrestigeUpgradeID::CRYSTAL_PLINKO)]  * 0.15f;
+float GameState::_crystalPlinkoBonus() const {
+    return 1.f + prestigeLevels[static_cast<int>(
+        PrestigeUpgradeID::CRYSTAL_PLINKO)] * 0.15f;
 }
 
 float GameState::crystalAmp() const {
@@ -67,13 +71,12 @@ float GameState::crystalAmp() const {
 //  Computed stats
 // ═════════════════════════════════════════════════════════════
 float GameState::gunDamage() const {
-    int lv = levelOf(UpgradeID::GUN_DAMAGE);
-    return (10.f + lv * 8.f) * _crystalDamageBonus();
+    return (10.f + levelOf(UpgradeID::GUN_DAMAGE) * 8.f)
+           * _crystalDamageBonus();
 }
 
 float GameState::fireRatePerSec() const {
-    int lv = levelOf(UpgradeID::FIRE_RATE);
-    return (1.5f + lv * 0.4f) * (1.f + prestigeLevels[0] * 0.05f);
+    return 1.5f + levelOf(UpgradeID::FIRE_RATE) * 0.4f;
 }
 
 int GameState::turretCount() const {
@@ -93,7 +96,8 @@ int GameState::splitShot() const {
 }
 
 float GameState::oreValueMult() const {
-    return (1.f + levelOf(UpgradeID::ORE_VALUE) * 0.2f) * _crystalMiningBonus();
+    return (1.f + levelOf(UpgradeID::ORE_VALUE) * 0.2f)
+           * _crystalMiningBonus();
 }
 
 float GameState::autoCollectRadius() const {
@@ -105,16 +109,18 @@ float GameState::oreLuckBonus() const {
 }
 
 int GameState::plinkoRows() const {
-    int base = PLINKO_MIN_ROWS + levelOf(UpgradeID::PLINKO_ROWS);
-    return std::min(base, PLINKO_MAX_ROWS);
+    return std::min(PLINKO_MIN_ROWS + levelOf(UpgradeID::PLINKO_ROWS),
+                    PLINKO_MAX_ROWS);
 }
 
 float GameState::plinkoMultBonus() const {
-    return (1.f + levelOf(UpgradeID::PLINKO_MULT) * 0.10f) * _crystalPlinkoBonus();
+    return (1.f + levelOf(UpgradeID::PLINKO_MULT) * 0.10f)
+           * _crystalPlinkoBonus();
 }
 
 int GameState::maxPlinkoBalls() const {
-    return std::min(1 + levelOf(UpgradeID::PLINKO_BALLS), MAX_PLINKO_BALLS);
+    return std::min(1 + levelOf(UpgradeID::PLINKO_BALLS),
+                    MAX_PLINKO_BALLS);
 }
 
 float GameState::plinkoLuck() const {
@@ -122,7 +128,8 @@ float GameState::plinkoLuck() const {
 }
 
 float GameState::creditMult() const {
-    return (1.f + levelOf(UpgradeID::CREDIT_MULT) * 0.25f) * _crystalEconomyBonus();
+    return (1.f + levelOf(UpgradeID::CREDIT_MULT) * 0.25f)
+           * _crystalEconomyBonus();
 }
 
 int GameState::bulkProcess() const {
@@ -178,34 +185,30 @@ void GameState::buy(PrestigeUpgradeID id) {
 //  Prestige
 // ═════════════════════════════════════════════════════════════
 double GameState::crystalsOnPrestige() const {
-    // crystals = sqrt(totalCredits / 1000), floored, minimum 1
     double gain = std::floor(std::sqrt(totalCredits / 1000.0));
     return std::max(gain, 1.0);
 }
 
 void GameState::doPrestige() {
-    // How many regular upgrades to keep (Deep Retention)
-    int keep = prestigeLevels[static_cast<int>(PrestigeUpgradeID::CRYSTAL_RETENTION)] * 2;
+    int keep = prestigeLevels[static_cast<int>(
+        PrestigeUpgradeID::CRYSTAL_RETENTION)] * 2;
 
-    // Award crystals
     crystals += crystalsOnPrestige();
     prestigeCount++;
 
-    // Save prestige levels before wipe
     auto savedPrestige = prestigeLevels;
 
-    // Determine which upgrades to retain (highest levels first)
-    std::array<std::pair<int,int>, static_cast<int>(UpgradeID::UPGRADE_COUNT)> ranked{};
+    std::array<std::pair<int,int>,
+        static_cast<int>(UpgradeID::UPGRADE_COUNT)> ranked{};
     for (int i = 0; i < static_cast<int>(UpgradeID::UPGRADE_COUNT); i++)
         ranked[i] = { upgradeLevels[i], i };
     std::sort(ranked.begin(), ranked.end(), std::greater<>());
 
-    // Full reset
     reset();
     prestigeLevels = savedPrestige;
 
-    // Restore kept upgrades (half their level)
-    for (int i = 0; i < keep && i < static_cast<int>(UpgradeID::UPGRADE_COUNT); i++) {
+    for (int i = 0; i < keep &&
+         i < static_cast<int>(UpgradeID::UPGRADE_COUNT); i++) {
         int idx = ranked[i].second;
         upgradeLevels[idx] = ranked[i].first / 2;
     }
@@ -215,29 +218,28 @@ void GameState::doPrestige() {
 //  Reset
 // ═════════════════════════════════════════════════════════════
 void GameState::reset() {
-    credits       = 0.0;
-    ore           = 0.0;
-    totalCredits  = 0.0;
-    totalOre      = 0.0;
+    credits      = 0.0;
+    ore          = 0.0;
+    totalCredits = 0.0;
+    totalOre     = 0.0;
     upgradeLevels.fill(0);
-    // Note: crystals, prestigeCount, prestigeLevels are NOT reset here
 }
 
 // ═════════════════════════════════════════════════════════════
-//  Save / Load  (simple binary format)
+//  Save / Load
 // ═════════════════════════════════════════════════════════════
 bool GameState::save(const std::string& path) const {
     std::ofstream f(path, std::ios::binary);
     if (!f) return false;
 
     int ver = SAVE_VERSION;
-    f.write(reinterpret_cast<const char*>(&ver),          sizeof(ver));
-    f.write(reinterpret_cast<const char*>(&credits),      sizeof(credits));
-    f.write(reinterpret_cast<const char*>(&ore),          sizeof(ore));
-    f.write(reinterpret_cast<const char*>(&crystals),     sizeof(crystals));
-    f.write(reinterpret_cast<const char*>(&totalCredits), sizeof(totalCredits));
-    f.write(reinterpret_cast<const char*>(&totalOre),     sizeof(totalOre));
-    f.write(reinterpret_cast<const char*>(&prestigeCount),sizeof(prestigeCount));
+    f.write(reinterpret_cast<const char*>(&ver),           sizeof(ver));
+    f.write(reinterpret_cast<const char*>(&credits),       sizeof(credits));
+    f.write(reinterpret_cast<const char*>(&ore),           sizeof(ore));
+    f.write(reinterpret_cast<const char*>(&crystals),      sizeof(crystals));
+    f.write(reinterpret_cast<const char*>(&totalCredits),  sizeof(totalCredits));
+    f.write(reinterpret_cast<const char*>(&totalOre),      sizeof(totalOre));
+    f.write(reinterpret_cast<const char*>(&prestigeCount), sizeof(prestigeCount));
     f.write(reinterpret_cast<const char*>(upgradeLevels.data()),
             upgradeLevels.size() * sizeof(int));
     f.write(reinterpret_cast<const char*>(prestigeLevels.data()),
@@ -251,7 +253,7 @@ bool GameState::load(const std::string& path) {
 
     int ver = 0;
     f.read(reinterpret_cast<char*>(&ver), sizeof(ver));
-    if (ver != SAVE_VERSION) return false;   // version mismatch → fresh start
+    if (ver != SAVE_VERSION) return false;
 
     f.read(reinterpret_cast<char*>(&credits),       sizeof(credits));
     f.read(reinterpret_cast<char*>(&ore),           sizeof(ore));

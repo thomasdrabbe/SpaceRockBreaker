@@ -1,3 +1,5 @@
+set(CMAKE_TOOLCHAIN_FILE "C:/vcpkg/scripts/buildsystems/vcpkg.cmake"
+    CACHE STRING "")
 cmake_minimum_required(VERSION 3.16)
 project(SpaceRockBreaker LANGUAGES CXX)
 
@@ -5,10 +7,9 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # ─── SFML ─────────────────────────────────────────────────────
-# Set this to wherever you installed SFML 2.6
-set(SFML_DIR "C:/SFML-2.6.1/lib/cmake/SFML")
 
-find_package(SFML 2.6 COMPONENTS graphics window system REQUIRED)
+find_package(SFML COMPONENTS Graphics Window System Audio REQUIRED)
+find_package(ImGui-SFML CONFIG REQUIRED)
 
 # ─── Sources ──────────────────────────────────────────────────
 set(SOURCES
@@ -22,7 +23,7 @@ set(SOURCES
     src/Plinko.cpp
     src/Shop.cpp
     src/MiningScreen.cpp
-	src/Player.cpp
+	  src/Player.cpp
     src/Game.cpp
 )
 
@@ -38,7 +39,7 @@ set(HEADERS
     src/Plinko.h
     src/Shop.h
     src/MiningScreen.h
-	src/Player.h
+	  src/Player.h
     src/Game.h
 )
 
@@ -48,9 +49,11 @@ add_executable(SpaceRockBreaker ${SOURCES} ${HEADERS})
 target_include_directories(SpaceRockBreaker PRIVATE src)
 
 target_link_libraries(SpaceRockBreaker PRIVATE
-    sfml-graphics
-    sfml-window
-    sfml-system
+  SFML::Graphics
+  SFML::Window
+  SFML::System
+  SFML::Audio
+  ImGui-SFML::ImGui-SFML
 )
 
 # ─── Windows: copy SFML DLLs next to .exe ─────────────────────

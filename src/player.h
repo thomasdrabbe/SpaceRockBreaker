@@ -5,11 +5,14 @@
 #include "Asteroid.h"
 #include "Particle.h"
 
+// ─────────────────────────────────────────────────────────────
+//  Player
+// ─────────────────────────────────────────────────────────────
 class Player {
 public:
     sf::Vector2f pos;
-    float        angle     = -90.f;  // graden, start omhoog
-    float        speed     = 220.f;  // px/s
+    float        angle     = -90.f;
+    float        speed     = 220.f;
     float        fireTimer = 0.f;
     bool         alive     = true;
 
@@ -32,7 +35,7 @@ public:
     sf::Vector2f centre() const { return pos; }
 
 private:
-    static constexpr float SHIP_RADIUS   = 14.f;
-    static constexpr float ROTATE_SPEED  = 280.f;  // deg/s
-    static constexpr float BARREL_LEN    = 18.f;
+    static constexpr float SHIP_RADIUS  = 14.f;
+    static constexpr float ROTATE_SPEED = 280.f;
+    static constexpr float BARREL_LEN   = 18.f;
 };

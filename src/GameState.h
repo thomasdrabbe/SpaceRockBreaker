@@ -5,14 +5,14 @@
 #include "Constants.h"
 
 // ─────────────────────────────────────────────────────────────
-//  Upgrade definition  (static data per upgrade type)
+//  Upgrade definition
 // ─────────────────────────────────────────────────────────────
 struct UpgradeDef {
     std::string name;
-    std::string description;   // uses {val} as placeholder for current effect
+    std::string description;
     double      baseCost;
-    double      costMult;      // cost = baseCost * costMult ^ level
-    int         maxLevel;      // 0 = infinite
+    double      costMult;
+    int         maxLevel;   // 0 = infinite
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -21,63 +21,62 @@ struct UpgradeDef {
 struct PrestigeUpgradeDef {
     std::string name;
     std::string description;
-    double      baseCost;      // cost in crystals
+    double      baseCost;
     double      costMult;
-    int         maxLevel;      // 0 = infinite
+    int         maxLevel;
 };
 
 // ─────────────────────────────────────────────────────────────
-//  GameState  — single source of truth for all runtime data
+//  GameState
 // ─────────────────────────────────────────────────────────────
 class GameState {
 public:
     // ── Currencies ────────────────────────────────────────
-    double credits        = 0.0;
-    double ore            = 0.0;
-    double crystals       = 0.0;
+    double credits       = 0.0;
+    double ore           = 0.0;
+    double crystals      = 0.0;
+    double totalCredits  = 0.0;
+    double totalOre      = 0.0;
+    int    prestigeCount = 0;
 
-    double totalCredits   = 0.0;   // lifetime (for prestige calc)
-    double totalOre       = 0.0;
-    int    prestigeCount  = 0;
-
-    // ── Regular upgrade levels (reset on prestige) ────────
+    // ── Regular upgrade levels ────────────────────────────
     std::array<int, static_cast<int>(UpgradeID::UPGRADE_COUNT)>
         upgradeLevels{};
 
-    // ── Prestige upgrade levels (permanent) ───────────────
+    // ── Prestige upgrade levels ───────────────────────────
     std::array<int, static_cast<int>(PrestigeUpgradeID::PRESTIGE_UPGRADE_COUNT)>
         prestigeLevels{};
 
-    // ── Static catalogs (filled in .cpp) ──────────────────
+    // ── Static catalogs ───────────────────────────────────
     static const std::array<UpgradeDef,
         static_cast<int>(UpgradeID::UPGRADE_COUNT)>        upgradeCatalog;
 
     static const std::array<PrestigeUpgradeDef,
-        static_cast<int>(PrestigeUpgradeID::PRESTIGE_UPGRADE_COUNT)> prestigeCatalog;
+        static_cast<int>(PrestigeUpgradeID::PRESTIGE_UPGRADE_COUNT)>
+        prestigeCatalog;
 
     // ── Computed stats ────────────────────────────────────
-    float gunDamage()          const;
-    float fireRatePerSec()     const;
-    int   turretCount()        const;
-    float critChance()         const;
-    float critMult()           const;
-    int   splitShot()          const;
+    float gunDamage()         const;
+    float fireRatePerSec()    const;
+    int   turretCount()       const;
+    float critChance()        const;
+    float critMult()          const;
+    int   splitShot()         const;
 
-    float oreValueMult()       const;
-    float autoCollectRadius()  const;
-    float oreLuckBonus()       const;
+    float oreValueMult()      const;
+    float autoCollectRadius() const;
+    float oreLuckBonus()      const;
 
-    int   plinkoRows()         const;
-    float plinkoMultBonus()    const;
-    int   maxPlinkoBalls()     const;
-    float plinkoLuck()         const;
+    int   plinkoRows()        const;
+    float plinkoMultBonus()   const;
+    int   maxPlinkoBalls()    const;
+    float plinkoLuck()        const;
 
-    float creditMult()         const;
-    int   bulkProcess()        const;
-    bool  autoPlinkoEnabled()  const;
+    float creditMult()        const;
+    int   bulkProcess()       const;
+    bool  autoPlinkoEnabled() const;
 
-    // ── Crystal amplifier (affects all regular upgrades) ──
-    float crystalAmp()         const;  // combined prestige bonus
+    float crystalAmp()        const;
 
     // ── Upgrade helpers ───────────────────────────────────
     double costOf(UpgradeID id)         const;
@@ -86,12 +85,11 @@ public:
     bool   canBuy(PrestigeUpgradeID id) const;
     void   buy(UpgradeID id);
     void   buy(PrestigeUpgradeID id);
-
     int    levelOf(UpgradeID id)         const;
     int    levelOf(PrestigeUpgradeID id) const;
 
     // ── Prestige ──────────────────────────────────────────
-    double crystalsOnPrestige()  const;   // preview
+    double crystalsOnPrestige() const;
     void   doPrestige();
 
     // ── Save / Load ───────────────────────────────────────
@@ -100,8 +98,8 @@ public:
     void reset();
 
 private:
-    float _crystalDamageBonus()   const;
-    float _crystalMiningBonus()   const;
-    float _crystalEconomyBonus()  const;
-    float _crystalPlinkoBonus()   const;
+    float _crystalDamageBonus()  const;
+    float _crystalMiningBonus()  const;
+    float _crystalEconomyBonus() const;
+    float _crystalPlinkoBonus()  const;
 };
