@@ -1,0 +1,68 @@
+SpaceRockBreaker/
+├── CMakeLists.txt
+├── assets/
+│   └── font.ttf          ←  bijv. Roboto of Arial kopie
+└── src/
+    ├── Constants.h
+    ├── Utils.h
+    ├── GameState.h
+    ├── GameState.cpp
+    ├── Particle.h
+    ├── Particle.cpp
+    ├── Asteroid.h
+    ├── Asteroid.cpp
+    ├── Bullet.h
+    ├── Bullet.cpp
+    ├── Turret.h
+    ├── Turret.cpp
+    ├── Ore.h
+    ├── Ore.cpp
+    ├── Plinko.h
+    ├── Plinko.cpp
+    ├── Shop.h
+    ├── Shop.cpp
+    ├── MiningScreen.h
+    ├── MiningScreen.cpp
+    ├── Game.h
+    ├── Game.cpp
+    └── main.cpp
+	
+	
+	install
+	🛠️ Installatie & bouwen op Windows 11
+1. SFML downloaden
+Ga naar sfml-dev.org/download.php en download:
+
+SFML 2.6.1 – Windows – Visual C++ 17 (2022) – 64-bit
+
+Pak het uit naar C:\SFML-2.6.1\
+
+2. CMake + compiler
+Je hebt nodig:
+
+CMake ≥ 3.16 → cmake.org/download
+Visual Studio 2022 (Community is gratis) met de werkbelasting "Desktop development with C++"
+3. Font toevoegen
+Kopieer C:\Windows\Fonts\arial.ttf naar de assets/ map en hernoem het naar font.ttf.
+Of download gratis Roboto via fonts.google.com.
+
+4. Bouwen
+Open een Developer Command Prompt of gebruik CMake GUI:
+
+cd SpaceRockBreaker
+mkdir build
+cd build
+cmake .. -G "Visual Studio 17 2022" -A x64
+cmake --build . --config Release
+bat
+Copy code
+De .exe verschijnt in build\Release\SpaceRockBreaker.exe — dubbelklik en speel! 🚀
+
+5. Sneltoetsen in de game
+Toets	Actie
+1	Mining tab
+2	Plinko tab
+3	Shop tab
+4	Prestige tab
+Space	Drop Plinko bal
+S	Handmatig opslaan

@@ -1,0 +1,29 @@
+# Build output
+build/
+out/
+Release/
+Debug/
+
+# Visual Studio
+.vs/
+*.vcxproj.user
+*.suo
+*.sdf
+*.opensdf
+CMakeSettings.json
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# Save files (niet in versiebeheer)
+*.bin
+
+# OS
+Thumbs.db
+.DS_Store
+
+# SFML DLLs (niet inchecken, gebruiker installeert zelf)
+*.dll
