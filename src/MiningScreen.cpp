@@ -194,7 +194,8 @@ void MiningScreen::clearAll() {
 //  draw
 // ═════════════════════════════════════════════════════════════
 void MiningScreen::draw(sf::RenderTarget& target,
-                         const GameState&  state) const {
+                         const GameState&  state,
+                         float             warpCharge) const {
 
     sf::View oldView = target.getView();
 
@@ -230,7 +231,8 @@ void MiningScreen::draw(sf::RenderTarget& target,
     target.setView(oldView);
 
     // ── HUD (buiten clipped view) ─────────────────────────
-    drawHUD(target, state);
+    drawHUD(target, state, warpCharge);
+
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -297,7 +299,59 @@ void MiningScreen::drawCollectRing(sf::RenderTarget& target,
 //  drawHUD
 // ─────────────────────────────────────────────────────────────
 void MiningScreen::drawHUD(sf::RenderTarget& target,
-                             const GameState&  state) const {
+                             const GameState&  state,
+                             float             warpCharge) const {
+
+// ── Warp UI ───────────────────────────────────────────────
+// ── Warp UI ───────────────────────────────────────────────
+if (state.warpDriveUnlocked()) {
+    float barW = m_w * 0.25f;                        // 25% van schermbreed
+    float barH = m_h * 0.014f;                       // ~1.4% van schermhoog
+    float barX = m_x + m_w * 0.5f - barW * 0.5f;
+    float barY = m_y + m_h - barH - m_h * 0.02f;
+    unsigned fontSize = static_cast<unsigned>(
+        std::max(10.f, m_h * 0.016f));
+
+    // Achtergrond
+    sf::RectangleShape bg(sf::Vector2f(barW, barH));
+    bg.setPosition(sf::Vector2f(barX, barY));
+    bg.setFillColor(sf::Color(20, 20, 40, 200));
+    bg.setOutlineColor(sf::Color(80, 140, 255, 160));
+    bg.setOutlineThickness(1.f);
+    target.draw(bg);
+
+    // Charge fill
+    if (warpCharge > 0.f) {
+        sf::RectangleShape fill(sf::Vector2f(
+            barW * warpCharge, barH));
+        fill.setPosition(sf::Vector2f(barX, barY));
+        uint8_t g = static_cast<uint8_t>(120 + 135 * warpCharge);
+        fill.setFillColor(sf::Color(60, g, 255, 220));
+        target.draw(fill);
+    }
+
+    // Label
+    sf::Text lbl(*m_font);
+    lbl.setCharacterSize(fontSize);
+    lbl.setFillColor(sf::Color(160, 200, 255));
+    if (!state.canWarp())
+        lbl.setString("Warp: " +
+            std::to_string(static_cast<int>(state.oreThisLevel))
+            + " / " +
+            std::to_string(state.oreWarpRequirement()) +
+            " ore");
+    else if (warpCharge <= 0.f)
+        lbl.setString("Warp ready  —  hold Space");
+    else
+        lbl.setString("Warping...");
+
+    float lw = lbl.getLocalBounds().size.x;
+    lbl.setPosition(sf::Vector2f(
+        barX + (barW - lw) * 0.5f,
+        barY - barH - fontSize * 1.2f));
+    target.draw(lbl);
+}
+
     // Zone label — linksboven
     sf::Text zoneLabel(*m_font);
     zoneLabel.setString(state.levelLabel());
@@ -343,4 +397,6 @@ void MiningScreen::drawHUD(sf::RenderTarget& target,
     drawLine("Turrets   : " +
              std::to_string(m_turrets.activeCount()),
              sf::Color(255, 180, 100));
+
+
 }

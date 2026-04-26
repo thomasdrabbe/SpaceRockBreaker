@@ -42,7 +42,9 @@ enum class UpgradeID {
     UNLOCK_PLATINUM,
     UNLOCK_TITANIUM,
     UNLOCK_IRIDIUM,
+    WARP_DRIVE,
     UPGRADE_COUNT   // sentinel
+
 };
 
 // ─── Prestige Upgrade IDs (permanent) ─────────────────────────
@@ -83,14 +85,14 @@ enum class OreTier {
 };
 
 // ─── Entity limits ────────────────────────────────────────────
-constexpr int MAX_ASTEROIDS    = 40;
+constexpr int MAX_ASTEROIDS    = 80;
 constexpr int MAX_BULLETS      = 300;
-constexpr int MAX_ORE          = 250;
+constexpr int MAX_ORE          = 9999;
 constexpr int MAX_PARTICLES    = 600;
-constexpr int MAX_PLINKO_BALLS = 100;
+constexpr int MAX_PLINKO_BALLS = 1000;
 
 // ─── Plinko board geometry ────────────────────────────────────
-constexpr int   PLINKO_MIN_ROWS    = 8;
+constexpr int   PLINKO_MIN_ROWS    = 16;
 constexpr int   PLINKO_MAX_ROWS    = 16;
 constexpr float PLINKO_PEG_RADIUS  = 6.f;
 constexpr float PLINKO_BALL_RADIUS = 9.f;
@@ -102,4 +104,4 @@ constexpr float TAB_BAR_H    = 46.f;
 
 // ─── Save ─────────────────────────────────────────────────────
 const std::string SAVE_FILE    = "srb_save.bin";
-constexpr int     SAVE_VERSION = 3;   // bumped: ore tiers + level
+constexpr int     SAVE_VERSION = 4;   // bumped: ore tiers + level

@@ -38,8 +38,9 @@ public:
                 double&    creditsEarned,
                 double&    oreEarned);
 
-    void draw(sf::RenderTarget& target,
-              const GameState&  state) const;
+    void draw   (sf::RenderTarget& target, const GameState&  state,
+    float       warpCharge = 0.f) const;
+
 
     void syncTurrets(const GameState& state);
 
@@ -85,8 +86,9 @@ private:
     void drawCollector  (sf::RenderTarget& target) const;
     void drawCollectRing(sf::RenderTarget& target,
                          const GameState&  state)  const;
-    void drawHUD        (sf::RenderTarget& target,
-                         const GameState&  state)  const;
+    void drawHUD(sf::RenderTarget& target, const GameState&  state,
+    float             warpCharge) const;
+
 
     static int targetAsteroidCount(int turrets);
 };

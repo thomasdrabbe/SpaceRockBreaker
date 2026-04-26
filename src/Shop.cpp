@@ -19,12 +19,14 @@ const std::vector<CatInfo> CATEGORIES = {
       { UpgradeID::GUN_DAMAGE,   UpgradeID::FIRE_RATE,
         UpgradeID::TURRET_COUNT, UpgradeID::CRIT_CHANCE,
         UpgradeID::CRIT_MULT,    UpgradeID::SPLIT_SHOT } },
-    { "[M] Mining",  ShopCategory::MINING,
-      { UpgradeID::ORE_VALUE,    UpgradeID::AUTO_COLLECT_RADIUS,
-        UpgradeID::ORE_LUCK,     UpgradeID::ASTEROID_HP } },
-    { "[P] Plinko",  ShopCategory::PLINKO,
-      { UpgradeID::PLINKO_ROWS,  UpgradeID::PLINKO_MULT,
-        UpgradeID::PLINKO_BALLS, UpgradeID::PLINKO_LUCK } },
+    { "[M] Mining", ShopCategory::MINING,
+      { UpgradeID::ORE_VALUE,          UpgradeID::AUTO_COLLECT_RADIUS,
+        UpgradeID::ORE_LUCK,           UpgradeID::ASTEROID_HP,
+        UpgradeID::WARP_DRIVE } },
+    { "[P] Plinko", ShopCategory::PLINKO,
+    { UpgradeID::PLINKO_MULT,
+      UpgradeID::PLINKO_BALLS, UpgradeID::PLINKO_LUCK,
+      UpgradeID::AUTO_PLINKO } },
     { "[E] Economy", ShopCategory::ECONOMY,
       { UpgradeID::CREDIT_MULT,  UpgradeID::BULK_PROCESS,
         UpgradeID::AUTO_PLINKO } },
@@ -432,6 +434,8 @@ std::string Shop::formatEffect(UpgradeID id,
             ss << "Bulk: " << state.bulkProcess() << "x"; break;
         case UpgradeID::AUTO_PLINKO:
             ss << (lv > 0 ? "Actief" : "Inactief"); break;
+        case UpgradeID::WARP_DRIVE:
+            ss << (state.levelOf(id) > 0 ? "Unlocked" : "Locked"); break;
         case UpgradeID::UNLOCK_BRONZE:
         case UpgradeID::UNLOCK_SILVER:
         case UpgradeID::UNLOCK_GOLD:

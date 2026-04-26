@@ -37,22 +37,21 @@ void PlinkoBoard::build(int   rows,
 void PlinkoBoard::buildPegs() {
     m_pegs.clear();
 
-    float usableH = m_boardH - SLOT_HEIGHT - 30.f;
-    float rowStep = usableH / static_cast<float>(m_rows + 1);
+    int   cols    = 32;                          // ← was 7
+    float usableH = m_boardH - SLOT_HEIGHT - 20.f;
+    float colStep = m_boardW / static_cast<float>(cols + 1);
+    float rowStep = usableH  / static_cast<float>(m_rows + 1);
 
     for (int row = 0; row < m_rows; row++) {
-        int   pegsInRow = row + 2;
-        float y         = m_boardY + rowStep * (row + 1);
-        float spacing   = m_boardW /
-                          static_cast<float>(pegsInRow + 1);
-        float xOffset   = (row % 2 == 1) ? spacing * 0.5f : 0.f;
+        float y = m_boardY + rowStep * (row + 1);
+
+        bool  oddRow    = (row % 2 == 1);
+        int   pegsInRow = oddRow ? cols - 1 : cols;
+        float offset    = oddRow ? colStep * 0.5f : 0.f;
 
         for (int col = 0; col < pegsInRow; col++) {
             Peg peg;
-            peg.pos = {
-                m_boardX + spacing * (col + 1) + xOffset,
-                y
-            };
+            peg.pos      = { m_boardX + offset + colStep * (col + 1), y };
             peg.hitFlash = 0.f;
             m_pegs.push_back(peg);
         }
@@ -66,7 +65,7 @@ float PlinkoBoard::slotMult(int slotIdx, int totalSlots,
                               float bonus, float luck) {
     float centre = (totalSlots - 1) * 0.5f;
     float dist   = std::abs(slotIdx - centre) / centre;
-    float base   = 8.f * std::pow(1.f - dist, 2.2f) + 0.5f;
+    float base   = 3.f * std::pow(1.f - dist, 2.2f) + 0.8f;
     base += luck * 3.f;
     return base * bonus;
 }
@@ -77,25 +76,25 @@ float PlinkoBoard::slotMult(int slotIdx, int totalSlots,
 void PlinkoBoard::buildSlots(float multBonus, float plinkoLuck) {
     m_slots.clear();
 
-    int   numSlots  = m_rows + 2;
-    float slotW     = m_boardW / static_cast<float>(numSlots);
-    float slotTopY  = m_boardY + m_boardH - SLOT_HEIGHT;
+    constexpr int NUM_SLOTS = 13;
+    float slotW = m_boardW / static_cast<float>(NUM_SLOTS);
+    float slotY = m_boardY + m_boardH - SLOT_HEIGHT;
 
-    for (int i = 0; i < numSlots; i++) {
-        PlinkoSlot s;
-        s.pos        = { m_boardX + i * slotW, slotTopY };
-        s.width      = slotW;
-        s.multiplier = slotMult(i, numSlots,
-                                multBonus, plinkoLuck);
+    for (int i = 0; i < NUM_SLOTS; i++) {
+        PlinkoSlot slot;
+        slot.pos   = sf::Vector2f(m_boardX + i * slotW, slotY);
+        slot.width = slotW;
+        slot.multiplier = slotMult(i, NUM_SLOTS, multBonus, plinkoLuck);
 
-        float t = std::abs(i - (numSlots - 1) * 0.5f)
-                  / ((numSlots - 1) * 0.5f);
-        s.color = sf::Color(
-            static_cast<uint8_t>(lerp(220.f, 60.f,  t)),
-            static_cast<uint8_t>(lerp(180.f, 200.f, t)),
-            static_cast<uint8_t>(lerp( 40.f, 220.f, t)));
+        // Kleur op basis van multiplier waarde
+        float t = static_cast<float>(i) / (NUM_SLOTS - 1);
+        float m = std::abs(t - 0.5f) * 2.f;  // 0 = midden, 1 = rand
+        slot.color = sf::Color(
+            static_cast<uint8_t>(50  + 200 * m),
+            static_cast<uint8_t>(200 - 150 * m),
+            static_cast<uint8_t>(100 + 100 * m));
 
-        m_slots.push_back(s);
+        m_slots.push_back(slot);
     }
 }
 

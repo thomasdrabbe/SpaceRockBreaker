@@ -72,6 +72,10 @@ private:
     void initLayout();         // aanroepen na window.create()
     void reinitSystems();      // herinitialiseer subsystems na resize
 
+    // ── Warp charge ───────────────────────────────────────
+    float m_warpCharge = 0.f;   // 0.0 → 1.0, warp bij 1.0
+    static constexpr float WARP_CHARGE_TIME = 2.f;
+
     // ── Main loop ─────────────────────────────────────────
     void processEvents();
     void update(float dt);

@@ -38,6 +38,8 @@ GameState::upgradeCatalog = {{
     { "Unlock Platinum",   "Spawn Platinum asteroids (140x)",   800000.0, 1.0, 1 },
     { "Unlock Titanium",   "Spawn Titanium asteroids (380x)",  3000000.0, 1.0, 1 },
     { "Unlock Iridium",    "Spawn Iridium asteroids (1000x)", 12000000.0, 1.0, 1 },
+    // Travel
+    { "Warp Drive", "Hold Space to warp to next zone", 500.0, 1.0, 1 },
 }};
 
 const std::array<PrestigeUpgradeDef,
@@ -76,6 +78,13 @@ float GameState::crystalAmp() const {
 }
 
 // ═════════════════════════════════════════════════════════════
+//  warp drive requirments
+// ═════════════════════════════════════════════════════════════
+int GameState::oreWarpRequirement() const {
+    return 5 * currentLevel * (currentLevel + 1);
+}
+
+// ═════════════════════════════════════════════════════════════
 //  Computed stats
 // ═════════════════════════════════════════════════════════════
 float GameState::gunDamage() const {
@@ -88,7 +97,7 @@ float GameState::fireRatePerSec() const {
 }
 
 int GameState::turretCount() const {
-    return 1 + levelOf(UpgradeID::TURRET_COUNT);
+    return + levelOf(UpgradeID::TURRET_COUNT);
 }
 
 float GameState::critChance() const {
@@ -215,6 +224,19 @@ bool GameState::canBuy(PrestigeUpgradeID id) const {
     return crystals >= costOf(id);
 }
 
+bool GameState::warpDriveUnlocked() const {
+    return levelOf(UpgradeID::WARP_DRIVE) > 0;
+}
+
+bool GameState::canWarp() const {
+    return warpDriveUnlocked() && oreThisLevel >= oreWarpRequirement();
+}
+
+void GameState::doWarp() {
+    currentLevel++;
+    oreThisLevel = 0.0;
+}
+
 void GameState::buy(UpgradeID id) {
     if (!canBuy(id)) return;
     credits -= costOf(id);
@@ -269,6 +291,7 @@ void GameState::reset() {
     totalOre     = 0.0;
     currentLevel = 1;          // ← nieuw
     upgradeLevels.fill(0);
+    oreThisLevel = 0.0;
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -287,6 +310,7 @@ bool GameState::save(const std::string& path) const {
     f.write(reinterpret_cast<const char*>(&totalOre),      sizeof(totalOre));
     f.write(reinterpret_cast<const char*>(&prestigeCount), sizeof(prestigeCount));
     f.write(reinterpret_cast<const char*>(&currentLevel), sizeof(currentLevel));
+    f.write(reinterpret_cast<const char*>(&oreThisLevel), sizeof(oreThisLevel));
     f.write(reinterpret_cast<const char*>(upgradeLevels.data()),
             upgradeLevels.size() * sizeof(int));
     f.write(reinterpret_cast<const char*>(prestigeLevels.data()),
@@ -309,6 +333,7 @@ bool GameState::load(const std::string& path) {
     f.read(reinterpret_cast<char*>(&totalOre),      sizeof(totalOre));
     f.read(reinterpret_cast<char*>(&prestigeCount), sizeof(prestigeCount));
     f.read(reinterpret_cast<char*>(&currentLevel), sizeof(currentLevel));
+    f.read(reinterpret_cast<char*>(&oreThisLevel), sizeof(oreThisLevel));
     f.read(reinterpret_cast<char*>(upgradeLevels.data()),
            upgradeLevels.size() * sizeof(int));
     f.read(reinterpret_cast<char*>(prestigeLevels.data()),

@@ -128,6 +128,24 @@ void Game::update(float dt) {
 
     m_mining.update(dt, m_state, creditsEarned, oreEarned);
 
+    // ── Warp charge (Space vasthouden in Mining tab) ───────
+        if (m_activeTab == Tab::MINING && m_state.canWarp()) {
+            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Space)) {
+                m_warpCharge += dt / WARP_CHARGE_TIME;
+                if (m_warpCharge >= 1.f) {
+                    m_warpCharge = 0.f;
+                    m_state.doWarp();
+                    m_mining.clearAll();
+                    m_mining.syncTurrets(m_state);
+                    pushNotif("Zone " + std::to_string(m_state.currentLevel) + "!",
+                              sf::Color(120, 220, 255));
+                }
+            } else {
+                m_warpCharge = std::max(0.f, m_warpCharge - dt * 2.f);
+            }
+        } else {
+            m_warpCharge = 0.f;
+        }
     if (m_state.autoPlinkoEnabled() && m_state.ore >= 1.0)
         m_plinko.updateAuto(dt, m_state.ore, 1.f / m_state.fireRatePerSec());
 
@@ -155,6 +173,8 @@ void Game::update(float dt) {
     if (oreEarned > 0.0) {
         m_state.ore      += oreEarned;
         m_state.totalOre += oreEarned;
+        m_state.oreThisLevel += oreEarned;
+
     }
 
     updateNotifs(dt);
@@ -344,7 +364,7 @@ void Game::drawTabBar() const {
 // ═════════════════════════════════════════════════════════════
 void Game::drawActiveTab() const {
     switch (m_activeTab) {
-        case Tab::MINING:   m_mining.draw(m_window, m_state); break;
+        case Tab::MINING:   m_mining.draw(m_window, m_state, m_warpCharge); break;
         case Tab::PLINKO:   drawPlinkoTab();                   break;
         case Tab::SHOP:     m_shop.draw(m_window, m_state);    break;
         case Tab::PRESTIGE: drawPrestigeScreen();              break;

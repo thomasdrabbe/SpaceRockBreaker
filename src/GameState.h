@@ -31,6 +31,11 @@ struct PrestigeUpgradeDef {
 // ─────────────────────────────────────────────────────────────
 class GameState {
 public:
+    // ── Level progress ────────────────────────────────────
+    double oreThisLevel  = 0.0;   // ore verzameld in huidig level
+    bool warpDriveUnlocked() const;
+    bool canWarp()           const;   // warpDrive + oreThisLevel >= 10
+    void doWarp();                    // level++ + reset
     // ── Currencies ────────────────────────────────────────
     double credits       = 0.0;
     double ore           = 0.0;
@@ -38,6 +43,7 @@ public:
     double totalCredits  = 0.0;
     double totalOre      = 0.0;
     int    prestigeCount = 0;
+
     // ── Level / zone ──────────────────────────────────────
     int currentLevel = 1;   // advances via step E (fly to next zone)
 
@@ -46,6 +52,7 @@ public:
     float   levelHpMult()   const;   // asteroid HP scale per level
     int     levelSpawnBonus() const; // extra asteroids per level
     std::string levelLabel() const;  // "Zone 1", "Zone 2" …
+    int oreWarpRequirement() const;  // ores nodig voor warp in huidig level
 
     // ── Regular upgrade levels ────────────────────────────
     std::array<int, static_cast<int>(UpgradeID::UPGRADE_COUNT)>
