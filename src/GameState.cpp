@@ -24,12 +24,20 @@ GameState::upgradeCatalog = {{
     // Plinko
     { "Plinko Rows",       "Add 1 row to Plinko",            300.0,  2.00, 8  },
     { "Plinko Multiplier", "+10% slot multipliers",          200.0,  1.80, 0  },
-    { "Plinko Balls",      "+1 max ball at once",            180.0,  1.85, 0  },
+    { "Plinko Balls",      "+1 max ball at once",            1.0,  1, 0  },
     { "Plinko Luck",       "+5% high-slot luck",             160.0,  1.70, 0  },
     // Economy
     { "Credit Multiplier", "+25% all credits",               250.0,  1.90, 0 },
     { "Bulk Processor",    "Convert more ore per drop",      400.0,  2.10, 0 },
     { "Auto-Plinko",       "Auto-drop balls",                750.0,  2.30, 0 },
+    // Ore tier unlocks  (maxLevel = 1 = one-time purchase)
+    { "Unlock Bronze",     "Spawn Bronze asteroids (3x ore)",    1500.0,  1.0, 1 },
+    { "Unlock Silver",     "Spawn Silver asteroids (8x ore)",    8000.0,  1.0, 1 },
+    { "Unlock Gold",       "Spawn Gold asteroids (20x ore)",    40000.0,  1.0, 1 },
+    { "Unlock Diamond",    "Spawn Diamond asteroids (55x ore)", 200000.0, 1.0, 1 },
+    { "Unlock Platinum",   "Spawn Platinum asteroids (140x)",   800000.0, 1.0, 1 },
+    { "Unlock Titanium",   "Spawn Titanium asteroids (380x)",  3000000.0, 1.0, 1 },
+    { "Unlock Iridium",    "Spawn Iridium asteroids (1000x)", 12000000.0, 1.0, 1 },
 }};
 
 const std::array<PrestigeUpgradeDef,
@@ -141,6 +149,43 @@ bool GameState::autoPlinkoEnabled() const {
 }
 
 // ═════════════════════════════════════════════════════════════
+//  Ore tier / level helpers
+// ═════════════════════════════════════════════════════════════
+OreTier GameState::maxOreTier() const {
+    // Each unlock upgrade adds one tier step
+    // IRON is always available; each unlock shifts the cap up
+    const UpgradeID unlocks[] = {
+        UpgradeID::UNLOCK_BRONZE,
+        UpgradeID::UNLOCK_SILVER,
+        UpgradeID::UNLOCK_GOLD,
+        UpgradeID::UNLOCK_DIAMOND,
+        UpgradeID::UNLOCK_PLATINUM,
+        UpgradeID::UNLOCK_TITANIUM,
+        UpgradeID::UNLOCK_IRIDIUM,
+    };
+    int tier = 0;
+    for (auto id : unlocks) {
+        if (levelOf(id) > 0) tier++;
+        else break;  // tiers must be bought in order
+    }
+    return static_cast<OreTier>(tier);
+}
+
+float GameState::levelHpMult() const {
+    // +15% asteroid HP per zone level
+    return 1.f + (currentLevel - 1) * 0.15f;
+}
+
+int GameState::levelSpawnBonus() const {
+    // +2 extra target asteroids per zone level
+    return (currentLevel - 1) * 2;
+}
+
+std::string GameState::levelLabel() const {
+    return "Zone " + std::to_string(currentLevel);
+}
+
+// ═════════════════════════════════════════════════════════════
 //  Upgrade helpers
 // ═════════════════════════════════════════════════════════════
 int GameState::levelOf(UpgradeID id) const {
@@ -222,6 +267,7 @@ void GameState::reset() {
     ore          = 0.0;
     totalCredits = 0.0;
     totalOre     = 0.0;
+    currentLevel = 1;          // ← nieuw
     upgradeLevels.fill(0);
 }
 
@@ -240,6 +286,7 @@ bool GameState::save(const std::string& path) const {
     f.write(reinterpret_cast<const char*>(&totalCredits),  sizeof(totalCredits));
     f.write(reinterpret_cast<const char*>(&totalOre),      sizeof(totalOre));
     f.write(reinterpret_cast<const char*>(&prestigeCount), sizeof(prestigeCount));
+    f.write(reinterpret_cast<const char*>(&currentLevel), sizeof(currentLevel));
     f.write(reinterpret_cast<const char*>(upgradeLevels.data()),
             upgradeLevels.size() * sizeof(int));
     f.write(reinterpret_cast<const char*>(prestigeLevels.data()),
@@ -261,6 +308,7 @@ bool GameState::load(const std::string& path) {
     f.read(reinterpret_cast<char*>(&totalCredits),  sizeof(totalCredits));
     f.read(reinterpret_cast<char*>(&totalOre),      sizeof(totalOre));
     f.read(reinterpret_cast<char*>(&prestigeCount), sizeof(prestigeCount));
+    f.read(reinterpret_cast<char*>(&currentLevel), sizeof(currentLevel));
     f.read(reinterpret_cast<char*>(upgradeLevels.data()),
            upgradeLevels.size() * sizeof(int));
     f.read(reinterpret_cast<char*>(prestigeLevels.data()),

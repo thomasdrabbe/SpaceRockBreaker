@@ -57,6 +57,21 @@ private:
     // ── Prestige confirm ──────────────────────────────────
     bool m_prestigeConfirm = false;
 
+    // ── Dynamic layout ────────────────────────────────────
+    // Berekend op basis van werkelijke schermgrootte
+    float m_scrW     = 0.f;   // werkelijke breedte
+    float m_scrH     = 0.f;   // werkelijke hoogte
+    float m_scale    = 1.f;   // UI-schaalfactor t.o.v. 1920x1080
+    float m_tabH     = 0.f;   // tab bar hoogte
+    float m_sideW    = 0.f;   // side panel breedte
+    float m_cntX     = 0.f;   // content origin X
+    float m_cntY     = 0.f;   // content origin Y
+    float m_cntW     = 0.f;   // content breedte
+    float m_cntH     = 0.f;   // content hoogte
+
+    void initLayout();         // aanroepen na window.create()
+    void reinitSystems();      // herinitialiseer subsystems na resize
+
     // ── Main loop ─────────────────────────────────────────
     void processEvents();
     void update(float dt);
@@ -92,18 +107,13 @@ private:
     void updateNotifs(float dt);
     void drawNotifs()  const;
 
-    // ── Helper ────────────────────────────────────────────
+    // ── Helpers ───────────────────────────────────────────
     void drawText(const std::string& str,
                   float x, float y,
                   unsigned size,
                   sf::Color color,
                   bool bold = false) const;
 
-    // ── Layout constants ──────────────────────────────────
-    static constexpr float TAB_BAR_H = 46.f;
-    static constexpr float SIDE_W    = 240.f;
-    static constexpr float CONTENT_X = 0.f;
-    static constexpr float CONTENT_Y = TAB_BAR_H;
-    static constexpr float CONTENT_W = WINDOW_WIDTH  - SIDE_W;
-    static constexpr float CONTENT_H = WINDOW_HEIGHT - TAB_BAR_H;
+    std::string formatBig(double v) const;
+    std::string pct(float v)        const;
 };

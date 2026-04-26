@@ -18,11 +18,13 @@ PlinkoBoard::PlinkoBoard() {
 void PlinkoBoard::build(int   rows,
                          float boardX, float boardY,
                          float boardW, float boardH,
-                         float multBonus, float plinkoLuck) {
+                         float multBonus, float plinkoLuck,
+                         float scale) {        // ← nieuw
     m_boardX = boardX;
     m_boardY = boardY;
     m_boardW = boardW;
     m_boardH = boardH;
+    m_scale  = scale;  // ← opslaan
     m_rows   = clamp(rows, PLINKO_MIN_ROWS, PLINKO_MAX_ROWS);
 
     buildPegs();
@@ -307,21 +309,24 @@ void PlinkoBoard::draw(sf::RenderTarget& target,
         target.draw(bucket);
 
         // Multiplier label
+        // Multiplier label
         std::ostringstream ss;
         ss << std::fixed << std::setprecision(1)
-           << slot.multiplier << "x";
+        << slot.multiplier << "x";
 
         sf::Text label(font);
         label.setString(ss.str());
-        label.setCharacterSize(11);
+        label.setCharacterSize(
+            static_cast<unsigned>(std::round(12.f * m_scale)));  // ← was 11
         label.setStyle(sf::Text::Bold);
         label.setFillColor(sf::Color(255, 255, 255,
             static_cast<uint8_t>(200 + 55 * flash)));
 
         float lw = label.getLocalBounds().size.x;
+        float lh = label.getLocalBounds().size.y;
         label.setPosition({
             slot.pos.x + (slot.width - lw) * 0.5f,
-            slot.pos.y + SLOT_HEIGHT * 0.25f });
+            slot.pos.y + (SLOT_HEIGHT - lh) * 0.5f - 2.f });  // ← ook verticaal gecentreerd
         target.draw(label);
     }
 

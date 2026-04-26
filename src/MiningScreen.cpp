@@ -11,6 +11,7 @@ MiningScreen::MiningScreen()
     : m_particles(MAX_PARTICLES) {
 }
 
+
 // ═════════════════════════════════════════════════════════════
 //  init
 // ═════════════════════════════════════════════════════════════
@@ -98,7 +99,8 @@ void MiningScreen::update(float      dt,
 
     // ── Asteroid field ────────────────────────────────────
     int target = targetAsteroidCount(state.turretCount());
-    m_asteroids.maintainField(target, m_w, m_h, hpMult);
+    int spawnTarget = target + state.levelSpawnBonus();
+    m_asteroids.maintainField(spawnTarget, m_w, m_h,hpMult * state.levelHpMult(), state.maxOreTier());
     m_asteroids.update(dt, m_w, m_h);
 
     // ── Turrets ───────────────────────────────────────────
@@ -155,13 +157,14 @@ void MiningScreen::resolveCollisions(GameState& state) {
 
             bullet.alive = false;
 
-            bool destroyed = asteroid.hit(bullet.damage,
-                                           m_particles);
+            bool destroyed = asteroid.hit(bullet.damage, m_particles);
             if (destroyed) {
+                int count = asteroid.oreDrop.count * asteroid.rarityDropMult();
                 m_ores.drop(
                     asteroid.pos,
                     asteroid.oreDrop.color,
-                    asteroid.oreDrop.count,
+                    asteroid.oreDrop.value,
+                    count,
                     state.oreLuckBonus(),
                     m_particles);
             }
@@ -295,7 +298,14 @@ void MiningScreen::drawCollectRing(sf::RenderTarget& target,
 // ─────────────────────────────────────────────────────────────
 void MiningScreen::drawHUD(sf::RenderTarget& target,
                              const GameState&  state) const {
-    // HUD achtergrond
+    // Zone label — linksboven
+    sf::Text zoneLabel(*m_font);
+    zoneLabel.setString(state.levelLabel());
+    zoneLabel.setCharacterSize(15);
+    zoneLabel.setStyle(sf::Text::Bold);
+    zoneLabel.setFillColor(sf::Color(180, 210, 255));
+    zoneLabel.setPosition({ m_x + 8.f, m_y + 8.f });
+    target.draw(zoneLabel);    // HUD achtergrond
     sf::RectangleShape hudBg(sf::Vector2f{ 220.f, 96.f });
     hudBg.setPosition({ m_x + 5.f, m_y + 4.f });
     hudBg.setFillColor(sf::Color(4, 6, 16, 170));

@@ -34,6 +34,14 @@ enum class UpgradeID {
     CREDIT_MULT,
     BULK_PROCESS,
     AUTO_PLINKO,
+    // Ore tier unlocks (maxLevel = 1 each)
+    UNLOCK_BRONZE,
+    UNLOCK_SILVER,
+    UNLOCK_GOLD,
+    UNLOCK_DIAMOND,
+    UNLOCK_PLATINUM,
+    UNLOCK_TITANIUM,
+    UNLOCK_IRIDIUM,
     UPGRADE_COUNT   // sentinel
 };
 
@@ -47,22 +55,46 @@ enum class PrestigeUpgradeID {
     PRESTIGE_UPGRADE_COUNT
 };
 
-// ─── Asteroid tiers ───────────────────────────────────────────
+// ─── Asteroid tiers (size/hp) ─────────────────────────────────
 enum class AsteroidTier { SMALL = 0, MEDIUM, LARGE, GIANT };
+
+// ─── Ore Rarity ───────────────────────────────────────────────
+enum class OreRarity {
+    COMMON = 0,
+    UNCOMMON,
+    RARE,
+    EPIC,
+    MYTHIC,
+    LEGENDARY,
+    RARITY_COUNT
+};
+
+// ─── Ore tiers (material) ─────────────────────────────────────
+enum class OreTier {
+    IRON = 0,
+    BRONZE,
+    SILVER,
+    GOLD,
+    DIAMOND,
+    PLATINUM,
+    TITANIUM,
+    IRIDIUM,
+    ORE_TIER_COUNT
+};
 
 // ─── Entity limits ────────────────────────────────────────────
 constexpr int MAX_ASTEROIDS    = 40;
 constexpr int MAX_BULLETS      = 300;
 constexpr int MAX_ORE          = 250;
 constexpr int MAX_PARTICLES    = 600;
-constexpr int MAX_PLINKO_BALLS = 24;
+constexpr int MAX_PLINKO_BALLS = 100;
 
 // ─── Plinko board geometry ────────────────────────────────────
-constexpr int   PLINKO_MIN_ROWS   = 8;
-constexpr int   PLINKO_MAX_ROWS   = 16;
-constexpr float PLINKO_PEG_RADIUS = 6.f;
+constexpr int   PLINKO_MIN_ROWS    = 8;
+constexpr int   PLINKO_MAX_ROWS    = 16;
+constexpr float PLINKO_PEG_RADIUS  = 6.f;
 constexpr float PLINKO_BALL_RADIUS = 9.f;
-constexpr float PLINKO_GRAVITY    = 600.f;
+constexpr float PLINKO_GRAVITY     = 600.f;
 
 // ─── Layout ───────────────────────────────────────────────────
 constexpr float SIDE_PANEL_W = 240.f;
@@ -70,4 +102,4 @@ constexpr float TAB_BAR_H    = 46.f;
 
 // ─── Save ─────────────────────────────────────────────────────
 const std::string SAVE_FILE    = "srb_save.bin";
-constexpr int     SAVE_VERSION = 2;
+constexpr int     SAVE_VERSION = 3;   // bumped: ore tiers + level

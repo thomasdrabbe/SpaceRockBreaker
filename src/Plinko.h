@@ -45,10 +45,11 @@ public:
     PlinkoBoard();
 
     void build(int   rows,
-               float boardX, float boardY,
-               float boardW, float boardH,
-               float multBonus,
-               float plinkoLuck);
+           float boardX, float boardY,
+           float boardW, float boardH,
+           float multBonus,
+           float plinkoLuck,
+           float scale = 1.f);
 
     bool dropBall(double oreValue, float dropX = -1.f);
 
@@ -72,6 +73,7 @@ private:
     float m_boardX = 0.f, m_boardY = 0.f;
     float m_boardW = 0.f, m_boardH = 0.f;
     int   m_rows   = PLINKO_MIN_ROWS;
+    float m_scale = 1.f;
 
     std::vector<Peg>        m_pegs;
     std::vector<PlinkoSlot> m_slots;

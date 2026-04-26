@@ -38,6 +38,14 @@ public:
     double totalCredits  = 0.0;
     double totalOre      = 0.0;
     int    prestigeCount = 0;
+    // ── Level / zone ──────────────────────────────────────
+    int currentLevel = 1;   // advances via step E (fly to next zone)
+
+    // ── New computed stats ────────────────────────────────
+    OreTier maxOreTier()    const;   // highest unlocked ore tier
+    float   levelHpMult()   const;   // asteroid HP scale per level
+    int     levelSpawnBonus() const; // extra asteroids per level
+    std::string levelLabel() const;  // "Zone 1", "Zone 2" …
 
     // ── Regular upgrade levels ────────────────────────────
     std::array<int, static_cast<int>(UpgradeID::UPGRADE_COUNT)>

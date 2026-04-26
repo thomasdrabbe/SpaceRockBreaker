@@ -30,11 +30,16 @@ public:
     sf::Color     color;
     sf::ConvexShape shape;
     OreDrop       oreDrop;
+    OreRarity    rarity    = OreRarity::COMMON;
+    OreTier      oreTier = OreTier::IRON;
+    // In Asteroid.h, public:
+    int rarityDropMult() const;  // returns countMult based on rarity
 
     void spawn(AsteroidTier tier,
                sf::Vector2f pos,
                sf::Vector2f vel,
-               float        hpMult = 1.f);
+               float        hpMult = 1.f,
+               OreTier      ot     = OreTier::IRON);
 
     bool hit(float damage, ParticleSystem& particles);
     void update(float dt);
@@ -53,11 +58,13 @@ class AsteroidManager {
 public:
     AsteroidManager();
 
+    // In AsteroidManager:
     void spawnRandom(float areaW, float areaH,
-                     float hpMult = 1.f);
+                     float hpMult, OreTier maxTier);
+
     void maintainField(int targetCount,
                        float areaW, float areaH,
-                       float hpMult);
+                       float hpMult, OreTier maxTier);
     void update(float dt, float areaW, float areaH);
     void draw(sf::RenderTarget& target) const;
 

@@ -4,35 +4,22 @@
 #include <algorithm>
 
 // ═════════════════════════════════════════════════════════════
-//  Tier tables
+//  Anonieme namespace — alle tabellen en helpers
 // ═════════════════════════════════════════════════════════════
 namespace {
 
+// ── Asteroid size/speed/hp tabel ─────────────────────────────
 struct TierData {
     float     radiusMin, radiusMax;
     float     speedMin,  speedMax;
     float     baseHp;
-    sf::Color color;
-    OreDrop   ore;
 };
 
 const TierData TIER_TABLE[4] = {
-    // SMALL
-    { 14.f, 22.f, 60.f, 120.f, 30.f,
-      sf::Color(140, 110,  80),
-      { sf::Color(180, 140,  60),  2.0, 2 } },
-    // MEDIUM
-    { 26.f, 38.f, 35.f,  80.f, 90.f,
-      sf::Color(100,  80, 130),
-      { sf::Color(130,  80, 200),  6.0, 4 } },
-    // LARGE
-    { 42.f, 58.f, 20.f,  50.f, 240.f,
-      sf::Color( 80, 120, 100),
-      { sf::Color( 60, 200, 120), 18.0, 7 } },
-    // GIANT
-    { 64.f, 90.f, 10.f,  28.f, 600.f,
-      sf::Color(160,  60,  60),
-      { sf::Color(220,  80,  60), 50.0, 14 } },
+    { 14.f, 22.f, 60.f, 120.f,  30.f },   // SMALL
+    { 26.f, 38.f, 35.f,  80.f,  90.f },   // MEDIUM
+    { 42.f, 58.f, 20.f,  50.f, 240.f },   // LARGE
+    { 64.f, 90.f, 10.f,  28.f, 600.f },   // GIANT
 };
 
 const float TIER_WEIGHTS[4] = { 0.50f, 0.30f, 0.15f, 0.05f };
@@ -47,7 +34,87 @@ AsteroidTier pickTier() {
     return AsteroidTier::SMALL;
 }
 
+// ── Ore tier tabel ────────────────────────────────────────────
+struct OreTierData {
+    sf::Color asteroidColor;
+    sf::Color oreColor;
+    double    baseValue;
+    int       baseCount;   // ore drops per asteroid size (SMALL)
+};
+
+const OreTierData ORE_TIER_TABLE[static_cast<int>(OreTier::ORE_TIER_COUNT)] = {
+    { sf::Color( 90,  90,  95), sf::Color(140, 140, 150),    1.0, 2  }, // IRON
+    { sf::Color(140,  80,  30), sf::Color(200, 120,  50),    3.0, 2  }, // BRONZE
+    { sf::Color(160, 165, 175), sf::Color(210, 215, 225),    8.0, 3  }, // SILVER
+    { sf::Color(180, 150,  20), sf::Color(255, 215,  50),   20.0, 3  }, // GOLD
+    { sf::Color( 60, 180, 200), sf::Color(140, 230, 255),   55.0, 4  }, // DIAMOND
+    { sf::Color( 80, 110, 190), sf::Color(160, 185, 255),  140.0, 4  }, // PLATINUM
+    { sf::Color( 50,  70, 150), sf::Color( 90, 120, 220),  380.0, 5  }, // TITANIUM
+    { sf::Color( 80,  30, 110), sf::Color(160,  60, 220), 1000.0, 5  }, // IRIDIUM
+};
+
+// Drop count scales with asteroid size tier
+const int ORE_COUNT_BY_SIZE[4] = { 2, 4, 7, 14 };
+
+OreTier pickOreTier(OreTier maxTier) {
+    int max = static_cast<int>(maxTier);
+    if (max == 0) return OreTier::IRON;
+
+    float weights[8] = {};
+    float total = 0.f;
+    float w = 1.f;
+    for (int i = 0; i <= max; i++) {
+        weights[i] = w;
+        total += w;
+        w *= 0.40f;
+    }
+
+    float r = randFloat(0.f, total);
+    float cum = 0.f;
+    for (int i = 0; i <= max; i++) {
+        cum += weights[i];
+        if (r < cum) return static_cast<OreTier>(i);
+    }
+    return OreTier::IRON;
+}
+
+// ── Asteroid rarity tabel ────────────────────────────────────
+struct AsteroidRarityData {
+    sf::Color outlineColor;
+    float     outlineThick;
+    int       countMult;
+    float     weight;
+};
+
+const AsteroidRarityData ASTEROID_RARITY[6] = {
+    { sf::Color(160, 160, 165), 1.5f, 1,  50.0f },  // Common
+    { sf::Color( 80, 200,  80), 2.0f, 1,  25.0f },  // Uncommon
+    { sf::Color( 70, 130, 255), 2.5f, 2,  14.0f },  // Rare
+    { sf::Color(185,  60, 255), 3.0f, 3,   7.5f },  // Epic
+    { sf::Color(220,  50,  50), 3.5f, 5,   2.8f },  // Mythic
+    { sf::Color(255, 170,   0), 4.5f, 8,   0.7f },  // Legendary
+};
+
+OreRarity rollAsteroidRarity() {
+    float total = 0.f;
+    for (const auto& r : ASTEROID_RARITY) total += r.weight;
+    float roll = randFloat(0.f, total);
+    float cum  = 0.f;
+    for (int i = 0; i < 6; i++) {
+        cum += ASTEROID_RARITY[i].weight;
+        if (roll < cum) return static_cast<OreRarity>(i);
+    }
+    return OreRarity::COMMON;
+}
+
 } // anonymous namespace
+
+// ═════════════════════════════════════════════════════════════
+//  Asteroid::rarityDropMult
+// ═════════════════════════════════════════════════════════════
+int Asteroid::rarityDropMult() const {
+    return ASTEROID_RARITY[static_cast<int>(rarity)].countMult;
+}
 
 // ═════════════════════════════════════════════════════════════
 //  Asteroid::spawn
@@ -55,26 +122,33 @@ AsteroidTier pickTier() {
 void Asteroid::spawn(AsteroidTier t,
                      sf::Vector2f p,
                      sf::Vector2f v,
-                     float        hpMult) {
-    const auto& td = TIER_TABLE[static_cast<int>(t)];
+                     float        hpMult,
+                     OreTier      ot) {
+    const auto& td  = TIER_TABLE[static_cast<int>(t)];
+    const auto& otd = ORE_TIER_TABLE[static_cast<int>(ot)];
 
     tier         = t;
+    oreTier      = ot;
+    rarity       = rollAsteroidRarity();
     pos          = p;
     vel          = v;
     radius       = randFloat(td.radiusMin, td.radiusMax);
     maxHp        = td.baseHp * hpMult;
     hp           = maxHp;
-    color        = td.color;
-    oreDrop      = td.ore;
+    color        = otd.asteroidColor;
     rotation     = randFloat(0.f, 360.f);
     rotationRate = randFloat(-40.f, 40.f);
     alive        = true;
+
+    oreDrop.color = otd.oreColor;
+    oreDrop.value = otd.baseValue;
+    oreDrop.count = ORE_COUNT_BY_SIZE[static_cast<int>(t)];
 
     buildShape();
 }
 
 // ─────────────────────────────────────────────────────────────
-//  buildShape
+//  Asteroid::buildShape
 // ─────────────────────────────────────────────────────────────
 void Asteroid::buildShape() {
     const int VERTS = randInt(7, 12);
@@ -89,11 +163,11 @@ void Asteroid::buildShape() {
     }
 
     shape.setFillColor(color);
-    shape.setOutlineColor(sf::Color(
-        static_cast<uint8_t>(std::min(255, color.r + 60)),
-        static_cast<uint8_t>(std::min(255, color.g + 60)),
-        static_cast<uint8_t>(std::min(255, color.b + 60))));
-    shape.setOutlineThickness(1.5f);
+
+    // Outline kleur en dikte komen van de rarity
+    const auto& rd = ASTEROID_RARITY[static_cast<int>(rarity)];
+    shape.setOutlineColor(rd.outlineColor);
+    shape.setOutlineThickness(rd.outlineThick);
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -132,7 +206,6 @@ void Asteroid::update(float dt) {
 void Asteroid::draw(sf::RenderTarget& target) const {
     if (!alive) return;
 
-    // Draw polygon met rotatie
     sf::Transform tf;
     tf.translate(pos).rotate(sf::degrees(rotation));
     target.draw(shape, tf);
@@ -164,22 +237,10 @@ void Asteroid::draw(sf::RenderTarget& target) const {
 // ═════════════════════════════════════════════════════════════
 void Asteroid::bounceWalls(float left, float top,
                             float right, float bottom) {
-    if (pos.x - radius < left) {
-        pos.x = left + radius;
-        vel.x = std::abs(vel.x);
-    }
-    if (pos.x + radius > right) {
-        pos.x = right - radius;
-        vel.x = -std::abs(vel.x);
-    }
-    if (pos.y - radius < top) {
-        pos.y = top + radius;
-        vel.y = std::abs(vel.y);
-    }
-    if (pos.y + radius > bottom) {
-        pos.y = bottom - radius;
-        vel.y = -std::abs(vel.y);
-    }
+    if (pos.x - radius < left)  { pos.x = left  + radius; vel.x =  std::abs(vel.x); }
+    if (pos.x + radius > right) { pos.x = right - radius; vel.x = -std::abs(vel.x); }
+    if (pos.y - radius < top)   { pos.y = top   + radius; vel.y =  std::abs(vel.y); }
+    if (pos.y + radius > bottom){ pos.y = bottom- radius; vel.y = -std::abs(vel.y); }
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -194,31 +255,27 @@ Asteroid* AsteroidManager::claim() {
 }
 
 void AsteroidManager::spawnRandom(float areaW, float areaH,
-                                   float hpMult) {
+                                   float hpMult, OreTier maxTier) {
     Asteroid* a = claim();
     if (!a) return;
 
-    AsteroidTier tier = pickTier();
-    float r = TIER_TABLE[static_cast<int>(tier)].radiusMax;
+    AsteroidTier t  = pickTier();
+    OreTier      ot = pickOreTier(maxTier);
+
+    const auto& td = TIER_TABLE[static_cast<int>(t)];
+    float r     = td.radiusMax;
+    float speed = randFloat(td.speedMin, td.speedMax);
 
     int side = randInt(0, 3);
     sf::Vector2f spawnPos;
-
     float cx = areaW * 0.5f;
     float cy = areaH * 0.5f;
-    float speed = randFloat(
-        TIER_TABLE[static_cast<int>(tier)].speedMin,
-        TIER_TABLE[static_cast<int>(tier)].speedMax);
 
     switch (side) {
-        case 0: spawnPos = { randFloat(r, areaW - r), -r };
-                break;
-        case 1: spawnPos = { randFloat(r, areaW - r), areaH + r };
-                break;
-        case 2: spawnPos = { -r, randFloat(r, areaH - r) };
-                break;
-        default:spawnPos = { areaW + r, randFloat(r, areaH - r) };
-                break;
+        case 0: spawnPos = { randFloat(r, areaW - r), -r };          break;
+        case 1: spawnPos = { randFloat(r, areaW - r), areaH + r };   break;
+        case 2: spawnPos = { -r,          randFloat(r, areaH - r) }; break;
+        default:spawnPos = { areaW + r,   randFloat(r, areaH - r) }; break;
     }
 
     sf::Vector2f dir = normalize({
@@ -226,16 +283,16 @@ void AsteroidManager::spawnRandom(float areaW, float areaH,
         cy - spawnPos.y + randFloat(-areaH * 0.3f, areaH * 0.3f)
     });
 
-    a->spawn(tier, spawnPos, dir * speed, hpMult);
+    a->spawn(t, spawnPos, dir * speed, hpMult, ot);
     m_alive++;
 }
 
 void AsteroidManager::maintainField(int targetCount,
                                      float areaW, float areaH,
-                                     float hpMult) {
+                                     float hpMult, OreTier maxTier) {
     int current = aliveCount();
     for (int i = current; i < targetCount; i++)
-        spawnRandom(areaW, areaH, hpMult);
+        spawnRandom(areaW, areaH, hpMult, maxTier);
 }
 
 void AsteroidManager::update(float dt, float areaW, float areaH) {
@@ -253,8 +310,7 @@ void AsteroidManager::draw(sf::RenderTarget& target) const {
         if (a.alive) a.draw(target);
 }
 
-Asteroid* AsteroidManager::nearest(sf::Vector2f from,
-                                     float maxDist) {
+Asteroid* AsteroidManager::nearest(sf::Vector2f from, float maxDist) {
     Asteroid* best   = nullptr;
     float     bestD2 = maxDist * maxDist;
 

@@ -5,7 +5,7 @@
 #include "Particle.h"
 
 // ─────────────────────────────────────────────────────────────
-//  Single ore pickup
+//  Single ore pickup — gewoon het materiaal, vaste waarde
 // ─────────────────────────────────────────────────────────────
 struct Ore {
     sf::Vector2f pos;
@@ -17,6 +17,7 @@ struct Ore {
     bool         alive       = false;
     bool         collecting  = false;
     sf::Vector2f collectTarget;
+    double       value       = 1.0;  // vaste waarde per ore tier
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -26,15 +27,13 @@ class OreManager {
 public:
     OreManager();
 
-    /// Drop ore at position — ore gaat naar m_state.ore teller
-    /// GEEN credits — alleen via Plinko
     void drop(sf::Vector2f    pos,
               sf::Color       color,
+              double          value,
               int             count,
               float           oreLuckBonus,
               ParticleSystem& particles);
 
-    /// Per-frame update — geeft aantal opgepakte ore terug
     void update(float           dt,
                 sf::Vector2f    collectorPos,
                 float           collectRadius,

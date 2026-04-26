@@ -5,9 +5,6 @@
 #include <algorithm>
 #include <cmath>
 
-// ─────────────────────────────────────────────────────────────
-//  Category metadata
-// ─────────────────────────────────────────────────────────────
 namespace {
 
 struct CatInfo {
@@ -16,30 +13,37 @@ struct CatInfo {
     std::vector<UpgradeID> ids;
 };
 
+
 const std::vector<CatInfo> CATEGORIES = {
     { "[W] Weapons", ShopCategory::WEAPONS,
       { UpgradeID::GUN_DAMAGE,   UpgradeID::FIRE_RATE,
         UpgradeID::TURRET_COUNT, UpgradeID::CRIT_CHANCE,
         UpgradeID::CRIT_MULT,    UpgradeID::SPLIT_SHOT } },
-
     { "[M] Mining",  ShopCategory::MINING,
-      { UpgradeID::ORE_VALUE,          UpgradeID::AUTO_COLLECT_RADIUS,
-        UpgradeID::ORE_LUCK,           UpgradeID::ASTEROID_HP } },
-
+      { UpgradeID::ORE_VALUE,    UpgradeID::AUTO_COLLECT_RADIUS,
+        UpgradeID::ORE_LUCK,     UpgradeID::ASTEROID_HP } },
     { "[P] Plinko",  ShopCategory::PLINKO,
       { UpgradeID::PLINKO_ROWS,  UpgradeID::PLINKO_MULT,
         UpgradeID::PLINKO_BALLS, UpgradeID::PLINKO_LUCK } },
-
     { "[E] Economy", ShopCategory::ECONOMY,
-      { UpgradeID::CREDIT_MULT, UpgradeID::BULK_PROCESS,
+      { UpgradeID::CREDIT_MULT,  UpgradeID::BULK_PROCESS,
         UpgradeID::AUTO_PLINKO } },
+    { "[O] Ore Tiers", ShopCategory::ORE_TIERS,
+      { UpgradeID::UNLOCK_BRONZE,
+      UpgradeID::UNLOCK_SILVER,
+      UpgradeID::UNLOCK_GOLD,
+      UpgradeID::UNLOCK_DIAMOND,
+      UpgradeID::UNLOCK_PLATINUM,
+      UpgradeID::UNLOCK_TITANIUM,
+      UpgradeID::UNLOCK_IRIDIUM } },
 };
 
 const sf::Color CAT_COLORS[] = {
-    sf::Color(255, 100,  80),   // Weapons
-    sf::Color( 80, 200, 120),   // Mining
-    sf::Color(160, 100, 255),   // Plinko
-    sf::Color(255, 200,  60),   // Economy
+    sf::Color(255, 100,  80),
+    sf::Color( 80, 200, 120),
+    sf::Color(160, 100, 255),
+    sf::Color(255, 200,  60),
+    sf::Color(120, 180, 255),
 };
 
 } // anonymous namespace
@@ -51,12 +55,32 @@ Shop::Shop() {}
 
 void Shop::init(sf::Font& font,
                 float panelX, float panelY,
-                float panelW, float panelH) {
-    m_font = &font;
-    m_x    = panelX;
-    m_y    = panelY;
-    m_w    = panelW;
-    m_h    = panelH;
+                float panelW, float panelH,
+                float scale) {
+    m_font  = &font;
+    m_x     = panelX;
+    m_y     = panelY;
+    m_w     = panelW;
+    m_h     = panelH;
+    m_scale = scale;
+
+    // Schaalbare layout-waarden
+    m_tabH       = std::round(44.f  * m_scale);
+    m_cardH      = std::round(100.f * m_scale);
+    m_cardMargin = std::round(10.f  * m_scale);
+    m_cardPad    = std::round(14.f  * m_scale);
+    m_scrollBarW = std::round(8.f   * m_scale);
+}
+
+// ═════════════════════════════════════════════════════════════
+//  tabBounds
+// ═════════════════════════════════════════════════════════════
+sf::FloatRect Shop::tabBounds(int idx) const {
+    int   count = static_cast<int>(ShopCategory::CATEGORY_COUNT);
+    float tabW  = (m_w - m_scrollBarW) / static_cast<float>(count);
+    return sf::FloatRect(
+        { m_x + idx * tabW, m_y },
+        { tabW, m_tabH });
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -65,58 +89,40 @@ void Shop::init(sf::Font& font,
 void Shop::buildCards(const GameState& state) {
     m_cards.clear();
 
-    const auto& cat   = CATEGORIES[static_cast<int>(m_activeCategory)];
-    float contentX    = m_x + CARD_MARGIN;
-    float cardW       = m_w - CARD_MARGIN * 2.f
-                        - SCROLLBAR_W - 4.f;
-    float startY      = m_y + TAB_H + CARD_MARGIN;
+    int catIdx = static_cast<int>(m_activeCategory);
+    const auto& ids = CATEGORIES[catIdx].ids;
 
-    int idx = 0;
-    for (UpgradeID id : cat.ids) {
+    float cardW = m_w - m_scrollBarW - m_cardMargin * 2.f;
+    float y     = m_y + m_tabH + m_cardMargin - m_scroll;
+
+    for (auto id : ids) {
         UpgradeCard card;
         card.id         = id;
         card.bounds     = sf::FloatRect(
-            { contentX,
-              startY + idx * (CARD_H + CARD_MARGIN) - m_scroll },
-            { cardW, CARD_H });
+            { m_x + m_cardMargin, y },
+            { cardW, m_cardH });
         card.affordable = state.canBuy(id);
         m_cards.push_back(card);
-        idx++;
+        y += m_cardH + m_cardMargin;
     }
 
-    float totalH   = cat.ids.size() * (CARD_H + CARD_MARGIN);
-    float visibleH = m_h - TAB_H - CARD_MARGIN;
+    float totalH   = static_cast<float>(ids.size()) * (m_cardH + m_cardMargin);
+    float visibleH = m_h - m_tabH;
     m_maxScroll    = std::max(0.f, totalH - visibleH);
     m_scroll       = clamp(m_scroll, 0.f, m_maxScroll);
 }
 
 // ═════════════════════════════════════════════════════════════
-//  tabBounds
+//  handleEvent
 // ═════════════════════════════════════════════════════════════
-sf::FloatRect Shop::tabBounds(int idx) const {
-    float tabW = m_w / static_cast<float>(
-        static_cast<int>(ShopCategory::CATEGORY_COUNT));
-    return sf::FloatRect(
-        { m_x + idx * tabW, m_y },
-        { tabW, TAB_H });
-}
-
-// ═════════════════════════════════════════════════════════════
-//  handleEvent  — SFML 3 event system
-// ═════════════════════════════════════════════════════════════
-bool Shop::handleEvent(const sf::Event& event,
-                        GameState&       state) {
-
-    if (const auto* e =
-            event.getIf<sf::Event::MouseButtonPressed>()) {
-
+bool Shop::handleEvent(const sf::Event& event, GameState& state) {
+    if (const auto* e = event.getIf<sf::Event::MouseButtonPressed>()) {
         if (e->button == sf::Mouse::Button::Left) {
-            sf::Vector2f mp(static_cast<float>(e->position.x),
-                            static_cast<float>(e->position.y));
+            sf::Vector2f mp(
+                static_cast<float>(e->position.x),
+                static_cast<float>(e->position.y));
 
-            // Category tab click
-            for (int i = 0; i < static_cast<int>(
-                     ShopCategory::CATEGORY_COUNT); i++) {
+            for (int i = 0; i < static_cast<int>(ShopCategory::CATEGORY_COUNT); i++) {
                 if (tabBounds(i).contains(mp)) {
                     m_activeCategory = static_cast<ShopCategory>(i);
                     m_scroll         = 0.f;
@@ -125,7 +131,6 @@ bool Shop::handleEvent(const sf::Event& event,
                 }
             }
 
-            // Card click
             for (auto& card : m_cards) {
                 if (card.bounds.contains(mp) && card.affordable) {
                     state.buy(card.id);
@@ -136,8 +141,7 @@ bool Shop::handleEvent(const sf::Event& event,
         }
     }
 
-    if (const auto* e =
-            event.getIf<sf::Event::MouseWheelScrolled>()) {
+    if (const auto* e = event.getIf<sf::Event::MouseWheelScrolled>()) {
         scrollBy(-e->delta * 30.f);
         buildCards(state);
     }
@@ -148,8 +152,7 @@ bool Shop::handleEvent(const sf::Event& event,
 // ═════════════════════════════════════════════════════════════
 //  update
 // ═════════════════════════════════════════════════════════════
-void Shop::update(sf::Vector2f mousePos,
-                   const GameState& state) {
+void Shop::update(sf::Vector2f mousePos, const GameState& state) {
     buildCards(state);
     for (auto& card : m_cards)
         card.hovered = card.bounds.contains(mousePos);
@@ -160,79 +163,28 @@ void Shop::scrollBy(float delta) {
 }
 
 // ═════════════════════════════════════════════════════════════
-//  formatEffect
-// ═════════════════════════════════════════════════════════════
-std::string Shop::formatEffect(UpgradeID        id,
-                                 const GameState& state) const {
-    std::ostringstream ss;
-    ss << std::fixed << std::setprecision(1);
-
-    switch (id) {
-        case UpgradeID::GUN_DAMAGE:
-            ss << state.gunDamage() << " dmg"; break;
-        case UpgradeID::FIRE_RATE:
-            ss << state.fireRatePerSec() << "/s"; break;
-        case UpgradeID::TURRET_COUNT:
-            ss << state.turretCount() << " turrets"; break;
-        case UpgradeID::CRIT_CHANCE:
-            ss << pct(state.critChance()); break;
-        case UpgradeID::CRIT_MULT:
-            ss << state.critMult() << "x"; break;
-        case UpgradeID::SPLIT_SHOT:
-            ss << state.splitShot() << " bullets"; break;
-        case UpgradeID::ORE_VALUE:
-            ss << state.oreValueMult() << "x"; break;
-        case UpgradeID::AUTO_COLLECT_RADIUS:
-            ss << state.autoCollectRadius() << "px"; break;
-        case UpgradeID::ORE_LUCK:
-            ss << pct(state.oreLuckBonus()); break;
-        case UpgradeID::ASTEROID_HP: {
-            float hpMult = std::max(0.1f,
-                1.f - state.levelOf(UpgradeID::ASTEROID_HP) * 0.1f);
-            ss << std::setprecision(0)
-               << hpMult * 100.f << "% HP"; break;
-        }
-        case UpgradeID::PLINKO_ROWS:
-            ss << state.plinkoRows() << " rows"; break;
-        case UpgradeID::PLINKO_MULT:
-            ss << state.plinkoMultBonus() << "x"; break;
-        case UpgradeID::PLINKO_BALLS:
-            ss << state.maxPlinkoBalls() << " balls"; break;
-        case UpgradeID::PLINKO_LUCK:
-            ss << pct(state.plinkoLuck()); break;
-        case UpgradeID::CREDIT_MULT:
-            ss << state.creditMult() << "x"; break;
-        case UpgradeID::BULK_PROCESS:
-            ss << state.bulkProcess() << "x bulk"; break;
-        case UpgradeID::AUTO_PLINKO:
-            ss << (state.autoPlinkoEnabled() ? "ON" : "OFF"); break;
-        default:
-            ss << "Lv " << state.levelOf(id); break;
-    }
-    return ss.str();
-}
-
-// ═════════════════════════════════════════════════════════════
 //  draw
 // ═════════════════════════════════════════════════════════════
-void Shop::draw(sf::RenderTarget& target,
-                 const GameState&  state) const {
+void Shop::draw(sf::RenderTarget& target, const GameState& state) const {
     drawBackground(target);
     drawCategoryTabs(target, state);
 
-    // Clip kaarten via viewport
+    // Viewport clipping — gebruik werkelijke target-grootte
+    auto  tSize = target.getSize();
+    float tW    = static_cast<float>(tSize.x);
+    float tH    = static_cast<float>(tSize.y);
+
     sf::View oldView = target.getView();
 
-    float vpX = m_x / WINDOW_WIDTH;
-    float vpY = (m_y + TAB_H) / WINDOW_HEIGHT;
-    float vpW = m_w / WINDOW_WIDTH;
-    float vpH = (m_h - TAB_H) / WINDOW_HEIGHT;
+    float vpX = m_x / tW;
+    float vpY = (m_y + m_tabH) / tH;
+    float vpW = m_w / tW;
+    float vpH = (m_h - m_tabH) / tH;
 
     sf::View cardView(sf::FloatRect(
-        { m_x, m_y + TAB_H },
-        { m_w, m_h - TAB_H }));
-    cardView.setViewport(sf::FloatRect(
-        { vpX, vpY }, { vpW, vpH }));
+        { m_x, m_y + m_tabH },
+        { m_w, m_h - m_tabH }));
+    cardView.setViewport(sf::FloatRect({ vpX, vpY }, { vpW, vpH }));
     target.setView(cardView);
 
     for (const auto& card : m_cards)
@@ -259,26 +211,25 @@ void Shop::drawBackground(sf::RenderTarget& target) const {
 // ─────────────────────────────────────────────────────────────
 void Shop::drawCategoryTabs(sf::RenderTarget& target,
                               const GameState& /*state*/) const {
-    int count = static_cast<int>(ShopCategory::CATEGORY_COUNT);
+    int      count   = static_cast<int>(ShopCategory::CATEGORY_COUNT);
+    unsigned tabFont = static_cast<unsigned>(std::round(14.f * m_scale));
 
     for (int i = 0; i < count; i++) {
         auto  bounds = tabBounds(i);
-        bool  active = (m_activeCategory ==
-                        static_cast<ShopCategory>(i));
+        bool  active = (m_activeCategory == static_cast<ShopCategory>(i));
         auto& accent = CAT_COLORS[i];
 
-        sf::RectangleShape tab(sf::Vector2f{
+        sf::RectangleShape bg(sf::Vector2f{
             bounds.size.x, bounds.size.y });
-        tab.setPosition(bounds.position);
-        tab.setFillColor(active
-            ? sf::Color(accent.r / 4, accent.g / 4,
-                        accent.b / 4, 240)
-            : sf::Color(18, 20, 38, 200));
-        tab.setOutlineColor(active
+        bg.setPosition(bounds.position);
+        bg.setFillColor(active
+            ? sf::Color(accent.r/5, accent.g/5, accent.b/5, 255)
+            : sf::Color(16, 18, 32, 255));
+        bg.setOutlineColor(active
             ? sf::Color(accent.r, accent.g, accent.b, 200)
-            : sf::Color(40, 50, 80, 120));
-        tab.setOutlineThickness(1.f);
-        target.draw(tab);
+            : sf::Color(40, 48, 80, 150));
+        bg.setOutlineThickness(1.f);
+        target.draw(bg);
 
         if (active) {
             sf::RectangleShape bar(sf::Vector2f{
@@ -290,22 +241,24 @@ void Shop::drawCategoryTabs(sf::RenderTarget& target,
             target.draw(bar);
         }
 
-        sf::Text label(*m_font);
-        label.setString(CATEGORIES[i].label);
-        label.setCharacterSize(13);
-        label.setStyle(sf::Text::Bold);
-        label.setFillColor(active
-            ? sf::Color(accent.r, accent.g, accent.b)
-            : sf::Color(160, 170, 200));
-
-        float lw = label.getLocalBounds().size.x;
-        float lh = label.getLocalBounds().size.y;
-        label.setPosition({
-            bounds.position.x + (bounds.size.x - lw) * 0.5f,
-            bounds.position.y + (bounds.size.y - lh) * 0.5f - 4.f
-        });
-        target.draw(label);
+        sf::Text lbl(*m_font);
+        lbl.setCharacterSize(tabFont);
+        lbl.setString(CATEGORIES[i].label);
+        lbl.setFillColor(active ? accent : sf::Color(130, 140, 170));
+        if (active) lbl.setStyle(sf::Text::Bold);
+        lbl.setPosition({
+            bounds.position.x + bounds.size.x * 0.5f
+                - lbl.getLocalBounds().size.x * 0.5f,
+            bounds.position.y + m_tabH * 0.5f
+                - static_cast<float>(tabFont) * 0.5f });
+        target.draw(lbl);
     }
+
+    // Scheidingslijn onder tabs
+    sf::RectangleShape sep(sf::Vector2f{ m_w, 1.f });
+    sep.setPosition({ m_x, m_y + m_tabH });
+    sep.setFillColor(sf::Color(50, 60, 100, 200));
+    target.draw(sep);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -314,107 +267,101 @@ void Shop::drawCategoryTabs(sf::RenderTarget& target,
 void Shop::drawCard(sf::RenderTarget&  target,
                      const UpgradeCard& card,
                      const GameState&   state) const {
+    int catIdx  = static_cast<int>(m_activeCategory);
+    auto& accent = CAT_COLORS[catIdx];
 
-    const auto& def   = GameState::upgradeCatalog[
-                            static_cast<int>(card.id)];
-    int         level = state.levelOf(card.id);
-    double      cost  = state.costOf(card.id);
-    bool        maxed = (def.maxLevel > 0 &&
-                         level >= def.maxLevel);
-    auto&       accent= CAT_COLORS[
-                            static_cast<int>(m_activeCategory)];
+    bool hov = card.hovered;
+    bool aff = card.affordable;
 
-    // Card background
+    // Achtergrond
     sf::RectangleShape bg(sf::Vector2f{
         card.bounds.size.x, card.bounds.size.y });
     bg.setPosition(card.bounds.position);
-
-    if (maxed)
-        bg.setFillColor(sf::Color(30, 40, 20, 220));
-    else if (card.hovered && card.affordable)
-        bg.setFillColor(sf::Color(
-            accent.r / 6 + 20,
-            accent.g / 6 + 20,
-            accent.b / 6 + 20, 240));
-    else
-        bg.setFillColor(sf::Color(20, 24, 44, 220));
-
-    bg.setOutlineColor(card.hovered
-        ? sf::Color(accent.r, accent.g, accent.b, 200)
-        : sf::Color(40, 50, 80, 120));
-    bg.setOutlineThickness(1.f);
+    bg.setFillColor(hov && aff
+        ? sf::Color(accent.r/6, accent.g/6, accent.b/6, 240)
+        : sf::Color(18, 20, 36, 230));
+    bg.setOutlineColor(aff
+        ? sf::Color(accent.r, accent.g, accent.b,
+                    hov ? 220 : 120)
+        : sf::Color(40, 44, 70, 100));
+    bg.setOutlineThickness(hov && aff ? 2.f : 1.f);
     target.draw(bg);
 
-    float tx = card.bounds.position.x + CARD_PAD;
-    float ty = card.bounds.position.y + CARD_PAD;
+    unsigned fName = static_cast<unsigned>(std::round(15.f * m_scale));
+    unsigned fDesc = static_cast<unsigned>(std::round(12.f * m_scale));
+    unsigned fCost = static_cast<unsigned>(std::round(13.f * m_scale));
+    unsigned fLvl  = static_cast<unsigned>(std::round(12.f * m_scale));
 
-    // Name + level
+    float tx = card.bounds.position.x + m_cardPad;
+    float ty = card.bounds.position.y + m_cardPad;
+
+    int         idx = static_cast<int>(card.id);
+    const auto& def = GameState::upgradeCatalog[idx];
+    int         lv  = state.upgradeLevels[idx];
+
+    // Naam
     sf::Text name(*m_font);
-    name.setCharacterSize(14);
+    name.setCharacterSize(fName);
+    name.setString(def.name);
+    name.setFillColor(aff ? sf::Color(230, 230, 255)
+                          : sf::Color(110, 110, 140));
     name.setStyle(sf::Text::Bold);
-    name.setFillColor(maxed
-        ? sf::Color(120, 200, 80)
-        : sf::Color(220, 230, 255));
-    std::string nameStr = def.name;
-    nameStr += maxed
-        ? "  [MAX]"
-        : "  Lv " + std::to_string(level);
-    name.setString(nameStr);
     name.setPosition({ tx, ty });
     target.draw(name);
 
-    // Current effect
-    sf::Text effect(*m_font);
-    effect.setCharacterSize(12);
-    effect.setFillColor(sf::Color(
-        accent.r, accent.g, accent.b, 200));
-    effect.setString(formatEffect(card.id, state));
-    effect.setPosition({ tx, ty + 18.f });
-    target.draw(effect);
+    // Level badge
+    std::string lvStr = "Lv " + std::to_string(lv);
+    sf::Text lvTxt(*m_font);
+    lvTxt.setCharacterSize(fLvl);
+    lvTxt.setString(lvStr);
+    lvTxt.setFillColor(sf::Color(accent.r, accent.g, accent.b,
+                                  aff ? 220 : 120));
+    lvTxt.setPosition({
+        card.bounds.position.x + card.bounds.size.x
+            - m_cardPad - lvTxt.getLocalBounds().size.x - 4.f,
+        ty + 2.f });
+    target.draw(lvTxt);
 
-    // Description
+    ty += fName + std::round(6.f * m_scale);
+
+    // Beschrijving
     sf::Text desc(*m_font);
-    desc.setCharacterSize(11);
-    desc.setFillColor(sf::Color(140, 150, 180));
+    desc.setCharacterSize(fDesc);
     desc.setString(def.description);
-    desc.setPosition({ tx, ty + 34.f });
+    desc.setFillColor(sf::Color(140, 150, 180));
+    desc.setPosition({ tx, ty });
     target.draw(desc);
 
-    // Cost button
-    if (!maxed) {
-        float btnW = 100.f, btnH = 28.f;
-        float btnX = card.bounds.position.x
-                     + card.bounds.size.x - btnW - CARD_PAD;
-        float btnY = card.bounds.position.y
-                     + card.bounds.size.y - btnH - CARD_PAD;
+    ty += fDesc + std::round(6.f * m_scale);
 
-        sf::RectangleShape btn(sf::Vector2f{ btnW, btnH });
-        btn.setPosition({ btnX, btnY });
-        btn.setFillColor(card.affordable
-            ? sf::Color(accent.r/3, accent.g/3,
-                        accent.b/3, 220)
-            : sf::Color(40, 30, 30, 200));
-        btn.setOutlineColor(card.affordable
-            ? sf::Color(accent.r, accent.g, accent.b, 180)
-            : sf::Color(80, 50, 50, 120));
-        btn.setOutlineThickness(1.f);
-        target.draw(btn);
-
-        sf::Text costLabel(*m_font);
-        costLabel.setCharacterSize(12);
-        costLabel.setStyle(sf::Text::Bold);
-        costLabel.setFillColor(card.affordable
-            ? sf::Color(255, 230, 120)
-            : sf::Color(120, 80, 80));
-        costLabel.setString("$ " + formatCost(cost));
-
-        float cw = costLabel.getLocalBounds().size.x;
-        float ch = costLabel.getLocalBounds().size.y;
-        costLabel.setPosition({
-            btnX + (btnW - cw) * 0.5f,
-            btnY + (btnH - ch) * 0.5f - 2.f });
-        target.draw(costLabel);
+    // Effect
+    std::string fx = formatEffect(card.id, state);
+    if (!fx.empty()) {
+        sf::Text fxTxt(*m_font);
+        fxTxt.setCharacterSize(fDesc);
+        fxTxt.setString(fx);
+        fxTxt.setFillColor(sf::Color(
+            accent.r, accent.g, accent.b, aff ? 200 : 100));
+        fxTxt.setPosition({ tx, ty });
+        target.draw(fxTxt);
     }
+
+    // Kosten (rechtsonder)
+    double cost = state.costOf(card.id);
+    std::ostringstream cs;
+    cs << "$ " << std::fixed << std::setprecision(0) << cost;
+    sf::Text costTxt(*m_font);
+    costTxt.setCharacterSize(fCost);
+    costTxt.setString(cs.str());
+    costTxt.setStyle(sf::Text::Bold);
+    costTxt.setFillColor(aff ? sf::Color(255, 215, 70)
+                             : sf::Color(100, 90, 70));
+    costTxt.setPosition({
+        card.bounds.position.x + card.bounds.size.x
+            - m_cardPad - costTxt.getLocalBounds().size.x - 4.f,
+        card.bounds.position.y + card.bounds.size.y
+            - m_cardPad - fCost });
+    target.draw(costTxt);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -423,26 +370,78 @@ void Shop::drawCard(sf::RenderTarget&  target,
 void Shop::drawScrollBar(sf::RenderTarget& target) const {
     if (m_maxScroll <= 0.f) return;
 
-    float trackX = m_x + m_w - SCROLLBAR_W - 2.f;
-    float trackY = m_y + TAB_H + 4.f;
-    float trackH = m_h - TAB_H - 8.f;
+    float visibleH = m_h - m_tabH;
+    float totalH   = visibleH + m_maxScroll;
+    float barH     = std::max(30.f, visibleH * (visibleH / totalH));
+    float barY     = m_y + m_tabH +
+                     (m_scroll / m_maxScroll) * (visibleH - barH);
+    float barX     = m_x + m_w - m_scrollBarW;
 
-    sf::RectangleShape track(sf::Vector2f{ SCROLLBAR_W, trackH });
-    track.setPosition({ trackX, trackY });
-    track.setFillColor(sf::Color(30, 35, 60, 160));
+    sf::RectangleShape track(sf::Vector2f{ m_scrollBarW, visibleH });
+    track.setPosition({ barX, m_y + m_tabH });
+    track.setFillColor(sf::Color(20, 24, 44));
     target.draw(track);
 
-    float thumbRatio = std::min(1.f, trackH /
-                                (trackH + m_maxScroll));
-    float thumbH     = std::max(20.f, trackH * thumbRatio);
-    float thumbY     = trackY + (m_scroll / m_maxScroll)
-                       * (trackH - thumbH);
+    sf::RectangleShape bar(sf::Vector2f{ m_scrollBarW - 2.f, barH });
+    bar.setPosition({ barX + 1.f, barY });
+    bar.setFillColor(sf::Color(80, 90, 140, 200));
+    target.draw(bar);
+}
 
-    sf::RectangleShape thumb(sf::Vector2f{
-        SCROLLBAR_W, thumbH });
-    thumb.setPosition({ trackX, thumbY });
-    thumb.setFillColor(sf::Color(100, 120, 200, 200));
-    thumb.setOutlineColor(sf::Color(160, 180, 255, 120));
-    thumb.setOutlineThickness(1.f);
-    target.draw(thumb);
+// ═════════════════════════════════════════════════════════════
+//  formatEffect
+// ═════════════════════════════════════════════════════════════
+std::string Shop::formatEffect(UpgradeID id,
+                                 const GameState& state) const {
+    std::ostringstream ss;
+    ss << std::fixed << std::setprecision(1);
+    int lv = state.upgradeLevels[static_cast<int>(id)];
+
+    switch (id) {
+        case UpgradeID::GUN_DAMAGE:
+            ss << "Damage: " << state.gunDamage(); break;
+        case UpgradeID::FIRE_RATE:
+            ss << "Fire/sec: " << state.fireRatePerSec(); break;
+        case UpgradeID::TURRET_COUNT:
+            ss << "Turrets: " << state.turretCount(); break;
+        case UpgradeID::CRIT_CHANCE:
+            ss << "Crit: " << state.critChance() * 100.f << "%"; break;
+        case UpgradeID::CRIT_MULT:
+            ss << "Crit mult: " << state.critMult() << "x"; break;
+        case UpgradeID::SPLIT_SHOT:
+            ss << "Bullets: " << state.splitShot(); break;
+        case UpgradeID::ORE_VALUE:
+            ss << "Ore value: " << state.oreValueMult() << "x"; break;
+        case UpgradeID::AUTO_COLLECT_RADIUS:
+            ss << "Radius: +" << lv * 30 << "px"; break;
+        case UpgradeID::ORE_LUCK:
+            ss << "Luck: " << lv * 5 << "%"; break;
+        case UpgradeID::ASTEROID_HP:
+            ss << "HP: -" << lv * 10 << "%"; break;
+        case UpgradeID::PLINKO_ROWS:
+            ss << "Rows: " << state.plinkoRows(); break;
+        case UpgradeID::PLINKO_MULT:
+            ss << "Mult bonus: +" << lv * 10 << "%"; break;
+        case UpgradeID::PLINKO_BALLS:
+            ss << "Max balls: " << state.maxPlinkoBalls(); break;
+        case UpgradeID::PLINKO_LUCK:
+            ss << "High-slot luck: +" << lv * 5 << "%"; break;
+        case UpgradeID::CREDIT_MULT:
+            ss << "Credits: " << state.creditMult() << "x"; break;
+        case UpgradeID::BULK_PROCESS:
+            ss << "Bulk: " << state.bulkProcess() << "x"; break;
+        case UpgradeID::AUTO_PLINKO:
+            ss << (lv > 0 ? "Actief" : "Inactief"); break;
+        case UpgradeID::UNLOCK_BRONZE:
+        case UpgradeID::UNLOCK_SILVER:
+        case UpgradeID::UNLOCK_GOLD:
+        case UpgradeID::UNLOCK_DIAMOND:
+        case UpgradeID::UNLOCK_PLATINUM:
+        case UpgradeID::UNLOCK_TITANIUM:
+        case UpgradeID::UNLOCK_IRIDIUM:
+            ss << (state.levelOf(id) > 0 ? "Unlocked" : "Locked");
+            break;
+        default: return "";
+    }
+    return ss.str();
 }
