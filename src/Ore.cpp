@@ -83,6 +83,7 @@ void OreManager::update(float           dt,
 
             if (distance(o.pos, collectorPos) < 8.f) {
                 oreOut += o.value * static_cast<double>(bulkMultiplier);
+                
                 particles.emitSpark(
                     o.pos,
                     normalize(collectorPos - o.pos), 3);

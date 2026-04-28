@@ -262,12 +262,13 @@ void Game::onKeyPress(sf::Keyboard::Key key) {
                     m_plinko.ballsAlive() < m_state.maxPlinkoBalls()) {
                     m_state.ore -= 1.0;
                     if (m_state.ore < 0.0) m_state.ore = 0.0;
-                    m_plinko.dropBall(1.0);
+                    m_plinko.dropBall(m_state.ore >= 1.0 ? 1.0 : 0.0);
+
                 }
             }
             break;
 
-        case K::S:
+        case K::P:
             m_state.save(SAVE_FILE);
             pushNotif("Opgeslagen.", sf::Color(100, 220, 120));
             break;
@@ -512,7 +513,7 @@ void Game::handlePlinkoClick(sf::Vector2f pos) {
         m_plinko.ballsAlive() < m_state.maxPlinkoBalls()) {
         m_state.ore -= 1.0;
         if (m_state.ore < 0.0) m_state.ore = 0.0;
-        m_plinko.dropBall(1.0);
+        m_plinko.dropBall(m_state.ore >= 1.0 ? 1.0 : 0.0);
     } else if (m_state.ore < 1.0) {
         pushNotif("Geen ore!", sf::Color(255, 100, 80));
     }

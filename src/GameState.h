@@ -49,6 +49,7 @@ public:
 
     // ── New computed stats ────────────────────────────────
     OreTier maxOreTier()    const;   // highest unlocked ore tier
+    double lastOreValue = 1.0;   // waarde van meest recent gecollecte ore
     float   levelHpMult()   const;   // asteroid HP scale per level
     int     levelSpawnBonus() const; // extra asteroids per level
     std::string levelLabel() const;  // "Zone 1", "Zone 2" …

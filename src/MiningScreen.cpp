@@ -159,15 +159,15 @@ void MiningScreen::resolveCollisions(GameState& state) {
 
             bool destroyed = asteroid.hit(bullet.damage, m_particles);
             if (destroyed) {
-                int count = asteroid.oreDrop.count * asteroid.rarityDropMult();
-                m_ores.drop(
-                    asteroid.pos,
-                    asteroid.oreDrop.color,
-                    asteroid.oreDrop.value,
-                    count,
-                    state.oreLuckBonus(),
-                    m_particles);
-            }
+      int count = asteroid.oreDrop.count * asteroid.rarityDropMult();
+      m_ores.drop(
+          asteroid.pos,
+          asteroid.oreDrop.color,
+          asteroid.oreDrop.value,    // ← voeg value toe
+          count,
+          state.oreLuckBonus(),
+          m_particles);
+  }
             break;
         }
     }
