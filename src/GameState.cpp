@@ -292,6 +292,7 @@ void GameState::reset() {
     currentLevel = 1;          // ← nieuw
     upgradeLevels.fill(0);
     oreThisLevel = 0.0;
+    lives = MAX_LIVES;
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -311,6 +312,7 @@ bool GameState::save(const std::string& path) const {
     f.write(reinterpret_cast<const char*>(&prestigeCount), sizeof(prestigeCount));
     f.write(reinterpret_cast<const char*>(&currentLevel), sizeof(currentLevel));
     f.write(reinterpret_cast<const char*>(&oreThisLevel), sizeof(oreThisLevel));
+    f.write(reinterpret_cast<const char*>(&lives), sizeof(lives));
     f.write(reinterpret_cast<const char*>(upgradeLevels.data()),
             upgradeLevels.size() * sizeof(int));
     f.write(reinterpret_cast<const char*>(prestigeLevels.data()),
@@ -334,9 +336,25 @@ bool GameState::load(const std::string& path) {
     f.read(reinterpret_cast<char*>(&prestigeCount), sizeof(prestigeCount));
     f.read(reinterpret_cast<char*>(&currentLevel), sizeof(currentLevel));
     f.read(reinterpret_cast<char*>(&oreThisLevel), sizeof(oreThisLevel));
+    f.read(reinterpret_cast<char*>(&lives), sizeof(lives));
     f.read(reinterpret_cast<char*>(upgradeLevels.data()),
            upgradeLevels.size() * sizeof(int));
     f.read(reinterpret_cast<char*>(prestigeLevels.data()),
            prestigeLevels.size() * sizeof(int));
     return f.good();
+}
+// ── game over ─────────────────────────────────────────────
+
+void GameState::loseLife() {
+    lives--;
+    if (lives < 0) lives = 0;
+}
+
+void GameState::gameOver() {
+    credits      = 0.0;
+    ore          = 0.0;
+    oreThisLevel = 0.0;
+    currentLevel = 1;
+    lives        = MAX_LIVES;
+    // upgrades blijven staan
 }

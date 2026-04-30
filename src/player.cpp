@@ -43,6 +43,17 @@ void Player::update(float            dt,
 
     pos += move * speed * dt;
 
+    // ── Check asteroid collision ──────────────────────────
+    m_hitThisFrame = false;
+    for (auto& asteroid : asteroids.all()) {
+        if (!asteroid.alive) continue;
+        float dist = distance(pos, asteroid.pos);
+        if (dist < SHIP_RADIUS + asteroid.radius * 0.6f) {
+            m_hitThisFrame = true;
+            break;
+        }
+    }
+
     // ── Grenzen ───────────────────────────────────────────
     pos.x = clamp(pos.x, SHIP_RADIUS, areaW - SHIP_RADIUS);
     pos.y = clamp(pos.y, SHIP_RADIUS, areaH - SHIP_RADIUS);

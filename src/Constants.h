@@ -104,4 +104,4 @@ constexpr float TAB_BAR_H    = 46.f;
 
 // ─── Save ─────────────────────────────────────────────────────
 const std::string SAVE_FILE    = "srb_save.bin";
-constexpr int     SAVE_VERSION = 4;   // bumped: ore tiers + level
+constexpr int SAVE_VERSION = 5;

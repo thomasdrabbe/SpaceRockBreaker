@@ -28,6 +28,7 @@ public:
     Game();
     void run();
 
+
 private:
     // ── Window ────────────────────────────────────────────
     mutable sf::RenderWindow m_window;
@@ -59,6 +60,11 @@ private:
     // ── Save timer ────────────────────────────────────────
     float m_saveTimer = 0.f;
     static constexpr float SAVE_INTERVAL = 30.f;
+    //hit cooldown
+    float m_hitCooldown = 0.f;
+    static constexpr float HIT_COOLDOWN = 2.f;  // seconden onkwetsbaar na hit
+
+    void drawLives() const;
 
     // ── Prestige confirm ──────────────────────────────────
     bool m_prestigeConfirm = false;

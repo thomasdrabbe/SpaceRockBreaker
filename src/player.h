@@ -15,6 +15,7 @@ public:
     float        speed     = 220.f;
     float        fireTimer = 0.f;
     bool         alive     = true;
+    bool wasHit() const { return m_hitThisFrame; }
 
     void init(float startX, float startY);
 
@@ -34,7 +35,12 @@ public:
 
     sf::Vector2f centre() const { return pos; }
 
+    void clearHit()     { m_hitThisFrame = false; }
+
+
 private:
+
+    bool m_hitThisFrame = false;
     static constexpr float SHIP_RADIUS  = 14.f;
     static constexpr float ROTATE_SPEED = 280.f;
     static constexpr float BARREL_LEN   = 18.f;

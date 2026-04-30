@@ -116,6 +116,25 @@ void Game::processEvents() {
         }
     }
 }
+// draw lives
+void Game::drawLives() const {
+    float x = m_cntX + m_cntW - std::round(160.f * m_scale);
+    float y = m_cntY + std::round(8.f * m_scale);
+    float r = std::round(10.f * m_scale);
+    float gap = std::round(28.f * m_scale);
+
+    for (int i = 0; i < GameState::MAX_LIVES; i++) {
+        sf::CircleShape heart(r);
+        heart.setOrigin({ r, r });
+        heart.setPosition({ x + i * gap, y + r });
+        heart.setFillColor(i < m_state.lives
+            ? sf::Color(255, 60, 80)
+            : sf::Color(60, 20, 30));
+        heart.setOutlineColor(sf::Color(200, 40, 60, 160));
+        heart.setOutlineThickness(1.5f);
+        m_window.draw(heart);
+    }
+}
 
 // ═════════════════════════════════════════════════════════════
 //  update
@@ -127,7 +146,29 @@ void Game::update(float dt) {
     double oreEarned     = 0.0;
 
     m_mining.update(dt, m_state, creditsEarned, oreEarned);
+    // ── Lives check ───────────────────────────────────────
+    if (m_hitCooldown > 0.f) {
+        m_hitCooldown -= dt;
+    } else if (m_mining.playerHit()) {
+        m_hitCooldown = HIT_COOLDOWN;
+        m_state.loseLife();
+        m_mining.particles().emitExplosion(
+            sf::Vector2f(m_cntW * 0.5f, m_cntH * 0.5f),
+            40.f, sf::Color(255, 80, 60), 30);
 
+        if (m_state.isGameOver()) {
+            m_state.gameOver();
+            m_mining.clearAll();
+            m_mining.syncTurrets(m_state);
+            rebuildPlinko();
+            pushNotif("GAME OVER — terug naar zone 1",
+                      sf::Color(255, 60, 60));
+        } else {
+            pushNotif("Leven verloren!  " +
+                      std::to_string(m_state.lives) + " over",
+                      sf::Color(255, 120, 60));
+        }
+    }
     // ── Warp charge (Space vasthouden in Mining tab) ───────
         if (m_activeTab == Tab::MINING && m_state.canWarp()) {
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Space)) {
@@ -213,6 +254,8 @@ void Game::render() {
 
     drawTabBar();
     drawActiveTab();
+    if (m_activeTab == Tab::MINING)
+    drawLives();
     drawSidePanel();
     drawNotifs();
     if (m_paused) drawPauseOverlay();

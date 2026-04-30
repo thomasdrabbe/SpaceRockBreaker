@@ -25,6 +25,7 @@ struct Star {
 // ─────────────────────────────────────────────────────────────
 class MiningScreen {
 public:
+    bool playerHit() const;
     MiningScreen();
 
     void init(sf::Font& font,

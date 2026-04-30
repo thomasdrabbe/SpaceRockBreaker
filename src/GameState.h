@@ -55,6 +55,14 @@ public:
     std::string levelLabel() const;  // "Zone 1", "Zone 2" …
     int oreWarpRequirement() const;  // ores nodig voor warp in huidig level
 
+        // ── Lives ─────────────────────────────────────────────
+    int lives = 3;
+    static constexpr int MAX_LIVES = 3;
+
+    void loseLife();    // -1 leven, bij 0 → game over
+    bool isGameOver() const { return lives <= 0; }
+    void gameOver();    // reset level + ore + credits, behoud upgrades
+
     // ── Regular upgrade levels ────────────────────────────
     std::array<int, static_cast<int>(UpgradeID::UPGRADE_COUNT)>
         upgradeLevels{};

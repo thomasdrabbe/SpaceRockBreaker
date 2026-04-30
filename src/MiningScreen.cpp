@@ -63,6 +63,10 @@ void MiningScreen::syncTurrets(const GameState& state) {
 int MiningScreen::targetAsteroidCount(int turrets) {
     return std::min(6 + turrets * 3, MAX_ASTEROIDS);
 }
+// health player hit
+bool MiningScreen::playerHit() const {
+    return m_player.wasHit();
+}
 
 // ═════════════════════════════════════════════════════════════
 //  update
@@ -139,6 +143,8 @@ void MiningScreen::update(float      dt,
         if (s.pos.y > m_y + m_h + 4.f)
             s.pos = { randFloat(m_x, m_x + m_w), m_y - 4.f };
     }
+    m_player.clearHit();
+
 }
 
 // ═════════════════════════════════════════════════════════════
