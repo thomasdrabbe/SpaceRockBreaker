@@ -75,7 +75,8 @@ void MiningScreen::update(float      dt,
                             GameState& state,
                             double&    creditsEarned,
                             double&    oreEarned) {
-
+    //
+    m_player.clearHit();
     // ── Sync turrets ──────────────────────────────────────
     syncTurrets(state);
 
@@ -143,7 +144,6 @@ void MiningScreen::update(float      dt,
         if (s.pos.y > m_y + m_h + 4.f)
             s.pos = { randFloat(m_x, m_x + m_w), m_y - 4.f };
     }
-    m_player.clearHit();
 
 }
 
