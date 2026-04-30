@@ -34,6 +34,12 @@ private:
     mutable sf::Font         m_font;
     sf::Clock        m_clock;
 
+    // ── Pause menu state ──────────────────────────────────
+    enum class PauseButton { NONE, RESUME, SAVE, MAIN_MENU };
+    PauseButton pauseButtonAt(sf::Vector2f pos) const;
+    bool m_showMainMenu = true;
+
+
     // ── State ─────────────────────────────────────────────
     GameState m_state;
     Tab       m_activeTab = Tab::MINING;
@@ -106,6 +112,10 @@ private:
 
     // ── Pause overlay ─────────────────────────────────────
     void drawPauseOverlay() const;
+    // ── mainmenu overlay ─────────────────────────────────────
+
+    void drawMainMenu() const;
+    void handleMainMenuClick(sf::Vector2f pos);
 
     // ── Notifications ─────────────────────────────────────
     void updateNotifs(float dt);

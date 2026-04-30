@@ -11,9 +11,9 @@
 Game::Game()
     : m_window(
         sf::VideoMode::getDesktopMode(),
-        WINDOW_TITLE,
-        sf::State::Fullscreen)
+        WINDOW_TITLE)
 {
+    m_window.setPosition(sf::Vector2i(0, 0));
     m_window.setFramerateLimit(TARGET_FPS);
 
     if (!m_font.openFromFile("assets/font.ttf"))
@@ -205,13 +205,17 @@ void Game::update(float dt) {
 void Game::render() {
     m_window.clear(sf::Color(6, 8, 18));
 
+    if (m_showMainMenu) {
+        drawMainMenu();
+        m_window.display();
+        return;
+    }
+
     drawTabBar();
     drawActiveTab();
     drawSidePanel();
     drawNotifs();
-
     if (m_paused) drawPauseOverlay();
-
     m_window.display();
 }
 
@@ -220,7 +224,29 @@ void Game::render() {
 // ═════════════════════════════════════════════════════════════
 void Game::onMouseClick(sf::Vector2f pos, sf::Mouse::Button btn) {
     if (btn != sf::Mouse::Button::Left) return;
-
+    if (m_paused) {
+          switch (pauseButtonAt(pos)) {
+              case PauseButton::RESUME:
+                  m_paused = false;
+                  break;
+              case PauseButton::SAVE:
+                  m_state.save(SAVE_FILE);
+                  pushNotif("Opgeslagen.", sf::Color(100, 220, 120));
+                  break;
+              case PauseButton::MAIN_MENU:
+                  m_state.save(SAVE_FILE);
+                  m_showMainMenu = true;
+                  m_paused       = false;
+                  break;
+              default: break;
+          }
+          return;
+      }
+      // Main menu clicks
+    if (m_showMainMenu) {
+        handleMainMenuClick(pos);
+        return;
+    }
     for (int i = 0; i < TAB_COUNT; i++) {
         if (tabRect(i).contains(pos)) {
             m_activeTab       = static_cast<Tab>(i);
@@ -280,22 +306,6 @@ void Game::onKeyPress(sf::Keyboard::Key key) {
                           sf::Color(255, 200, 60));
             break;
 
-        case K::F11:
-        {
-            static bool isFullscreen = true;
-            isFullscreen = !isFullscreen;
-            if (isFullscreen)
-                m_window.create(sf::VideoMode::getDesktopMode(),
-                                WINDOW_TITLE, sf::State::Fullscreen);
-            else
-                m_window.create(sf::VideoMode({ WINDOW_WIDTH, WINDOW_HEIGHT }),
-                                WINDOW_TITLE, sf::State::Windowed);
-            m_window.setFramerateLimit(TARGET_FPS);
-            initLayout();
-            reinitSystems();
-            m_mining.syncTurrets(m_state);
-            break;
-        }
 
         default: break;
     }
@@ -445,6 +455,53 @@ void Game::drawSidePanel() const {
     css << "+ " << std::fixed << std::setprecision(0) << g << " on prestige";
     drawText(css.str(), tx, ty, fSmall, sf::Color(150, 90, 240));
 }
+// ═════════════════════════════════════════════════════════════
+//  draw mainmenu
+// ═════════════════════════════════════════════════════════════
+
+void Game::drawMainMenu() const {
+    sf::RectangleShape bg(sf::Vector2f{ m_scrW, m_scrH });
+    bg.setFillColor(sf::Color(6, 8, 18));
+    m_window.draw(bg);
+
+    unsigned fTitle = static_cast<unsigned>(std::round(48.f * m_scale));
+    unsigned fBtn   = static_cast<unsigned>(std::round(18.f * m_scale));
+
+    float cx     = m_scrW * 0.5f;
+    float cy     = m_scrH * 0.5f;
+    float btnW   = std::round(300.f * m_scale);
+    float btnH   = std::round(54.f  * m_scale);
+    float gap    = std::round(16.f  * m_scale);
+
+    drawText("SPACE ROCK BREAKER",
+             cx - fTitle * 4.5f,
+             cy - fTitle * 3.f,
+             fTitle, sf::Color(80, 160, 255), true);
+
+    struct BtnDef { std::string label; sf::Color color; };
+    const BtnDef btns[] = {
+        { "Doorgaan",     sf::Color( 80, 160, 255) },
+        { "Nieuw Spel",   sf::Color( 80, 220, 120) },
+        { "Afsluiten",    sf::Color(255, 100,  80) },
+    };
+
+    for (int i = 0; i < 3; i++) {
+        float bx = cx - btnW * 0.5f;
+        float by = cy - btnH * 0.5f + i * (btnH + gap);
+
+        sf::RectangleShape btn(sf::Vector2f{ btnW, btnH });
+        btn.setPosition({ bx, by });
+        btn.setFillColor(sf::Color(14, 16, 32, 230));
+        btn.setOutlineColor(btns[i].color);
+        btn.setOutlineThickness(2.f);
+        m_window.draw(btn);
+
+        drawText(btns[i].label,
+                 bx + 20.f,
+                 by + btnH * 0.5f - fBtn * 0.5f,
+                 fBtn, btns[i].color, true);
+    }
+}
 
 // ═════════════════════════════════════════════════════════════
 //  Plinko tab
@@ -498,6 +555,41 @@ void Game::drawPlinkoTab() const {
 
     drawText(os.str(), m_cntX + 16.f, btnY + 6.f,              fs, sf::Color(170, 225, 110));
     drawText(bs.str(), m_cntX + 16.f, btnY + 6.f + fs + 4.f,   fs, sf::Color(150, 130, 195));
+}
+
+void Game::handleMainMenuClick(sf::Vector2f pos) {
+    float cx     = m_scrW * 0.5f;
+    float cy     = m_scrH * 0.5f;
+    float btnW   = std::round(300.f * m_scale);
+    float btnH   = std::round(54.f  * m_scale);
+    float gap    = std::round(16.f  * m_scale);
+
+    for (int i = 0; i < 3; i++) {
+        sf::FloatRect r(
+            { cx - btnW * 0.5f, cy - btnH * 0.5f + i * (btnH + gap) },
+            { btnW, btnH });
+
+        if (r.contains(pos)) {
+            if (i == 0) {                          // Doorgaan
+                if (m_state.load(SAVE_FILE))
+                    pushNotif("Save geladen!", sf::Color(100, 220, 120));
+                else
+                    pushNotif("Geen save gevonden.", sf::Color(255, 100, 80));
+                m_showMainMenu = false;
+            } else if (i == 1) {                   // Nieuw Spel
+                m_state.reset();
+                m_mining.clearAll();
+                m_mining.syncTurrets(m_state);
+                rebuildPlinko();
+                m_showMainMenu = false;
+                pushNotif("Nieuw spel gestart.", sf::Color(180, 180, 180));
+            } else if (i == 2) {                   // Afsluiten
+                m_state.save(SAVE_FILE);
+                m_window.close();
+            }
+            return;
+        }
+    }
 }
 
 void Game::handlePlinkoClick(sf::Vector2f pos) {
@@ -703,22 +795,70 @@ void Game::handlePrestigeClick(sf::Vector2f pos) {
 // ═════════════════════════════════════════════════════════════
 void Game::drawPauseOverlay() const {
     sf::RectangleShape overlay(sf::Vector2f{ m_scrW, m_scrH });
-    overlay.setFillColor(sf::Color(0, 0, 0, 140));
+    overlay.setFillColor(sf::Color(0, 0, 0, 160));
     m_window.draw(overlay);
 
-    unsigned fBig = static_cast<unsigned>(std::round(38.f * m_scale));
-    unsigned fSub = static_cast<unsigned>(std::round(18.f * m_scale));
+    unsigned fTitle = static_cast<unsigned>(std::round(36.f * m_scale));
+    unsigned fBtn   = static_cast<unsigned>(std::round(16.f * m_scale));
+
+    float cx     = m_scrW * 0.5f;
+    float cy     = m_scrH * 0.5f;
+    float btnW   = std::round(260.f * m_scale);
+    float btnH   = std::round(48.f  * m_scale);
+    float gap    = std::round(14.f  * m_scale);
+    float startY = cy - btnH * 0.5f;
 
     drawText("GEPAUZEERD",
-             m_scrW * 0.5f - fBig * 3.f,
-             m_scrH * 0.5f - fBig,
-             fBig, sf::Color(255, 200, 60), true);
+             cx - fTitle * 3.f,
+             startY - fTitle * 2.f,
+             fTitle, sf::Color(255, 200, 60), true);
 
-    drawText("Druk Escape om verder te gaan",
-             m_scrW * 0.5f - fSub * 7.f,
-             m_scrH * 0.5f + fBig * 0.5f,
-             fSub, sf::Color(200, 180, 120));
+    struct BtnDef { std::string label; sf::Color color; };
+    const BtnDef btns[] = {
+        { "Doorgaan  [Escape]", sf::Color( 80, 160, 255) },
+        { "Opslaan   [P]",      sf::Color( 80, 220, 120) },
+        { "Main Menu",          sf::Color(255, 100,  80) },
+    };
+
+    for (int i = 0; i < 3; i++) {
+        float bx = cx - btnW * 0.5f;
+        float by = startY + i * (btnH + gap);
+
+        sf::RectangleShape btn(sf::Vector2f{ btnW, btnH });
+        btn.setPosition({ bx, by });
+        btn.setFillColor(sf::Color(14, 16, 32, 230));
+        btn.setOutlineColor(btns[i].color);
+        btn.setOutlineThickness(2.f);
+        m_window.draw(btn);
+
+        drawText(btns[i].label,
+                 bx + 20.f,
+                 by + btnH * 0.5f - fBtn * 0.5f,
+                 fBtn, btns[i].color, true);
+    }
 }
+
+Game::PauseButton Game::pauseButtonAt(sf::Vector2f pos) const {
+    float cx   = m_scrW * 0.5f;
+    float cy   = m_scrH * 0.5f;
+    float btnW = std::round(260.f * m_scale);
+    float btnH = std::round(48.f  * m_scale);
+    float gap  = std::round(14.f  * m_scale);
+    float startY = cy - btnH * 0.5f;
+
+    for (int i = 0; i < 3; i++) {
+        sf::FloatRect r(
+            { cx - btnW * 0.5f, startY + i * (btnH + gap) },
+            { btnW, btnH });
+        if (r.contains(pos)) {
+            if (i == 0) return PauseButton::RESUME;
+            if (i == 1) return PauseButton::SAVE;
+            if (i == 2) return PauseButton::MAIN_MENU;
+        }
+    }
+    return PauseButton::NONE;
+}
+
 
 // ═════════════════════════════════════════════════════════════
 //  Notifications

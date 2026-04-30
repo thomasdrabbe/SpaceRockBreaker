@@ -87,9 +87,9 @@ enum class OreTier {
 // ─── Entity limits ────────────────────────────────────────────
 constexpr int MAX_ASTEROIDS    = 80;
 constexpr int MAX_BULLETS      = 300;
-constexpr int MAX_ORE          = 9999;
+constexpr int MAX_ORE          = 1000;
 constexpr int MAX_PARTICLES    = 600;
-constexpr int MAX_PLINKO_BALLS = 1000;
+constexpr int MAX_PLINKO_BALLS = 200;
 
 // ─── Plinko board geometry ────────────────────────────────────
 constexpr int   PLINKO_MIN_ROWS    = 16;
