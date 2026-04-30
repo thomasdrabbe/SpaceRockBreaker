@@ -153,8 +153,8 @@ void Game::update(float dt) {
         m_hitCooldown = HIT_COOLDOWN;
         m_state.loseLife();
         m_mining.particles().emitExplosion(
-            sf::Vector2f(m_cntW * 0.5f, m_cntH * 0.5f),
-            40.f, sf::Color(255, 80, 60), 30);
+      m_mining.playerPos(),
+      40.f, sf::Color(255, 80, 60), 30);
 
         if (m_state.isGameOver()) {
             m_state.gameOver();

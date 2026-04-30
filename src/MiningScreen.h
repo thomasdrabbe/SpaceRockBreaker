@@ -75,6 +75,8 @@ private:
 
     // ── Collector volgt speler ────────────────────────────
     sf::Vector2f m_collectorPos;
+    //--player pos voor emit explosion
+    sf::Vector2f playerPos() const { return m_player.pos; }
 
     // ── State ─────────────────────────────────────────────
     int m_lastTurretCnt = 0;
