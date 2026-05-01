@@ -1,4 +1,5 @@
 #include "Player.h"
+#include "SoundHub.h"
 #include "Utils.h"
 #include <cmath>
 #include <algorithm>
@@ -92,6 +93,7 @@ void Player::update(float            dt,
 
         bullets.fire(tip, dir, finalDmg, isCrit,
                      splitShot, particles);
+        gSfx.play(Sfx::Shot);
 
         if (isCrit)
             particles.emitCritText(tip, finalDmg);

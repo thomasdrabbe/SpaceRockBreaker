@@ -3,6 +3,7 @@
 #include <fstream>
 #include <cmath>
 #include <algorithm>
+#include <climits>
 
 // ═════════════════════════════════════════════════════════════
 //  Static catalogs
@@ -52,6 +53,14 @@ GameState::prestigeCatalog = {{
     { "Deep Retention",  "Keep 2 extra upgrades/level",  3.0, 2.50, 0 },
 }};
 
+const std::array<ChestDef, static_cast<int>(ChestUpgradeID::CHEST_UPGRADE_COUNT)>
+GameState::chestCatalog = {{
+    { "Golden Pegs",     "Plinko peg hit radius +3.5% / level", 2, 1.22, 12 },
+    { "Reactive Pegs",   "Peg bounce strength +3% / level",    2, 1.22, 12 },
+    { "Ammo Cache",      "Gun damage +1.5 / level",             3, 1.28, 10 },
+    { "Refinery Pass",   "Ore value +2% / level",               3, 1.28, 12 },
+}};
+
 // ═════════════════════════════════════════════════════════════
 //  Crystal bonuses
 // ═════════════════════════════════════════════════════════════
@@ -78,6 +87,55 @@ float GameState::crystalAmp() const {
 }
 
 // ═════════════════════════════════════════════════════════════
+//  Chest upgrades
+// ═════════════════════════════════════════════════════════════
+float GameState::chestPlinkoPegRadiusMult() const {
+    int lv = levelOfChest(ChestUpgradeID::PLINKO_PEG_SIZE);
+    return 1.f + 0.035f * static_cast<float>(lv);
+}
+
+float GameState::chestPlinkoBounceMult() const {
+    int lv = levelOfChest(ChestUpgradeID::PLINKO_PEG_BOUNCE);
+    return 1.f + 0.03f * static_cast<float>(lv);
+}
+
+float GameState::chestGunFlatBonus() const {
+    return 1.5f * static_cast<float>(
+        levelOfChest(ChestUpgradeID::GUN_FLAT_DAMAGE));
+}
+
+float GameState::chestOreValueMult() const {
+    return 1.f + 0.02f * static_cast<float>(
+        levelOfChest(ChestUpgradeID::MINING_ORE_VALUE));
+}
+
+int GameState::levelOfChest(ChestUpgradeID id) const {
+    return chestLevels[static_cast<int>(id)];
+}
+
+int GameState::keyCostOf(ChestUpgradeID id) const {
+    const auto& d = chestCatalog[static_cast<int>(id)];
+    int         lv  = levelOfChest(id);
+    if (d.maxLevel > 0 && lv >= d.maxLevel)
+        return INT_MAX;
+    return static_cast<int>(std::ceil(
+        static_cast<double>(d.baseKeyCost)
+        * std::pow(d.keyCostMult, static_cast<double>(lv))));
+}
+
+bool GameState::canBuyChest(ChestUpgradeID id) const {
+    int c = keyCostOf(id);
+    if (c == INT_MAX) return false;
+    return keys >= c;
+}
+
+void GameState::buyChest(ChestUpgradeID id) {
+    if (!canBuyChest(id)) return;
+    keys -= keyCostOf(id);
+    chestLevels[static_cast<int>(id)]++;
+}
+
+// ═════════════════════════════════════════════════════════════
 //  warp drive requirments
 // ═════════════════════════════════════════════════════════════
 int GameState::oreWarpRequirement() const {
@@ -89,7 +147,8 @@ int GameState::oreWarpRequirement() const {
 // ═════════════════════════════════════════════════════════════
 float GameState::gunDamage() const {
     return (10.f + levelOf(UpgradeID::GUN_DAMAGE) * 8.f)
-           * _crystalDamageBonus();
+           * _crystalDamageBonus()
+           + chestGunFlatBonus();
 }
 
 float GameState::fireRatePerSec() const {
@@ -114,7 +173,8 @@ int GameState::splitShot() const {
 
 float GameState::oreValueMult() const {
     return (1.f + levelOf(UpgradeID::ORE_VALUE) * 0.2f)
-           * _crystalMiningBonus();
+           * _crystalMiningBonus()
+           * chestOreValueMult();
 }
 
 float GameState::autoCollectRadius() const {
@@ -237,6 +297,32 @@ void GameState::doWarp() {
     oreThisLevel = 0.0;
 }
 
+namespace {
+
+int nextBossZoneAfter(int beatenZone) {
+    static const int seq[] = {
+        3,  5,  10, 15, 20, 25, 30, 35, 40, 45, 50,
+        60, 70, 80, 90, 100, 115, 130, 150, 170, 200
+    };
+    for (int s : seq) {
+        if (s > beatenZone)
+            return s;
+    }
+    return beatenZone + 25;
+}
+
+} // namespace
+
+void GameState::registerBossDefeated() {
+    const int z = nextBossMilestone;
+    double bonus = 6.0 + static_cast<double>(z) * 2.0
+                 + std::floor(std::sqrt(static_cast<double>(z * z)));
+    const double gain = std::max(8.0, bonus);
+    crystals         += gain;
+    bossCrystalPopup  = gain;
+    nextBossMilestone = nextBossZoneAfter(z);
+}
+
 void GameState::buy(UpgradeID id) {
     if (!canBuy(id)) return;
     credits -= costOf(id);
@@ -260,6 +346,9 @@ void GameState::doPrestige() {
     int keep = prestigeLevels[static_cast<int>(
         PrestigeUpgradeID::CRYSTAL_RETENTION)] * 2;
 
+    const int savedKeys = keys;
+    const auto savedChest = chestLevels;
+
     crystals += crystalsOnPrestige();
     prestigeCount++;
 
@@ -272,6 +361,8 @@ void GameState::doPrestige() {
     std::sort(ranked.begin(), ranked.end(), std::greater<>());
 
     reset();
+    keys           = savedKeys;
+    chestLevels    = savedChest;
     prestigeLevels = savedPrestige;
 
     for (int i = 0; i < keep &&
@@ -292,7 +383,11 @@ void GameState::reset() {
     currentLevel = 1;          // ← nieuw
     upgradeLevels.fill(0);
     oreThisLevel = 0.0;
-    lives = MAX_LIVES;
+    lives        = MAX_LIVES;
+    keys         = 0;
+    chestLevels.fill(0);
+    nextBossMilestone = 3;
+    bossCrystalPopup  = 0.0;
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -313,11 +408,51 @@ bool GameState::save(const std::string& path) const {
     f.write(reinterpret_cast<const char*>(&currentLevel), sizeof(currentLevel));
     f.write(reinterpret_cast<const char*>(&oreThisLevel), sizeof(oreThisLevel));
     f.write(reinterpret_cast<const char*>(&lives), sizeof(lives));
+    f.write(reinterpret_cast<const char*>(&keys), sizeof(keys));
     f.write(reinterpret_cast<const char*>(upgradeLevels.data()),
             upgradeLevels.size() * sizeof(int));
     f.write(reinterpret_cast<const char*>(prestigeLevels.data()),
             prestigeLevels.size() * sizeof(int));
+    f.write(reinterpret_cast<const char*>(chestLevels.data()),
+            chestLevels.size() * sizeof(int));
+    f.write(reinterpret_cast<const char*>(&nextBossMilestone),
+            sizeof(nextBossMilestone));
     return f.good();
+}
+
+bool GameState::peekSaveSlot(const std::string& path,
+                             int&         outZone,
+                             double&      outCredits) {
+    std::ifstream f(path, std::ios::binary);
+    if (!f)
+        return false;
+
+    int ver = 0;
+    f.read(reinterpret_cast<char*>(&ver), sizeof(ver));
+    if (ver < 5 || ver > SAVE_VERSION)
+        return false;
+
+    double credits = 0.0, ore = 0.0, cry = 0.0, tc = 0.0, to = 0.0;
+    int    pres = 0, zone = 0, lives = 0;
+    double orel = 0.0;
+    f.read(reinterpret_cast<char*>(&credits), sizeof(credits));
+    f.read(reinterpret_cast<char*>(&ore), sizeof(ore));
+    f.read(reinterpret_cast<char*>(&cry), sizeof(cry));
+    f.read(reinterpret_cast<char*>(&tc), sizeof(tc));
+    f.read(reinterpret_cast<char*>(&to), sizeof(to));
+    f.read(reinterpret_cast<char*>(&pres), sizeof(pres));
+    f.read(reinterpret_cast<char*>(&zone), sizeof(zone));
+    f.read(reinterpret_cast<char*>(&orel), sizeof(orel));
+    f.read(reinterpret_cast<char*>(&lives), sizeof(lives));
+    if (ver >= 6) {
+        int keysDummy = 0;
+        f.read(reinterpret_cast<char*>(&keysDummy), sizeof(keysDummy));
+    }
+    if (!f.good())
+        return false;
+    outZone     = zone;
+    outCredits  = credits;
+    return true;
 }
 
 bool GameState::load(const std::string& path) {
@@ -326,7 +461,7 @@ bool GameState::load(const std::string& path) {
 
     int ver = 0;
     f.read(reinterpret_cast<char*>(&ver), sizeof(ver));
-    if (ver != SAVE_VERSION) return false;
+    if (ver < 5 || ver > SAVE_VERSION) return false;
 
     f.read(reinterpret_cast<char*>(&credits),       sizeof(credits));
     f.read(reinterpret_cast<char*>(&ore),           sizeof(ore));
@@ -337,10 +472,22 @@ bool GameState::load(const std::string& path) {
     f.read(reinterpret_cast<char*>(&currentLevel), sizeof(currentLevel));
     f.read(reinterpret_cast<char*>(&oreThisLevel), sizeof(oreThisLevel));
     f.read(reinterpret_cast<char*>(&lives), sizeof(lives));
+    keys = 0;
+    if (ver >= 6)
+        f.read(reinterpret_cast<char*>(&keys), sizeof(keys));
     f.read(reinterpret_cast<char*>(upgradeLevels.data()),
            upgradeLevels.size() * sizeof(int));
     f.read(reinterpret_cast<char*>(prestigeLevels.data()),
            prestigeLevels.size() * sizeof(int));
+    chestLevels.fill(0);
+    if (ver >= 7) {
+        f.read(reinterpret_cast<char*>(chestLevels.data()),
+               chestLevels.size() * sizeof(int));
+    }
+    nextBossMilestone = 3;
+    if (ver >= 8)
+        f.read(reinterpret_cast<char*>(&nextBossMilestone),
+               sizeof(nextBossMilestone));
     return f.good();
 }
 // ── game over ─────────────────────────────────────────────

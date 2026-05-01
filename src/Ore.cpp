@@ -1,4 +1,5 @@
 #include "Ore.h"
+#include "SoundHub.h"
 #include "Utils.h"
 #include <cmath>
 #include <algorithm>
@@ -83,7 +84,8 @@ void OreManager::update(float           dt,
 
             if (distance(o.pos, collectorPos) < 8.f) {
                 oreOut += o.value * static_cast<double>(bulkMultiplier);
-                
+                gSfx.play(Sfx::OreCollect);
+
                 particles.emitSpark(
                     o.pos,
                     normalize(collectorPos - o.pos), 3);

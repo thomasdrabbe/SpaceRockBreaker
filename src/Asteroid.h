@@ -30,10 +30,13 @@ public:
     sf::Color     color;
     sf::ConvexShape shape;
     OreDrop       oreDrop;
-    OreRarity    rarity    = OreRarity::COMMON;
-    OreTier      oreTier = OreTier::IRON;
-    // In Asteroid.h, public:
-    int rarityDropMult() const;  // returns countMult based on rarity
+    OreRarity     rarity       = OreRarity::COMMON;
+    OreTier       oreTier      = OreTier::IRON;
+    bool          isKeyAsteroid = false;
+    bool          isBoss         = false;
+    float         bossPhase      = 0.f;
+
+    int rarityDropMult() const;
 
     void spawn(AsteroidTier tier,
                sf::Vector2f pos,
@@ -41,14 +44,23 @@ public:
                float        hpMult = 1.f,
                OreTier      ot     = OreTier::IRON);
 
+    void spawnKey(sf::Vector2f pos, sf::Vector2f vel, float hpMult);
+
+    void spawnBoss(float areaW, float areaH,
+                   float hpMult, OreTier lootTier);
+
     bool hit(float damage, ParticleSystem& particles);
-    void update(float dt);
-    void draw(sf::RenderTarget& target) const;
+    void update(float dt, sf::Vector2f playerPos = { 0.f, 0.f });
+    void draw(sf::RenderTarget& target,
+               float               animTime   = 0.f,
+               const sf::Font*     labelFont  = nullptr) const;
     void bounceWalls(float left, float top,
                      float right, float bottom);
 
 private:
     void buildShape();
+    void buildKeyOctagon();
+    void buildBossShape();
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -58,15 +70,20 @@ class AsteroidManager {
 public:
     AsteroidManager();
 
-    // In AsteroidManager:
     void spawnRandom(float areaW, float areaH,
                      float hpMult, OreTier maxTier);
 
     void maintainField(int targetCount,
                        float areaW, float areaH,
                        float hpMult, OreTier maxTier);
-    void update(float dt, float areaW, float areaH);
-    void draw(sf::RenderTarget& target) const;
+    bool trySpawnKey(float areaW, float areaH, float hpMult);
+    bool trySpawnBoss(float areaW, float areaH,
+                      float hpMult, OreTier lootTier);
+    void update(float dt, float areaW, float areaH,
+                sf::Vector2f playerPos);
+    void draw(sf::RenderTarget& target,
+               float               animTime,
+               const sf::Font*     labelFont) const;
 
     Asteroid* nearest(sf::Vector2f from,
                       float maxDist = 99999.f);

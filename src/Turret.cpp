@@ -1,4 +1,5 @@
 #include "Turret.h"
+#include "SoundHub.h"
 #include "Utils.h"
 #include <cmath>
 #include <algorithm>
@@ -54,6 +55,7 @@ void Turret::update(float            dt,
 
     sf::Vector2f dir = normalize(target->pos - tip);
     bullets.fire(tip, dir, finalDmg, isCrit, splitShot, particles);
+    gSfx.play(Sfx::Shot);
 
     if (isCrit)
         particles.emitCritText(tip, finalDmg);

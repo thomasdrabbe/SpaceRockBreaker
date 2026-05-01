@@ -1,4 +1,5 @@
 #include "Plinko.h"
+#include "SoundHub.h"
 #include "Utils.h"
 #include <cmath>
 #include <algorithm>
@@ -19,13 +20,19 @@ void PlinkoBoard::build(int   rows,
                          float boardX, float boardY,
                          float boardW, float boardH,
                          float multBonus, float plinkoLuck,
-                         float scale) {        // ← nieuw
+                         float scale,
+                         float pegHitRadius,
+                         float pegBounceMult) {
     m_boardX = boardX;
     m_boardY = boardY;
     m_boardW = boardW;
     m_boardH = boardH;
-    m_scale  = scale;  // ← opslaan
+    m_scale  = scale;
     m_rows   = clamp(rows, PLINKO_MIN_ROWS, PLINKO_MAX_ROWS);
+
+    m_pegHitRadius  = std::max(3.f, pegHitRadius);
+    m_pegDrawRadius = m_pegHitRadius;
+    m_pegBounceMult = std::max(0.5f, pegBounceMult);
 
     buildPegs();
     buildSlots(multBonus, plinkoLuck);
@@ -131,6 +138,7 @@ bool PlinkoBoard::dropBall(double oreValue, float dropX) {
     b->oreValue = oreValue;
     b->alive    = true;
     b->scored   = false;
+    gSfx.play(Sfx::PlinkoDrop);
     return true;
 }
 
@@ -157,14 +165,15 @@ void PlinkoBoard::resolvePegCollision(PlinkoBall& ball) {
     for (auto& peg : m_pegs) {
         sf::Vector2f diff = ball.pos - peg.pos;
         float        dist = length(diff);
-        float        minD = ball.radius + PLINKO_PEG_RADIUS;
+        float        minD = ball.radius + m_pegHitRadius;
 
         if (dist < minD && dist > 0.001f) {
             sf::Vector2f normal = diff / dist;
             ball.pos = peg.pos + normal * (minD + 0.5f);
 
             float vDotN = dot(ball.vel, normal);
-            ball.vel   -= normal * (1.f + PEG_BOUNCE) * vDotN;
+            float rest  = 1.f + PEG_BOUNCE * m_pegBounceMult;
+            ball.vel   -= normal * rest * vDotN;
             ball.vel.x += randFloat(-25.f, 25.f);
 
             peg.hitFlash = 0.12f;
@@ -244,6 +253,7 @@ void PlinkoBoard::update(float dt, double& creditsOut,
 
                 creditsOut      += earned;
                 slot.flashTimer  = 0.6f;
+                gSfx.play(Sfx::PlinkoScore);
 
                 particles.emitExplosion(ball.pos, 18.f,
                                          slot.color, 12);
@@ -269,8 +279,8 @@ void PlinkoBoard::draw(sf::RenderTarget& target,
     target.draw(bg);
 
     // ── Pegs ──────────────────────────────────────────────
-    sf::CircleShape pegShape(PLINKO_PEG_RADIUS);
-    pegShape.setOrigin({ PLINKO_PEG_RADIUS, PLINKO_PEG_RADIUS });
+    sf::CircleShape pegShape(m_pegDrawRadius);
+    pegShape.setOrigin({ m_pegDrawRadius, m_pegDrawRadius });
 
     for (const auto& peg : m_pegs) {
         bool    flash = peg.hitFlash > 0.f;

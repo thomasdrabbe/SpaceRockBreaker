@@ -1,4 +1,5 @@
 #include "MiningScreen.h"
+#include "SoundHub.h"
 #include "Utils.h"
 #include <cmath>
 #include <sstream>
@@ -106,7 +107,7 @@ void MiningScreen::update(float      dt,
     int target = targetAsteroidCount(state.turretCount());
     int spawnTarget = target + state.levelSpawnBonus();
     m_asteroids.maintainField(spawnTarget, m_w, m_h,hpMult * state.levelHpMult(), state.maxOreTier());
-    m_asteroids.update(dt, m_w, m_h);
+    m_asteroids.update(dt, m_w, m_h, m_player.pos);
 
     // ── Turrets ───────────────────────────────────────────
     m_turrets.update(dt,
@@ -165,15 +166,65 @@ void MiningScreen::resolveCollisions(GameState& state) {
 
             bool destroyed = asteroid.hit(bullet.damage, m_particles);
             if (destroyed) {
-      int count = asteroid.oreDrop.count * asteroid.rarityDropMult();
-      m_ores.drop(
-          asteroid.pos,
-          asteroid.oreDrop.color,
-          asteroid.oreDrop.value,    // ← voeg value toe
-          count,
-          state.oreLuckBonus(),
-          m_particles);
-  }
+                if (asteroid.isBoss)
+                    gSfx.play(Sfx::BossExplode);
+                else
+                    gSfx.play(Sfx::Explosion);
+                if (asteroid.isKeyAsteroid) {
+                    int nk = randInt(1, 3);
+                    state.keys += nk;
+                    m_pendingKeyDrop += nk;
+                    m_ores.drop(
+                        asteroid.pos,
+                        asteroid.oreDrop.color,
+                        asteroid.oreDrop.value,
+                        asteroid.oreDrop.count,
+                        state.oreLuckBonus(),
+                        m_particles);
+                } else if (asteroid.isBoss) {
+                    int count =
+                        asteroid.oreDrop.count * asteroid.rarityDropMult();
+                    m_ores.drop(
+                        asteroid.pos,
+                        asteroid.oreDrop.color,
+                        asteroid.oreDrop.value,
+                        count,
+                        state.oreLuckBonus(),
+                        m_particles);
+                    if (static_cast<int>(state.maxOreTier())
+                        >= static_cast<int>(OreTier::GOLD)) {
+                        m_ores.drop(
+                            asteroid.pos,
+                            sf::Color(255, 215, 50),
+                            20.0,
+                            26,
+                            state.oreLuckBonus(),
+                            m_particles);
+                    }
+                    if (static_cast<int>(state.maxOreTier())
+                        >= static_cast<int>(OreTier::SILVER)) {
+                        m_ores.drop(
+                            asteroid.pos,
+                            sf::Color(210, 215, 225),
+                            8.0,
+                            20,
+                            state.oreLuckBonus(),
+                            m_particles);
+                    }
+                    state.registerBossDefeated();
+                    m_pendingBossReturnToBase = true;
+                } else {
+                    int count =
+                        asteroid.oreDrop.count * asteroid.rarityDropMult();
+                    m_ores.drop(
+                        asteroid.pos,
+                        asteroid.oreDrop.color,
+                        asteroid.oreDrop.value,
+                        count,
+                        state.oreLuckBonus(),
+                        m_particles);
+                }
+            }
             break;
         }
     }
@@ -194,6 +245,44 @@ void MiningScreen::clearAll() {
     m_ores.clearAll();
     for (auto& b : m_bullets.all()) b.alive = false;
     for (auto& a : m_asteroids.all()) a.alive = false;
+    m_pendingBossReturnToBase = false;
+}
+
+void MiningScreen::prepareNewRun() {
+    clearAll();
+    m_pendingKeyDrop = 0;
+    m_player.init(m_x + m_w * 0.5f, m_y + m_h * 0.5f);
+}
+
+bool MiningScreen::pullBossReturnToBase() {
+    if (!m_pendingBossReturnToBase)
+        return false;
+    if (m_ores.aliveCount() > 0)
+        return false;
+    m_pendingBossReturnToBase = false;
+    return true;
+}
+
+bool MiningScreen::trySpawnKeyAsteroid(GameState& state) {
+    float hpMult = std::max(0.1f,
+        1.f - state.levelOf(UpgradeID::ASTEROID_HP) * 0.1f);
+    hpMult *= state.levelHpMult();
+    return m_asteroids.trySpawnKey(m_w, m_h, hpMult);
+}
+
+bool MiningScreen::trySpawnBoss(GameState& state) {
+    if (state.currentLevel != state.nextBossMilestone)
+        return false;
+    float hpMult = std::max(0.1f,
+        1.f - state.levelOf(UpgradeID::ASTEROID_HP) * 0.1f);
+    hpMult *= state.levelHpMult();
+    return m_asteroids.trySpawnBoss(m_w, m_h, hpMult, state.maxOreTier());
+}
+
+int MiningScreen::pullPendingKeyDrop() {
+    int k       = m_pendingKeyDrop;
+    m_pendingKeyDrop = 0;
+    return k;
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -201,7 +290,8 @@ void MiningScreen::clearAll() {
 // ═════════════════════════════════════════════════════════════
 void MiningScreen::draw(sf::RenderTarget& target,
                          const GameState&  state,
-                         float             warpCharge) const {
+                         float             warpCharge,
+                         float             animTime) const {
 
     sf::View oldView = target.getView();
 
@@ -227,7 +317,7 @@ void MiningScreen::draw(sf::RenderTarget& target,
     drawCollector(target);
 
     // ── Entities ──────────────────────────────────────────
-    m_asteroids.draw(target);
+    m_asteroids.draw(target, animTime, m_font);
     m_ores.draw(target);
     m_bullets.draw(target);
     m_turrets.draw(target);

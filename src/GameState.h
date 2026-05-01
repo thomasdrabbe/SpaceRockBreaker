@@ -27,6 +27,17 @@ struct PrestigeUpgradeDef {
 };
 
 // ─────────────────────────────────────────────────────────────
+//  Chest upgrade (keys, permanent)
+// ─────────────────────────────────────────────────────────────
+struct ChestDef {
+    std::string name;
+    std::string description;
+    int         baseKeyCost;
+    double      keyCostMult;
+    int         maxLevel;
+};
+
+// ─────────────────────────────────────────────────────────────
 //  GameState
 // ─────────────────────────────────────────────────────────────
 class GameState {
@@ -43,9 +54,16 @@ public:
     double totalCredits  = 0.0;
     double totalOre      = 0.0;
     int    prestigeCount = 0;
+    int    keys          = 0;   // sleutels (blijven bij game over; voor chests)
 
     // ── Level / zone ──────────────────────────────────────
     int currentLevel = 1;   // advances via step E (fly to next zone)
+
+    // ── Boss milestones (eerste bij zone 3, daarna 5, 10, 15…)
+    int     nextBossMilestone = 3;
+    double  bossCrystalPopup  = 0.0;
+
+    void registerBossDefeated();
 
     // ── New computed stats ────────────────────────────────
     OreTier maxOreTier()    const;   // highest unlocked ore tier
@@ -71,6 +89,10 @@ public:
     std::array<int, static_cast<int>(PrestigeUpgradeID::PRESTIGE_UPGRADE_COUNT)>
         prestigeLevels{};
 
+    // ── Chest levels (keys; blijven bij prestige & game over)
+    std::array<int, static_cast<int>(ChestUpgradeID::CHEST_UPGRADE_COUNT)>
+        chestLevels{};
+
     // ── Static catalogs ───────────────────────────────────
     static const std::array<UpgradeDef,
         static_cast<int>(UpgradeID::UPGRADE_COUNT)>        upgradeCatalog;
@@ -78,6 +100,9 @@ public:
     static const std::array<PrestigeUpgradeDef,
         static_cast<int>(PrestigeUpgradeID::PRESTIGE_UPGRADE_COUNT)>
         prestigeCatalog;
+
+    static const std::array<ChestDef,
+        static_cast<int>(ChestUpgradeID::CHEST_UPGRADE_COUNT)> chestCatalog;
 
     // ── Computed stats ────────────────────────────────────
     float gunDamage()         const;
@@ -102,6 +127,17 @@ public:
 
     float crystalAmp()        const;
 
+    // ── Chest (Plinko pegs / combat / mining) ────────────
+    float chestPlinkoPegRadiusMult() const;
+    float chestPlinkoBounceMult()    const;
+    float chestGunFlatBonus()        const;
+    float chestOreValueMult()        const;
+
+    int   keyCostOf(ChestUpgradeID id) const;
+    bool  canBuyChest(ChestUpgradeID id) const;
+    void  buyChest(ChestUpgradeID id);
+    int   levelOfChest(ChestUpgradeID id) const;
+
     // ── Upgrade helpers ───────────────────────────────────
     double costOf(UpgradeID id)         const;
     double costOf(PrestigeUpgradeID id) const;
@@ -119,6 +155,10 @@ public:
     // ── Save / Load ───────────────────────────────────────
     bool save(const std::string& path) const;
     bool load(const std::string& path);
+    /// Leest zone + credits zonder volledige game te laden (save-slot preview).
+    static bool peekSaveSlot(const std::string& path,
+                             int&         outZone,
+                             double&      outCredits);
     void reset();
 
 private:

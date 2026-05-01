@@ -127,6 +127,9 @@ void Asteroid::spawn(AsteroidTier t,
     const auto& td  = TIER_TABLE[static_cast<int>(t)];
     const auto& otd = ORE_TIER_TABLE[static_cast<int>(ot)];
 
+    isKeyAsteroid = false;
+    isBoss        = false;
+    bossPhase     = 0.f;
     tier         = t;
     oreTier      = ot;
     rarity       = rollAsteroidRarity();
@@ -145,6 +148,105 @@ void Asteroid::spawn(AsteroidTier t,
     oreDrop.count = ORE_COUNT_BY_SIZE[static_cast<int>(t)];
 
     buildShape();
+}
+
+// ═════════════════════════════════════════════════════════════
+//  Asteroid::spawnKey  — één per zone, 2× HP vs gelijk grootte-tier
+// ═════════════════════════════════════════════════════════════
+void Asteroid::spawnKey(sf::Vector2f p, sf::Vector2f v, float hpMult) {
+    AsteroidTier t = AsteroidTier::LARGE;
+    const auto& td  = TIER_TABLE[static_cast<int>(t)];
+    const auto& otd = ORE_TIER_TABLE[static_cast<int>(OreTier::GOLD)];
+
+    isKeyAsteroid = true;
+    isBoss        = false;
+    bossPhase     = 0.f;
+    tier          = t;
+    oreTier       = OreTier::GOLD;
+    rarity        = OreRarity::COMMON;
+    pos           = p;
+    vel           = v;
+    radius        = randFloat(td.radiusMin, td.radiusMax);
+    float baseHp  = td.baseHp * hpMult * 2.f;
+    maxHp         = baseHp;
+    hp            = maxHp;
+    color         = sf::Color(120, 115, 95);
+    rotation      = randFloat(0.f, 360.f);
+    rotationRate  = randFloat(-25.f, 25.f);
+    alive         = true;
+
+    oreDrop.color = otd.oreColor;
+    oreDrop.value = otd.baseValue;
+    oreDrop.count = ORE_COUNT_BY_SIZE[static_cast<int>(t)] * 2;
+
+    buildKeyOctagon();
+}
+
+// ═════════════════════════════════════════════════════════════
+//  Asteroid::spawnBoss  — laatste leven; mega HP + loot
+// ═════════════════════════════════════════════════════════════
+void Asteroid::spawnBoss(float areaW, float areaH,
+                         float hpMult, OreTier lootTier) {
+    AsteroidTier t = AsteroidTier::GIANT;
+    const auto& td  = TIER_TABLE[static_cast<int>(t)];
+    const auto& otd = ORE_TIER_TABLE[static_cast<int>(lootTier)];
+
+    isBoss        = true;
+    isKeyAsteroid = false;
+    bossPhase     = randFloat(0.f, 2.f * PI);
+    tier          = t;
+    oreTier       = lootTier;
+    rarity        = OreRarity::LEGENDARY;
+    radius        = (td.radiusMin + td.radiusMax) * 0.5f * 1.75f;
+    pos           = { areaW * 0.5f, -radius * 0.4f };
+    vel           = { randFloat(-28.f, 28.f), randFloat(55.f, 85.f) };
+    float baseHp  = td.baseHp * hpMult * 4.2f;
+    maxHp         = baseHp;
+    hp            = maxHp;
+    color         = sf::Color(120, 40, 90);
+    rotation      = randFloat(0.f, 360.f);
+    rotationRate  = randFloat(-18.f, 18.f);
+    alive         = true;
+
+    oreDrop.color = otd.oreColor;
+    oreDrop.value = otd.baseValue;
+    oreDrop.count = ORE_COUNT_BY_SIZE[static_cast<int>(t)] * 5;
+
+    buildBossShape();
+}
+
+// ─────────────────────────────────────────────────────────────
+//  Asteroid::buildBossShape
+// ─────────────────────────────────────────────────────────────
+void Asteroid::buildBossShape() {
+    const int N = 11;
+    shape.setPointCount(static_cast<std::size_t>(N));
+    for (int i = 0; i < N; i++) {
+        float angle = (i / static_cast<float>(N)) * 2.f * PI;
+        float r     = radius * randFloat(0.78f, 1.02f);
+        shape.setPoint(static_cast<std::size_t>(i),
+                         { std::cos(angle) * r, std::sin(angle) * r });
+    }
+    shape.setFillColor(sf::Color(95, 25, 70));
+    shape.setOutlineColor(sf::Color(255, 80, 120));
+    shape.setOutlineThickness(4.f);
+}
+
+// ─────────────────────────────────────────────────────────────
+//  Asteroid::buildKeyOctagon
+// ─────────────────────────────────────────────────────────────
+void Asteroid::buildKeyOctagon() {
+    constexpr int N = 8;
+    shape.setPointCount(static_cast<std::size_t>(N));
+    for (int i = 0; i < N; i++) {
+        float angle = (i / static_cast<float>(N)) * 2.f * PI - PI * 0.125f;
+        shape.setPoint(static_cast<std::size_t>(i),
+                       { std::cos(angle) * radius,
+                         std::sin(angle) * radius });
+    }
+    shape.setFillColor(sf::Color(95, 92, 78));
+    shape.setOutlineColor(sf::Color(255, 235, 200));
+    shape.setOutlineThickness(3.f);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -179,9 +281,18 @@ bool Asteroid::hit(float damage, ParticleSystem& particles) {
 
     if (hp <= 0.f) {
         alive = false;
-        particles.emitExplosion(pos, radius, color, 22);
+        sf::Color boomCol = color;
+        int       boomCnt = 22;
+        if (isKeyAsteroid) {
+            boomCol = sf::Color(255, 230, 160);
+            boomCnt = 34;
+        } else if (isBoss) {
+            boomCol = sf::Color(210, 80, 255);
+            boomCnt = 52;
+        }
+        particles.emitExplosion(pos, radius, boomCol, boomCnt);
         particles.emitOrePieces(pos, oreDrop.color,
-                                 oreDrop.count + 2);
+                                 oreDrop.count + (isBoss ? 10 : 2));
         return true;
     }
 
@@ -194,21 +305,139 @@ bool Asteroid::hit(float damage, ParticleSystem& particles) {
 // ═════════════════════════════════════════════════════════════
 //  Asteroid::update
 // ═════════════════════════════════════════════════════════════
-void Asteroid::update(float dt) {
+void Asteroid::update(float dt, sf::Vector2f playerPos) {
     if (!alive) return;
-    pos      += vel * dt;
-    rotation += rotationRate * dt;
+
+    if (isBoss) {
+        constexpr float chase   = 52.f;
+        constexpr float wobble  = 135.f;
+        constexpr float maxSp   = 98.f;
+
+        sf::Vector2f toP = playerPos - pos;
+        float        d    = length(toP);
+        if (d > 8.f)
+            toP = normalize(toP);
+        else
+            toP = { 0.f, 1.f };
+
+        sf::Vector2f tan{ -toP.y, toP.x };
+        float        sw = std::sin(bossPhase);
+        bossPhase += dt * 2.05f;
+
+        vel += toP * chase * dt;
+        vel += tan * (wobble * sw * dt);
+
+        float sp = length(vel);
+        if (sp > maxSp)
+            vel *= (maxSp / sp);
+
+        pos      += vel * dt;
+        rotation += rotationRate * 0.35f * dt;
+    } else {
+        pos      += vel * dt;
+        rotation += rotationRate * dt;
+    }
 }
 
 // ═════════════════════════════════════════════════════════════
 //  Asteroid::draw
 // ═════════════════════════════════════════════════════════════
-void Asteroid::draw(sf::RenderTarget& target) const {
+void Asteroid::draw(sf::RenderTarget& target,
+                     float               animTime,
+                     const sf::Font*     labelFont) const {
     if (!alive) return;
 
     sf::Transform tf;
     tf.translate(pos).rotate(sf::degrees(rotation));
-    target.draw(shape, tf);
+
+    if (isBoss) {
+        float pulse = 0.5f + 0.5f * std::sin(animTime * 2.2f);
+        for (int ring = 3; ring >= 0; --ring) {
+            float extra = static_cast<float>(ring) * 14.f + pulse * 10.f;
+            sf::CircleShape halo(radius + extra);
+            halo.setOrigin({ radius + extra, radius + extra });
+            halo.setPosition(pos);
+            uint8_t a = static_cast<uint8_t>(28 + ring * 22 + pulse * 35);
+            halo.setFillColor(sf::Color::Transparent);
+            halo.setOutlineColor(sf::Color(255, 60, 120, a));
+            halo.setOutlineThickness(2.5f + pulse);
+            target.draw(halo);
+        }
+        sf::ConvexShape drawShape = shape;
+        drawShape.setOutlineColor(sf::Color(
+            static_cast<uint8_t>(255),
+            static_cast<uint8_t>(100 + 80 * pulse),
+            static_cast<uint8_t>(160 + 95 * pulse),
+            245));
+        drawShape.setOutlineThickness(4.f + 2.f * pulse);
+        target.draw(drawShape, tf);
+
+        if (labelFont) {
+            sf::Text tag(*labelFont);
+            tag.setString("BOSS");
+            tag.setCharacterSize(static_cast<unsigned>(
+                std::max(14.f, radius * 0.28f)));
+            tag.setStyle(sf::Text::Bold);
+            tag.setFillColor(sf::Color(255, 200, 220, 250));
+            tag.setOutlineColor(sf::Color(60, 10, 40, 200));
+            tag.setOutlineThickness(2.f);
+            sf::FloatRect b = tag.getLocalBounds();
+            tag.setOrigin({ b.position.x + b.size.x * 0.5f,
+                            b.position.y + b.size.y * 0.5f });
+            tag.setPosition(pos);
+            target.draw(tag);
+        }
+    } else if (isKeyAsteroid) {
+        float pulse = 0.5f + 0.5f * std::sin(animTime * 2.8f);
+        float pulse2 = 0.5f + 0.5f * std::sin(animTime * 2.8f + 1.1f);
+
+        for (int ring = 2; ring >= 0; --ring) {
+            float extra = static_cast<float>(ring) * 10.f + pulse * 6.f;
+            sf::CircleShape halo(radius + extra);
+            halo.setOrigin({ radius + extra, radius + extra });
+            halo.setPosition(pos);
+            uint8_t a = static_cast<uint8_t>(35 + ring * 28 + pulse * 40);
+            halo.setFillColor(sf::Color::Transparent);
+            halo.setOutlineColor(sf::Color(
+                static_cast<uint8_t>(220 + 35 * pulse2),
+                static_cast<uint8_t>(210 + 45 * pulse),
+                static_cast<uint8_t>(120 + 80 * pulse2),
+                a));
+            halo.setOutlineThickness(2.f + pulse);
+            target.draw(halo);
+        }
+
+        sf::ConvexShape drawShape = shape;
+        drawShape.setOutlineColor(sf::Color(
+            static_cast<uint8_t>(245 + 10 * pulse2),
+            static_cast<uint8_t>(240 + 15 * pulse),
+            static_cast<uint8_t>(200 + 55 * pulse),
+            240));
+        drawShape.setOutlineThickness(3.5f + 2.f * pulse);
+        target.draw(drawShape, tf);
+
+        if (labelFont) {
+            sf::Text tag(*labelFont);
+            tag.setString("KEY");
+            tag.setCharacterSize(static_cast<unsigned>(
+                std::max(11.f, radius * 0.42f)));
+            tag.setStyle(sf::Text::Bold);
+            tag.setFillColor(sf::Color(
+                255,
+                250,
+                static_cast<uint8_t>(200.f + 55.f * pulse),
+                245));
+            tag.setOutlineColor(sf::Color(40, 30, 10, 180));
+            tag.setOutlineThickness(2.f);
+            sf::FloatRect b = tag.getLocalBounds();
+            tag.setOrigin({ b.position.x + b.size.x * 0.5f,
+                            b.position.y + b.size.y * 0.5f });
+            tag.setPosition(pos);
+            target.draw(tag);
+        }
+    } else {
+        target.draw(shape, tf);
+    }
 
     // HP bar
     if (hp < maxHp) {
@@ -295,22 +524,87 @@ void AsteroidManager::maintainField(int targetCount,
         spawnRandom(areaW, areaH, hpMult, maxTier);
 }
 
-void AsteroidManager::update(float dt, float areaW, float areaH) {
+void AsteroidManager::update(float dt, float areaW, float areaH,
+                              sf::Vector2f playerPos) {
     m_alive = 0;
     for (auto& a : m_pool) {
         if (!a.alive) continue;
-        a.update(dt);
+        a.update(dt, playerPos);
         a.bounceWalls(0.f, 0.f, areaW, areaH);
         m_alive++;
     }
 }
 
-void AsteroidManager::draw(sf::RenderTarget& target) const {
+void AsteroidManager::draw(sf::RenderTarget& target,
+                            float               animTime,
+                            const sf::Font*     labelFont) const {
     for (const auto& a : m_pool)
-        if (a.alive) a.draw(target);
+        if (a.alive) a.draw(target, animTime, labelFont);
+}
+
+bool AsteroidManager::trySpawnKey(float areaW, float areaH, float hpMult) {
+    for (const auto& a : m_pool)
+        if (a.alive && a.isKeyAsteroid)
+            return false;
+
+    Asteroid* ast = claim();
+    if (!ast)
+        return false;
+
+    AsteroidTier t = AsteroidTier::LARGE;
+    const auto& td = TIER_TABLE[static_cast<int>(t)];
+    float r        = td.radiusMax;
+    float speed    = randFloat(td.speedMin, td.speedMax);
+
+    int side = randInt(0, 3);
+    sf::Vector2f spawnPos;
+    float cx = areaW * 0.5f;
+    float cy = areaH * 0.5f;
+
+    switch (side) {
+        case 0: spawnPos = { randFloat(r, areaW - r), -r };          break;
+        case 1: spawnPos = { randFloat(r, areaW - r), areaH + r };   break;
+        case 2: spawnPos = { -r,          randFloat(r, areaH - r) }; break;
+        default:spawnPos = { areaW + r,   randFloat(r, areaH - r) }; break;
+    }
+
+    sf::Vector2f dir = normalize({
+        cx - spawnPos.x + randFloat(-areaW * 0.3f, areaW * 0.3f),
+        cy - spawnPos.y + randFloat(-areaH * 0.3f, areaH * 0.3f)
+    });
+
+    ast->spawnKey(spawnPos, dir * speed, hpMult);
+    return true;
+}
+
+bool AsteroidManager::trySpawnBoss(float areaW, float areaH,
+                                    float hpMult, OreTier lootTier) {
+    for (const auto& a : m_pool)
+        if (a.alive && a.isBoss)
+            return false;
+
+    Asteroid* ast = claim();
+    if (!ast)
+        return false;
+
+    ast->spawnBoss(areaW, areaH, hpMult, lootTier);
+    return true;
 }
 
 Asteroid* AsteroidManager::nearest(sf::Vector2f from, float maxDist) {
+    Asteroid* boss = nullptr;
+    float     bossD2 = maxDist * maxDist;
+    for (auto& a : m_pool) {
+        if (!a.alive || !a.isBoss) continue;
+        float d2 = distanceSq(from, a.pos);
+        if (d2 < bossD2) {
+            bossD2 = d2;
+            boss   = &a;
+        }
+    }
+    if (boss)
+        return boss;
+
     Asteroid* best   = nullptr;
     float     bestD2 = maxDist * maxDist;
 

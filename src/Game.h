@@ -7,6 +7,7 @@
 #include "MiningScreen.h"
 #include "Plinko.h"
 #include "Shop.h"
+#include "ChestScreen.h"
 
 // ─────────────────────────────────────────────────────────────
 //  Notification
@@ -45,17 +46,25 @@ private:
     GameState m_state;
     Tab       m_activeTab = Tab::MINING;
     bool      m_paused    = false;
+    RunMode   m_runMode   = RunMode::BASE;
 
     // ── Sub-systems ───────────────────────────────────────
     MiningScreen m_mining;
     PlinkoBoard  m_plinko;
     Shop         m_shop;
+    ChestScreen  m_chest;
 
     // ── Notifications ─────────────────────────────────────
     static constexpr int MAX_NOTIFS = 6;
     std::array<Notification, MAX_NOTIFS> m_notifs;
     void pushNotif(const std::string& text,
                    sf::Color color = sf::Color(220, 230, 255));
+
+    // ── Save slots (0 … SAVE_SLOT_COUNT-1) ────────────────
+    int m_saveSlot = 0;
+    [[nodiscard]] std::string currentSavePath() const {
+        return saveSlotPath(m_saveSlot);
+    }
 
     // ── Save timer ────────────────────────────────────────
     float m_saveTimer = 0.f;
@@ -87,6 +96,16 @@ private:
     // ── Warp charge ───────────────────────────────────────
     float m_warpCharge = 0.f;   // 0.0 → 1.0, warp bij 1.0
     static constexpr float WARP_CHARGE_TIME = 2.f;
+
+    // ── Key asteroid (één per zone, spawn na delay) ───────
+    sf::Clock m_animClock;
+    int       m_zonePlayLevel      = 1;
+    float     m_zonePlayTime       = 0.f;
+    bool      m_keySpawnedThisZone = false;
+    void      resetZoneKeyState();
+
+    sf::FloatRect miningStartRunBounds() const;
+    void          drawMiningBasePanel() const;
 
     // ── Main loop ─────────────────────────────────────────
     void processEvents();

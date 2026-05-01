@@ -22,9 +22,11 @@ set(SOURCES
     src/Ore.cpp
     src/Plinko.cpp
     src/Shop.cpp
+    src/ChestScreen.cpp
     src/MiningScreen.cpp
 	  src/Player.cpp
     src/Game.cpp
+    src/SoundHub.cpp
 )
 
 set(HEADERS
@@ -38,9 +40,11 @@ set(HEADERS
     src/Ore.h
     src/Plinko.h
     src/Shop.h
+    src/ChestScreen.h
     src/MiningScreen.h
 	  src/Player.h
     src/Game.h
+    src/SoundHub.h
 )
 
 # ─── Executable ───────────────────────────────────────────────
@@ -56,14 +60,18 @@ target_link_libraries(SpaceRockBreaker PRIVATE
   ImGui-SFML::ImGui-SFML
 )
 
-# ─── Windows: copy SFML DLLs next to .exe ─────────────────────
+# ─── Windows: copy SFML (incl. audio) DLLs next to .exe ───────
+# Gebruikt dezelfde binaries als vcpkg/CMake aan de targets koppelt
+# (geen vaste SFML 2.6-paden meer).
 if(WIN32)
     add_custom_command(TARGET SpaceRockBreaker POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "C:/SFML-2.6.1/bin/sfml-graphics-2.dll"
-            "C:/SFML-2.6.1/bin/sfml-window-2.dll"
-            "C:/SFML-2.6.1/bin/sfml-system-2.dll"
-            $<TARGET_FILE_DIR:SpaceRockBreaker>
+            "$<TARGET_FILE:SFML::System>"
+            "$<TARGET_FILE:SFML::Window>"
+            "$<TARGET_FILE:SFML::Graphics>"
+            "$<TARGET_FILE:SFML::Audio>"
+            "$<TARGET_FILE_DIR:SpaceRockBreaker>"
+        COMMENT "SFML runtime DLLs naar outputmap kopiëren"
     )
 endif()
 

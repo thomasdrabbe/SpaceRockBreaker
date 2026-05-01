@@ -42,15 +42,23 @@ public:
                 double&    creditsEarned,
                 double&    oreEarned);
 
-    void draw   (sf::RenderTarget& target, const GameState&  state,
-    float       warpCharge = 0.f) const;
+    void draw(sf::RenderTarget& target,
+              const GameState& state,
+              float            warpCharge,
+              float            animTime) const;
 
+    bool trySpawnKeyAsteroid(GameState& state);
+    bool trySpawnBoss(GameState& state);
+    int  pullPendingKeyDrop();
 
     void syncTurrets(const GameState& state);
 
     void collectAllOre(double&          oreOut,
                        const GameState& state);
     void clearAll();
+    void prepareNewRun();
+
+    bool pullBossReturnToBase();
 
     // ── Sub-system toegang ────────────────────────────────
     OreManager&     ores()      { return m_ores;      }
@@ -81,6 +89,8 @@ private:
 
     // ── State ─────────────────────────────────────────────
     int m_lastTurretCnt = 0;
+    int m_pendingKeyDrop = 0;
+    bool m_pendingBossReturnToBase = false;
 
     // ── Collision ─────────────────────────────────────────
     void resolveCollisions(GameState& state);

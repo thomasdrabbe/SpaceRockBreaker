@@ -8,8 +8,17 @@ constexpr int      TARGET_FPS    = 60;
 const std::string  WINDOW_TITLE  = "Space Rock Breaker";
 
 // ─── Tabs ─────────────────────────────────────────────────────
-enum class Tab { MINING = 0, PLINKO, SHOP, PRESTIGE };
-constexpr int TAB_COUNT = 4;
+enum class Tab { MINING = 0, PLINKO, SHOP, CHESTS, PRESTIGE };
+constexpr int TAB_COUNT = 5;
+
+// ─── Chest upgrades (keys, permanent; blijven bij prestige) ──
+enum class ChestUpgradeID {
+    PLINKO_PEG_SIZE = 0,
+    PLINKO_PEG_BOUNCE,
+    GUN_FLAT_DAMAGE,
+    MINING_ORE_VALUE,
+    CHEST_UPGRADE_COUNT
+};
 
 // ─── Upgrade IDs (reset on prestige) ──────────────────────────
 enum class UpgradeID {
@@ -103,5 +112,16 @@ constexpr float SIDE_PANEL_W = 240.f;
 constexpr float TAB_BAR_H    = 46.f;
 
 // ─── Save ─────────────────────────────────────────────────────
-const std::string SAVE_FILE    = "srb_save.bin";
-constexpr int SAVE_VERSION = 5;
+const std::string SAVE_FILE = "srb_save.bin"; // legacy (wordt naar slot 0 gemigreerd)
+constexpr int     SAVE_SLOT_COUNT = 3;
+constexpr int     SAVE_VERSION    = 8;
+
+inline std::string saveSlotPath(int slot) {
+    return "srb_save_" + std::to_string(slot) + ".bin";
+}
+
+// ─── Run (mining) vs basis (hub) ────────────────────────────
+enum class RunMode { BASE, RUNNING };
+
+// ─── Key asteroid ───────────────────────────────────────────
+constexpr float KEY_ASTEROID_SPAWN_DELAY_SEC = 30.f;
