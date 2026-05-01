@@ -34,6 +34,7 @@ public:
     OreTier       oreTier      = OreTier::IRON;
     bool          isKeyAsteroid = false;
     bool          isBoss         = false;
+    bool          isMeteor       = false;
     float         bossPhase      = 0.f;
 
     int rarityDropMult() const;
@@ -48,6 +49,9 @@ public:
 
     void spawnBoss(float ox, float oy, float areaW, float areaH,
                    float hpMult, OreTier lootTier);
+
+    void spawnMeteor(sf::Vector2f p, sf::Vector2f vel,
+                      float hpMult, OreTier maxOreTier);
 
     bool hit(float damage, ParticleSystem& particles);
     void update(float dt, sf::Vector2f playerPos = { 0.f, 0.f });
@@ -80,6 +84,8 @@ public:
                      float hpMult);
     bool trySpawnBoss(float ox, float oy, float areaW, float areaH,
                        float hpMult, OreTier lootTier);
+    void spawnMeteorSwarm(float ox, float oy, float areaW, float areaH,
+                          int count, float hpMult, OreTier maxOreTier);
     void update(float dt, float ox, float oy, float areaW, float areaH,
                 sf::Vector2f playerPos);
     void draw(sf::RenderTarget& target,
@@ -94,6 +100,7 @@ public:
     }
 
     int aliveCount() const { return m_alive; }
+    void refreshAliveCount();
 
 private:
     std::array<Asteroid, MAX_ASTEROIDS> m_pool;

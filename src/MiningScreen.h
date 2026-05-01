@@ -40,11 +40,13 @@ public:
     void update(float      dt,
                 GameState& state,
                 double&    creditsEarned,
-                double&    oreEarned);
+                double&    oreEarned,
+                float        warpChargeStars);
 
     void draw(sf::RenderTarget& target,
               const GameState& state,
               float            warpCharge,
+              float            warpFlashRemain,
               float            animTime) const;
 
     bool trySpawnKeyAsteroid(GameState& state);
@@ -59,6 +61,10 @@ public:
     void prepareNewRun();
 
     bool pullBossReturnToBase();
+    /// Boss verslagen maar nog loot op het veld — mining moet door simuleren.
+    bool bossReturnPending() const { return m_pendingBossReturnToBase; }
+
+    bool pullMeteorShowerWarning();
 
     // ── Sub-system toegang ────────────────────────────────
     OreManager&     ores()      { return m_ores;      }
@@ -92,11 +98,21 @@ private:
     int m_pendingKeyDrop = 0;
     bool m_pendingBossReturnToBase = false;
 
+    static constexpr float METEOR_WARN_LEAD_SEC = 5.f;
+    float                  m_meteorTimeToNext = -1.f;
+    bool                   m_meteorWarnIssued = false;
+    bool                   m_pullMeteorWarn   = false;
+
+    void resetMeteorShowerSchedule();
+    void tickMeteorShower(float dt, GameState& state, float asteroidHpMult);
+
     // ── Collision ─────────────────────────────────────────
     void resolveCollisions(GameState& state);
 
     // ── Draw helpers ──────────────────────────────────────
-    void drawStarfield  (sf::RenderTarget& target) const;
+    void drawStarfield(sf::RenderTarget& target, float warpCharge) const;
+    void drawWarpFlashOverlay(sf::RenderTarget& target,
+                               float            warpFlashRemain) const;
     void drawCollector  (sf::RenderTarget& target) const;
     void drawCollectRing(sf::RenderTarget& target,
                          const GameState&  state)  const;

@@ -34,6 +34,7 @@ private:
     // ── Window ────────────────────────────────────────────
     mutable sf::RenderWindow m_window;
     mutable sf::Font         m_font;
+    mutable sf::Font         m_fontFallback;
     sf::Clock        m_clock;
 
     // ── Pause menu state ──────────────────────────────────
@@ -95,8 +96,10 @@ private:
     void reinitSystems();      // herinitialiseer subsystems na resize
 
     // ── Warp charge ───────────────────────────────────────
-    float m_warpCharge = 0.f;   // 0.0 → 1.0, warp bij 1.0
+    float m_warpCharge = 0.f;   // 0.0 .. 1.0, warp bij 1.0
+    float m_warpFlashRemain = 0.f; // witte flits na warp (sec)
     static constexpr float WARP_CHARGE_TIME = 2.f;
+    static constexpr float WARP_FLASH_DURATION = 0.28f;
 
     // ── Key asteroid (één per zone, spawn na delay) ───────
     sf::Clock m_animClock;
@@ -107,6 +110,16 @@ private:
 
     sf::FloatRect miningStartRunBounds() const;
     void          drawMiningBasePanel() const;
+
+    bool          shouldShowRunRetreatButton() const;
+    bool          shouldShowPlinkoSideDrop() const;
+    float         sidePanelResourcesBottomY() const;
+    float         sidePanelAuxReservedHeight() const;
+    float         sidePanelAuxButtonsBaseY() const;
+    sf::FloatRect plinkoSideDropButtonBounds() const;
+    sf::FloatRect runRetreatButtonBounds() const;
+    void          drawSidePanelAuxButtons() const;
+    void          retreatRunToBase();
 
     // ── Main loop ─────────────────────────────────────────
     void processEvents();
@@ -126,6 +139,7 @@ private:
 
     // ── Side panel ────────────────────────────────────────
     void drawSidePanel() const;
+    // DROP (Plinko) + Terug naar basis onder resources-blok
 
     // ── Plinko tab ────────────────────────────────────────
     void drawPlinkoTab()             const;

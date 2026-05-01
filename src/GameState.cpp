@@ -141,6 +141,32 @@ float GameState::hitInvulnerabilitySec() const {
     return 2.f;
 }
 
+bool GameState::miningPausesWhenOffMiningTab() const {
+    return difficulty == Difficulty::Easy;
+}
+
+bool GameState::showsRetreatToBaseOnOtherTabs() const {
+    return difficulty == Difficulty::Medium;
+}
+
+float GameState::meteorShowerIntervalSec() const {
+    switch (difficulty) {
+        case Difficulty::Easy: return 120.f;
+        case Difficulty::Medium: return 60.f;
+        case Difficulty::Hard: return 30.f;
+    }
+    return 60.f;
+}
+
+int GameState::meteorShowerMeteorCount() const {
+    switch (difficulty) {
+        case Difficulty::Easy: return 6;
+        case Difficulty::Medium: return 10;
+        case Difficulty::Hard: return 14;
+    }
+    return 10;
+}
+
 bool GameState::buyRandomChestUpgrade(ChestUpgradeID* outPurchased) {
     ChestUpgradeID opts[8];
     int            n = 0;

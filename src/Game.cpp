@@ -35,10 +35,24 @@ Game::Game()
     m_window.setPosition(sf::Vector2i(0, 0));
     m_window.setFramerateLimit(TARGET_FPS);
 
-    const bool fontLoaded =
-        m_font.openFromFile("assets/font.ttf")
-        || m_font.openFromFile("C:/Windows/Fonts/arial.ttf");
-    (void)fontLoaded;
+    const bool notoOk =
+        m_font.openFromFile("assets/NotoSans-Regular.ttf");
+    if (!notoOk) {
+        bool ok = m_font.openFromFile("assets/font.ttf");
+        if (!ok)
+            ok = m_font.openFromFile("C:/Windows/Fonts/arial.ttf");
+        (void)ok;
+    }
+    if (notoOk) {
+        bool fb = m_fontFallback.openFromFile("assets/font.ttf");
+        if (!fb)
+            fb = m_fontFallback.openFromFile("C:/Windows/Fonts/arial.ttf");
+        (void)fb;
+    } else {
+        (void)m_fontFallback.openFromFile("C:/Windows/Fonts/arial.ttf");
+    }
+    (void)m_fontFallback.getInfo().family.size();
+    (void)notoOk;
 
     initLayout();
     reinitSystems();
@@ -192,48 +206,102 @@ void Game::drawLives() const {
 //  update
 // ═════════════════════════════════════════════════════════════
 void Game::update(float dt) {
+    if (m_warpFlashRemain > 0.f)
+        m_warpFlashRemain = std::max(0.f, m_warpFlashRemain - dt);
     if (m_paused) return;
 
     double creditsEarned = 0.0;
     double oreEarned     = 0.0;
 
     if (m_runMode == RunMode::RUNNING && !m_showMainMenu && !m_paused) {
-        m_mining.update(dt, m_state, creditsEarned, oreEarned);
+        const bool pauseMining =
+            m_state.miningPausesWhenOffMiningTab()
+            && m_activeTab != Tab::MINING
+            && !m_mining.bossReturnPending();
 
-        if (m_state.bossCrystalPopup > 0.0) {
-            pushNotif("+ " + formatBig(m_state.bossCrystalPopup)
-                      + " crystals (boss)",
-                      sf::Color(200, 150, 255));
-            m_state.bossCrystalPopup = 0.0;
-        }
+        if (!pauseMining) {
+            m_mining.update(dt, m_state, creditsEarned, oreEarned,
+                             m_warpCharge);
 
-        // ── Lives check ───────────────────────────────────────
-        if (m_hitCooldown > 0.f) {
-            m_hitCooldown -= dt;
-        } else if (m_mining.playerHit()) {
-            m_hitCooldown = m_state.hitInvulnerabilitySec();
-            m_state.loseLife();
-            m_mining.particles().emitExplosion(
-                m_mining.playerPos(),
-                40.f, sf::Color(255, 80, 60), 30);
+            if (m_mining.pullMeteorShowerWarning()) {
+                pushNotif("Meteor shower over 5 sec!",
+                          sf::Color(255, 170, 120));
+            }
 
-            if (m_state.isGameOver()) {
-                gSfx.play(Sfx::GameOver);
-                m_state.gameOver();
+            if (m_state.bossCrystalPopup > 0.0) {
+                pushNotif("+ " + formatBig(m_state.bossCrystalPopup)
+                          + " crystals (boss)",
+                          sf::Color(200, 150, 255));
+                m_state.bossCrystalPopup = 0.0;
+            }
+
+            if (m_hitCooldown > 0.f) {
+                m_hitCooldown -= dt;
+            } else if (m_mining.playerHit()) {
+                m_hitCooldown = m_state.hitInvulnerabilitySec();
+                m_state.loseLife();
+                m_mining.particles().emitExplosion(
+                    m_mining.playerPos(),
+                    40.f, sf::Color(255, 80, 60), 30);
+
+                if (m_state.isGameOver()) {
+                    gSfx.play(Sfx::GameOver);
+                    m_state.gameOver();
+                    m_mining.clearAll();
+                    m_mining.syncTurrets(m_state);
+                    rebuildPlinko();
+                    resetZoneKeyState();
+                    m_runMode = RunMode::BASE;
+                    pushNotif("GAME OVER - terug naar zone 1",
+                              sf::Color(255, 60, 60));
+                } else {
+                    pushNotif("Leven verloren!  " +
+                              std::to_string(m_state.lives) + " over",
+                              sf::Color(255, 120, 60));
+                }
+            }
+
+            if (m_mining.trySpawnBoss(m_state)) {
+                pushNotif("Zone boss - versla voor crystals!",
+                          sf::Color(255, 100, 160));
+            }
+
+            if (m_zonePlayLevel != m_state.currentLevel) {
+                m_zonePlayLevel      = m_state.currentLevel;
+                m_zonePlayTime       = 0.f;
+                m_keySpawnedThisZone = false;
+            }
+            m_zonePlayTime += dt;
+            if (!m_keySpawnedThisZone
+                && m_zonePlayTime >= KEY_ASTEROID_SPAWN_DELAY_SEC) {
+                if (m_mining.trySpawnKeyAsteroid(m_state)) {
+                    m_keySpawnedThisZone = true;
+                    pushNotif("Sleutel-asteroïde!",
+                              sf::Color(255, 230, 160));
+                }
+            }
+
+            if (m_mining.pullBossReturnToBase()) {
+                double orePick = 0.0;
+                m_mining.collectAllOre(orePick, m_state);
+                if (orePick > 0.0) {
+                    m_state.ore          += orePick;
+                    m_state.totalOre     += orePick;
+                    m_state.oreThisLevel += orePick;
+                }
                 m_mining.clearAll();
                 m_mining.syncTurrets(m_state);
-                rebuildPlinko();
-                resetZoneKeyState();
                 m_runMode = RunMode::BASE;
-                pushNotif("GAME OVER — terug naar zone 1",
-                          sf::Color(255, 60, 60));
-            } else {
-                pushNotif("Leven verloren!  " +
-                          std::to_string(m_state.lives) + " over",
-                          sf::Color(255, 120, 60));
+                resetZoneKeyState();
+                pushNotif(
+                    "Basis - loot binnen. Start een nieuwe run of prestige.",
+                    sf::Color(160, 220, 255));
             }
+        } else {
+            if (m_hitCooldown > 0.f)
+                m_hitCooldown -= dt;
         }
-        // ── Warp charge (Space vasthouden in Mining tab) ───────
+
         if (m_activeTab == Tab::MINING && m_state.canWarp()) {
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Space)) {
                 m_warpCharge += dt / WARP_CHARGE_TIME;
@@ -243,6 +311,7 @@ void Game::update(float dt) {
                     m_mining.clearAll();
                     m_mining.syncTurrets(m_state);
                     gSfx.play(Sfx::Warp);
+                    m_warpFlashRemain = WARP_FLASH_DURATION;
                     pushNotif("Zone " + std::to_string(m_state.currentLevel) + "!",
                               sf::Color(120, 220, 255));
                 }
@@ -251,42 +320,6 @@ void Game::update(float dt) {
             }
         } else {
             m_warpCharge = 0.f;
-        }
-
-        if (m_mining.trySpawnBoss(m_state)) {
-            pushNotif("Zone boss — versla voor crystals!",
-                      sf::Color(255, 100, 160));
-        }
-
-        if (m_zonePlayLevel != m_state.currentLevel) {
-            m_zonePlayLevel      = m_state.currentLevel;
-            m_zonePlayTime       = 0.f;
-            m_keySpawnedThisZone = false;
-        }
-        m_zonePlayTime += dt;
-        if (!m_keySpawnedThisZone
-            && m_zonePlayTime >= KEY_ASTEROID_SPAWN_DELAY_SEC) {
-            if (m_mining.trySpawnKeyAsteroid(m_state)) {
-                m_keySpawnedThisZone = true;
-                pushNotif("Sleutel-asteroïde!",
-                          sf::Color(255, 230, 160));
-            }
-        }
-
-        if (m_mining.pullBossReturnToBase()) {
-            double orePick = 0.0;
-            m_mining.collectAllOre(orePick, m_state);
-            if (orePick > 0.0) {
-                m_state.ore          += orePick;
-                m_state.totalOre     += orePick;
-                m_state.oreThisLevel += orePick;
-            }
-            m_mining.clearAll();
-            m_mining.syncTurrets(m_state);
-            m_runMode = RunMode::BASE;
-            resetZoneKeyState();
-            pushNotif("Basis — loot binnen. Start een nieuwe run of prestige.",
-                      sf::Color(160, 220, 255));
         }
     } else {
         m_warpCharge = 0.f;
@@ -381,6 +414,7 @@ void Game::render() {
     if (m_activeTab == Tab::MINING && m_runMode == RunMode::RUNNING)
         drawLives();
     drawSidePanel();
+    drawSidePanelAuxButtons();
     drawNotifs();
     if (m_paused) drawPauseOverlay();
     m_window.display();
@@ -427,6 +461,13 @@ void Game::onMouseClick(sf::Vector2f pos, sf::Mouse::Button btn) {
         }
     }
 
+    if (shouldShowRunRetreatButton()
+        && runRetreatButtonBounds().contains(pos)) {
+        gSfx.play(Sfx::UiClick);
+        retreatRunToBase();
+        return;
+    }
+
     if (m_activeTab == Tab::MINING && m_runMode == RunMode::BASE) {
         if (miningStartRunBounds().contains(pos)) {
             gSfx.play(Sfx::UiClick);
@@ -436,7 +477,7 @@ void Game::onMouseClick(sf::Vector2f pos, sf::Mouse::Button btn) {
             m_mining.prepareNewRun();
             m_mining.syncTurrets(m_state);
             resetZoneKeyState();
-            pushNotif("Run gestart — zone " +
+            pushNotif("Run gestart - zone " +
                       std::to_string(m_state.currentLevel),
                       sf::Color(120, 220, 255));
             return;
@@ -500,7 +541,7 @@ void Game::onKeyPress(sf::Keyboard::Key key) {
         case K::Escape:
             m_paused = !m_paused;
             if (m_paused)
-                pushNotif("GEPAUZEERD  —  Escape om door te gaan",
+                pushNotif("GEPAUZEERD - Escape om door te gaan",
                           sf::Color(255, 200, 60));
             break;
 
@@ -579,6 +620,7 @@ void Game::drawActiveTab() const {
                 drawMiningBasePanel();
             else
                 m_mining.draw(m_window, m_state, m_warpCharge,
+                               m_warpFlashRemain,
                                m_animClock.getElapsedTime().asSeconds());
             break;
         case Tab::PLINKO:   drawPlinkoTab();                   break;
@@ -655,6 +697,11 @@ void Game::drawSidePanel() const {
     }
     line("Boss bij", "Z " + std::to_string(m_state.nextBossMilestone),
          sf::Color(255, 170, 190));
+    {
+        const float skipAux = sidePanelAuxReservedHeight();
+        if (skipAux > 0.f)
+            ty += skipAux;
+    }
     divider();
 
     drawText("STATS", tx, ty, fHeader, sf::Color(160, 180, 255), true);
@@ -797,11 +844,11 @@ void Game::drawMainMenu() const {
             sf::Color   col;
         };
         const DiffBtn diffBtns[] = {
-            { "Makkelijk — 4 levens, zwakkere asteroïden",
+            { "Makkelijk - 4 levens, zwakkere asteroïden",
               sf::Color(80, 220, 140) },
-            { "Normaal — standaard balans",
+            { "Normaal - standaard balans",
               sf::Color(80, 160, 255) },
-            { "Moeilijk — 2 levens, zwaardere asteroïden",
+            { "Moeilijk - 2 levens, zwaardere asteroïden",
               sf::Color(255, 100, 80) },
         };
 
@@ -856,7 +903,7 @@ void Game::drawMainMenu() const {
         }
 
         const std::string foot =
-            "Klik een slot hierboven  ·  M = geluid aan/uit";
+            "Klik een slot hierboven | M = geluid aan/uit";
         sf::Text footMeas(m_font);
         footMeas.setString(foot);
         footMeas.setCharacterSize(L.fHint);
@@ -936,7 +983,7 @@ void Game::drawMainMenu() const {
         }
     }
 
-    const std::string foot = "Klik een slot hierboven  ·  M = geluid aan/uit";
+    const std::string foot = "Klik een slot hierboven | M = geluid aan/uit";
     sf::Text          footMeas(m_font);
     footMeas.setString(foot);
     footMeas.setCharacterSize(L.fHint);
@@ -975,37 +1022,16 @@ void Game::drawPlinkoTab() const {
 
     m_plinko.draw(m_window, const_cast<sf::Font&>(m_font));
 
-    float btnW = std::round(180.f * m_scale);
-    float btnH = std::round(44.f  * m_scale);
-    float btnX = m_cntX + m_cntW * 0.5f - btnW * 0.5f;
-    float btnY = m_cntY + m_cntH - btnH - 10.f;
-
     unsigned fs = static_cast<unsigned>(std::round(14.f * m_scale));
-
-    bool canDrop = m_state.ore >= 1.0 &&
-                   m_plinko.ballsAlive() < m_state.maxPlinkoBalls();
-
-    sf::RectangleShape btn(sf::Vector2f{ btnW, btnH });
-    btn.setPosition({ btnX, btnY });
-    btn.setFillColor(canDrop ? sf::Color(55, 25, 95, 235)
-                             : sf::Color(28, 22, 40, 180));
-    btn.setOutlineColor(canDrop ? sf::Color(160, 100, 255, 230)
-                                : sf::Color(55, 45, 75, 110));
-    btn.setOutlineThickness(2.f);
-    m_window.draw(btn);
-
-    drawText(canDrop ? "DROP  [Space]"
-                     : (m_state.ore < 1.0 ? "Geen ore" : "Balls vol"),
-             btnX + 12.f, btnY + btnH * 0.5f - fs * 0.5f, fs,
-             canDrop ? sf::Color(210, 170, 255) : sf::Color(90, 80, 110),
-             true);
-
     std::ostringstream os, bs;
     os << "Ore: " << static_cast<long long>(m_state.ore);
     bs << "Balls: " << m_plinko.ballsAlive() << " / " << m_state.maxPlinkoBalls();
 
-    drawText(os.str(), m_cntX + 16.f, btnY + 6.f,              fs, sf::Color(170, 225, 110));
-    drawText(bs.str(), m_cntX + 16.f, btnY + 6.f + fs + 4.f,   fs, sf::Color(150, 130, 195));
+    const float statusY =
+        m_cntY + m_cntH - std::round(52.f * m_scale);
+    drawText(os.str(), m_cntX + 16.f, statusY, fs, sf::Color(170, 225, 110));
+    drawText(bs.str(), m_cntX + 16.f, statusY + fs + 4.f, fs,
+             sf::Color(150, 130, 195));
 }
 
 void Game::handleMainMenuClick(sf::Vector2f pos) {
@@ -1043,7 +1069,7 @@ void Game::handleMainMenuClick(sf::Vector2f pos) {
             m_mainMenuPickDifficulty = false;
             m_state.save(currentSavePath());
             m_showMainMenu         = false;
-            pushNotif("Nieuw spel — slot " +
+            pushNotif("Nieuw spel - slot " +
                           std::to_string(m_saveSlot + 1) + ".",
                       sf::Color(180, 180, 180));
             return;
@@ -1092,12 +1118,7 @@ void Game::handleMainMenuClick(sf::Vector2f pos) {
 }
 
 void Game::handlePlinkoClick(sf::Vector2f pos) {
-    float btnW = std::round(180.f * m_scale);
-    float btnH = std::round(44.f  * m_scale);
-    float btnX = m_cntX + m_cntW * 0.5f - btnW * 0.5f;
-    float btnY = m_cntY + m_cntH - btnH - 10.f;
-    sf::FloatRect btnRect({ btnX, btnY }, { btnW, btnH });
-
+    sf::FloatRect btnRect = plinkoSideDropButtonBounds();
     if (!btnRect.contains(pos)) return;
 
     if (m_state.ore >= 1.0 &&
@@ -1395,24 +1416,27 @@ void Game::updateNotifs(float dt) {
     for (auto& n : m_notifs) {
         if (!n.alive) continue;
         n.lifetime -= dt;
-        n.yOffset  += 28.f * dt;
+        n.yOffset += 52.f * m_scale * dt;
         if (n.lifetime <= 0.f) n.alive = false;
     }
 }
 
 void Game::drawNotifs() const {
-    unsigned fs    = static_cast<unsigned>(std::round(13.f * m_scale));
-    float    notifW = std::round(340.f * m_scale);
-    float    notifH = std::round(26.f  * m_scale);
-    float    baseX  = m_scrW - m_sideW - notifW - 10.f;
-    float    baseY  = m_scrH - 40.f;
-    int      slot   = 0;
+    const unsigned fs =
+        static_cast<unsigned>(std::round(26.f * m_scale));
+    const float notifW = std::round(540.f * m_scale);
+    const float notifH = std::round(52.f * m_scale);
+    const float slotGap = std::round(10.f * m_scale);
+    const float padX    = std::round(18.f * m_scale);
+    const float baseX   = m_scrW - m_sideW - notifW - 10.f;
+    const float baseY   = m_scrH - std::round(58.f * m_scale);
+    int         slot    = 0;
 
     for (const auto& n : m_notifs) {
         if (!n.alive) continue;
 
         float alpha = clamp(n.lifetime / n.maxLifetime, 0.f, 1.f);
-        float y     = baseY - slot * (notifH + 4.f) - n.yOffset;
+        float y     = baseY - slot * (notifH + slotGap) - n.yOffset;
 
         sf::RectangleShape bg(sf::Vector2f{ notifW, notifH });
         bg.setPosition({ baseX, y });
@@ -1420,15 +1444,16 @@ void Game::drawNotifs() const {
             static_cast<uint8_t>(180 * alpha)));
         bg.setOutlineColor(sf::Color(n.color.r, n.color.g, n.color.b,
             static_cast<uint8_t>(160 * alpha)));
-        bg.setOutlineThickness(1.f);
+        bg.setOutlineThickness(2.f);
         m_window.draw(bg);
 
         sf::Text txt(m_font);
         txt.setCharacterSize(fs);
+        txt.setStyle(sf::Text::Bold);
         txt.setString(n.text);
         txt.setFillColor(sf::Color(n.color.r, n.color.g, n.color.b,
             static_cast<uint8_t>(255 * alpha)));
-        txt.setPosition({ baseX + 8.f, y + notifH * 0.5f - fs * 0.5f });
+        txt.setPosition({ baseX + padX, y + notifH * 0.5f - fs * 0.5f });
         m_window.draw(txt);
 
         slot++;
@@ -1470,7 +1495,7 @@ void Game::drawMiningBasePanel() const {
 
     std::ostringstream b2;
     b2 << "Crystals: " << formatBig(m_state.crystals)
-       << "  —  prestige in tab 5";
+       << "  -  prestige in tab 5";
     drawText(b2.str(), m_cntX + 40.f, ty, fBody, sf::Color(180, 160, 240));
     ty += 28.f;
 
@@ -1484,13 +1509,13 @@ void Game::drawMiningBasePanel() const {
 
     if (m_state.chestPegUpgradeCount() > 0) {
         unsigned fLeg = static_cast<unsigned>(std::round(12.f * m_scale));
-        drawText("Plinko peg — kleur = rarity (hit bonus):",
+        drawText("Plinko peg - kleur = rarity (hit bonus):",
                  m_cntX + 40.f, ty, fLeg, sf::Color(175, 195, 225));
         ty += std::round(20.f * m_scale);
 
         struct PegLegendRow { OreRarity id; const char* txt; };
         static const PegLegendRow legend[] = {
-            { OreRarity::COMMON,    "Common — geen bonus" },
+            { OreRarity::COMMON,    "Common - geen bonus" },
             { OreRarity::UNCOMMON,  "Uncommon +0.5x" },
             { OreRarity::RARE,      "Rare +1x" },
             { OreRarity::EPIC,      "Epic +2x" },
@@ -1528,6 +1553,128 @@ void Game::drawMiningBasePanel() const {
              rb.position.x + rb.size.x * 0.5f - fBtn * 3.2f,
              rb.position.y + rb.size.y * 0.5f - fBtn * 0.45f,
              fBtn, sf::Color(220, 240, 255), true);
+}
+
+bool Game::shouldShowRunRetreatButton() const {
+    return m_runMode == RunMode::RUNNING
+        && m_state.showsRetreatToBaseOnOtherTabs()
+        && m_activeTab != Tab::MINING
+        && !m_showMainMenu;
+}
+
+bool Game::shouldShowPlinkoSideDrop() const {
+    return m_activeTab == Tab::PLINKO && !m_showMainMenu;
+}
+
+float Game::sidePanelResourcesBottomY() const {
+    const float py     = m_tabH;
+    float       ty     = py + 16.f;
+    const unsigned fHeader =
+        static_cast<unsigned>(std::round(13.f * m_scale));
+    const float gap = std::round(24.f * m_scale);
+    ty += static_cast<float>(fHeader) + gap + 2.f;
+    ty += 7.f * gap;
+    return ty;
+}
+
+float Game::sidePanelAuxReservedHeight() const {
+    const float bh     = std::round(44.f * m_scale);
+    const float rowGap = std::round(8.f * m_scale);
+    const float pad    = std::round(8.f * m_scale);
+    int         rows   = 0;
+    if (shouldShowPlinkoSideDrop())
+        ++rows;
+    if (shouldShowRunRetreatButton())
+        ++rows;
+    if (rows == 0)
+        return 0.f;
+    return pad + static_cast<float>(rows) * bh
+         + static_cast<float>(rows - 1) * rowGap;
+}
+
+float Game::sidePanelAuxButtonsBaseY() const {
+    return sidePanelResourcesBottomY() + std::round(8.f * m_scale);
+}
+
+sf::FloatRect Game::plinkoSideDropButtonBounds() const {
+    if (!shouldShowPlinkoSideDrop())
+        return sf::FloatRect({ 0.f, 0.f }, { 0.f, 0.f });
+    const float px   = m_scrW - m_sideW + 14.f;
+    const float bw   = m_sideW - 28.f;
+    const float bh   = std::round(44.f * m_scale);
+    const float base = sidePanelAuxButtonsBaseY();
+    return sf::FloatRect({ px, base }, { bw, bh });
+}
+
+sf::FloatRect Game::runRetreatButtonBounds() const {
+    if (!shouldShowRunRetreatButton())
+        return sf::FloatRect({ 0.f, 0.f }, { 0.f, 0.f });
+    const float px = m_scrW - m_sideW + 14.f;
+    const float bw = m_sideW - 28.f;
+    const float bh = std::round(44.f * m_scale);
+    const float rowGap = std::round(8.f * m_scale);
+    float       y    = sidePanelAuxButtonsBaseY();
+    if (shouldShowPlinkoSideDrop())
+        y += bh + rowGap;
+    return sf::FloatRect({ px, y }, { bw, bh });
+}
+
+void Game::drawSidePanelAuxButtons() const {
+    if (shouldShowPlinkoSideDrop()) {
+        sf::FloatRect rb = plinkoSideDropButtonBounds();
+        bool          canDrop =
+            m_state.ore >= 1.0
+            && m_plinko.ballsAlive() < m_state.maxPlinkoBalls();
+        sf::RectangleShape btn(rb.size);
+        btn.setPosition(rb.position);
+        btn.setFillColor(canDrop ? sf::Color(55, 25, 95, 235)
+                                 : sf::Color(28, 22, 40, 180));
+        btn.setOutlineColor(canDrop ? sf::Color(160, 100, 255, 230)
+                                    : sf::Color(55, 45, 75, 110));
+        btn.setOutlineThickness(2.f);
+        m_window.draw(btn);
+        unsigned fs =
+            static_cast<unsigned>(std::round(14.f * m_scale));
+        drawText(canDrop ? "DROP [Space]"
+                         : (m_state.ore < 1.0 ? "Geen ore" : "Balls vol"),
+                 rb.position.x + 12.f,
+                 rb.position.y + rb.size.y * 0.5f - fs * 0.5f,
+                 fs,
+                 canDrop ? sf::Color(210, 170, 255)
+                         : sf::Color(90, 80, 110),
+                 true);
+    }
+    if (shouldShowRunRetreatButton()) {
+        sf::FloatRect rb = runRetreatButtonBounds();
+        sf::RectangleShape btn(rb.size);
+        btn.setPosition(rb.position);
+        btn.setFillColor(sf::Color(28, 42, 72, 235));
+        btn.setOutlineColor(sf::Color(120, 190, 255, 220));
+        btn.setOutlineThickness(2.f);
+        m_window.draw(btn);
+        unsigned fs =
+            static_cast<unsigned>(std::round(15.f * m_scale));
+        drawText("Terug naar basis (run stoppen)",
+                 rb.position.x + 14.f,
+                 rb.position.y + rb.size.y * 0.5f - fs * 0.45f,
+                 fs, sf::Color(200, 230, 255), true);
+    }
+}
+
+void Game::retreatRunToBase() {
+    double orePick = 0.0;
+    m_mining.collectAllOre(orePick, m_state);
+    if (orePick > 0.0) {
+        m_state.ore          += orePick;
+        m_state.totalOre     += orePick;
+        m_state.oreThisLevel += orePick;
+    }
+    m_mining.clearAll();
+    m_mining.syncTurrets(m_state);
+    m_runMode = RunMode::BASE;
+    resetZoneKeyState();
+    pushNotif("Basis - run gestopt, loot verzameld.",
+              sf::Color(160, 220, 255));
 }
 
 // ═════════════════════════════════════════════════════════════

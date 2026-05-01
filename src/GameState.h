@@ -62,6 +62,14 @@ public:
     float difficultyAsteroidHpMult() const;
     float hitInvulnerabilitySec() const;
 
+    /// Makkelijk: mining stopt op andere tabs (behalve boss-terug-flow).
+    bool miningPausesWhenOffMiningTab() const;
+    /// Normaal: knop om tijdens een run vanuit shop/plinko/chests naar basis te gaan.
+    bool showsRetreatToBaseOnOtherTabs() const;
+
+    float meteorShowerIntervalSec() const;
+    int   meteorShowerMeteorCount() const;
+
     /// Willekeurige koopbare chest-upgrade (betaalt normale key-kosten).
     bool buyRandomChestUpgrade(ChestUpgradeID* outPurchased = nullptr);
 

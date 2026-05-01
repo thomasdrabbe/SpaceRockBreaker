@@ -129,6 +129,7 @@ void Asteroid::spawn(AsteroidTier t,
 
     isKeyAsteroid = false;
     isBoss        = false;
+    isMeteor      = false;
     bossPhase     = 0.f;
     tier         = t;
     oreTier      = ot;
@@ -160,6 +161,7 @@ void Asteroid::spawnKey(sf::Vector2f p, sf::Vector2f v, float hpMult) {
 
     isKeyAsteroid = true;
     isBoss        = false;
+    isMeteor      = false;
     bossPhase     = 0.f;
     tier          = t;
     oreTier       = OreTier::GOLD;
@@ -193,6 +195,7 @@ void Asteroid::spawnBoss(float ox, float oy, float areaW, float areaH,
 
     isBoss        = true;
     isKeyAsteroid = false;
+    isMeteor      = false;
     bossPhase     = randFloat(0.f, 2.f * PI);
     tier          = t;
     oreTier       = lootTier;
@@ -213,6 +216,42 @@ void Asteroid::spawnBoss(float ox, float oy, float areaW, float areaH,
     oreDrop.count = ORE_COUNT_BY_SIZE[static_cast<int>(t)] * 5;
 
     buildBossShape();
+}
+
+// ═════════════════════════════════════════════════════════════
+//  Asteroid::spawnMeteor  — shower: snel, klein, ore bij kill
+// ═════════════════════════════════════════════════════════════
+void Asteroid::spawnMeteor(sf::Vector2f p, sf::Vector2f vel,
+                           float hpMult, OreTier maxOreTier) {
+    OreTier ot = pickOreTier(maxOreTier);
+
+    isMeteor      = true;
+    isKeyAsteroid = false;
+    isBoss        = false;
+    bossPhase     = 0.f;
+    tier          = AsteroidTier::SMALL;
+    oreTier       = ot;
+    rarity        = OreRarity::COMMON;
+    pos           = p;
+    vel           = vel;
+    radius        = randFloat(7.f, 11.f);
+    float baseHp  = 24.f * hpMult;
+    maxHp         = std::max(8.f, baseHp);
+    hp            = maxHp;
+    color         = sf::Color(
+        static_cast<std::uint8_t>(randInt(170, 220)),
+        static_cast<std::uint8_t>(randInt(70, 120)),
+        static_cast<std::uint8_t>(randInt(40, 80)));
+    rotation      = randFloat(0.f, 360.f);
+    rotationRate  = randFloat(-200.f, 200.f);
+    alive         = true;
+
+    const auto& otd = ORE_TIER_TABLE[static_cast<int>(ot)];
+    oreDrop.color = otd.oreColor;
+    oreDrop.value = otd.baseValue * 0.35;
+    oreDrop.count = randInt(1, 2);
+
+    buildShape();
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -289,6 +328,9 @@ bool Asteroid::hit(float damage, ParticleSystem& particles) {
         } else if (isBoss) {
             boomCol = sf::Color(210, 80, 255);
             boomCnt = 52;
+        } else if (isMeteor) {
+            boomCol = sf::Color(255, 150, 80);
+            boomCnt = 14;
         }
         particles.emitExplosion(pos, radius, boomCol, boomCnt);
         particles.emitOrePieces(pos, oreDrop.color,
@@ -335,7 +377,7 @@ void Asteroid::update(float dt, sf::Vector2f playerPos) {
         rotation += rotationRate * 0.35f * dt;
     } else {
         pos      += vel * dt;
-        rotation += rotationRate * dt;
+        rotation += rotationRate * (isMeteor ? 1.4f : 1.f) * dt;
     }
 }
 
@@ -439,8 +481,8 @@ void Asteroid::draw(sf::RenderTarget& target,
         target.draw(shape, tf);
     }
 
-    // HP bar
-    if (hp < maxHp) {
+    // HP bar (meteoren: subtieler)
+    if (hp < maxHp && !isMeteor) {
         float barW   = radius * 2.f;
         float filled = barW * (hp / maxHp);
         float barY   = pos.y - radius - 8.f;
@@ -476,6 +518,13 @@ void Asteroid::bounceWalls(float left, float top,
 //  AsteroidManager
 // ═════════════════════════════════════════════════════════════
 AsteroidManager::AsteroidManager() {}
+
+void AsteroidManager::refreshAliveCount() {
+    m_alive = 0;
+    for (const auto& a : m_pool)
+        if (a.alive)
+            ++m_alive;
+}
 
 Asteroid* AsteroidManager::claim() {
     for (auto& a : m_pool)
@@ -539,12 +588,49 @@ void AsteroidManager::maintainField(int targetCount,
 void AsteroidManager::update(float dt, float ox, float oy, float areaW,
                               float areaH, sf::Vector2f playerPos) {
     m_alive = 0;
+    const float bottom = oy + areaH;
     for (auto& a : m_pool) {
         if (!a.alive) continue;
         a.update(dt, playerPos);
-        a.bounceWalls(ox, oy, ox + areaW, oy + areaH);
+        if (a.isMeteor) {
+            if (a.pos.y - a.radius > bottom + 6.f)
+                a.alive = false;
+        } else {
+            a.bounceWalls(ox, oy, ox + areaW, bottom);
+        }
         m_alive++;
     }
+}
+
+void AsteroidManager::spawnMeteorSwarm(float ox, float oy, float areaW,
+                                        float areaH, int count, float hpMult,
+                                        OreTier maxOreTier) {
+    if (count < 1)
+        return;
+    const float cx     = ox + areaW * 0.5f;
+    const float spread = std::min(areaW * 0.38f, 300.f);
+    const float baseY  = oy - randFloat(18.f, 42.f);
+
+    for (int i = 0; i < count; i++) {
+        Asteroid* a = claim();
+        if (!a)
+            break;
+        float t = (count <= 1)
+            ? 0.f
+            : (static_cast<float>(i) / static_cast<float>(count - 1)) * 2.f
+                - 1.f;
+        const float arm = spread * 0.92f;
+        sf::Vector2f p{
+            cx + t * arm,
+            baseY + std::abs(t) * randFloat(10.f, 22.f)
+        };
+        sf::Vector2f dir{ t * 0.62f + randFloat(-0.08f, 0.08f), 1.f };
+        dir         = normalize(dir);
+        const float sp = randFloat(260.f, 340.f);
+        sf::Vector2f v = dir * sp;
+        a->spawnMeteor(p, v, hpMult, maxOreTier);
+    }
+    refreshAliveCount();
 }
 
 void AsteroidManager::draw(sf::RenderTarget& target,

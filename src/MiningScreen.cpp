@@ -75,7 +75,8 @@ bool MiningScreen::playerHit() const {
 void MiningScreen::update(float      dt,
                             GameState& state,
                             double&    creditsEarned,
-                            double&    oreEarned) {
+                            double&    oreEarned,
+                            float      warpChargeStars) {
     //
     m_player.clearHit();
     // ── Sync turrets ──────────────────────────────────────
@@ -142,13 +143,54 @@ void MiningScreen::update(float      dt,
     // ── Particles ─────────────────────────────────────────
     m_particles.update(dt);
 
-    // ── Sterren scrollen ──────────────────────────────────
+    // ── Sterren scrollen (warp opladen = sterk versneld) ───
+    const float w = std::clamp(warpChargeStars, 0.f, 1.f);
+    const float streak = 1.f + w * w * 10.f;
     for (auto& s : m_stars) {
-        s.pos.y += s.speed * dt;
+        s.pos.y += s.speed * dt * streak;
         if (s.pos.y > m_y + m_h + 4.f)
             s.pos = { randFloat(m_x, m_x + m_w), m_y - 4.f };
     }
 
+    tickMeteorShower(dt, state, hpMult * state.levelHpMult()
+                                    * state.difficultyAsteroidHpMult());
+}
+
+void MiningScreen::resetMeteorShowerSchedule() {
+    m_meteorTimeToNext = -1.f;
+    m_meteorWarnIssued = false;
+    m_pullMeteorWarn   = false;
+}
+
+bool MiningScreen::pullMeteorShowerWarning() {
+    if (!m_pullMeteorWarn)
+        return false;
+    m_pullMeteorWarn = false;
+    return true;
+}
+
+void MiningScreen::tickMeteorShower(float dt, GameState& state,
+                                    float asteroidHpMult) {
+    if (m_meteorTimeToNext < 0.f) {
+        m_meteorTimeToNext   = state.meteorShowerIntervalSec();
+        m_meteorWarnIssued   = false;
+    }
+    const float interval = state.meteorShowerIntervalSec();
+    const float prev     = m_meteorTimeToNext;
+    m_meteorTimeToNext -= dt;
+    if (!m_meteorWarnIssued && m_meteorTimeToNext <= METEOR_WARN_LEAD_SEC
+        && prev > METEOR_WARN_LEAD_SEC) {
+        m_meteorWarnIssued = true;
+        m_pullMeteorWarn   = true;
+    }
+    if (m_meteorTimeToNext <= 0.f) {
+        m_asteroids.spawnMeteorSwarm(m_x, m_y, m_w, m_h,
+                                     state.meteorShowerMeteorCount(),
+                                     asteroidHpMult,
+                                     state.maxOreTier());
+        m_meteorTimeToNext = interval;
+        m_meteorWarnIssued = false;
+    }
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -249,6 +291,7 @@ void MiningScreen::clearAll() {
     for (auto& b : m_bullets.all()) b.alive = false;
     for (auto& a : m_asteroids.all()) a.alive = false;
     m_pendingBossReturnToBase = false;
+    resetMeteorShowerSchedule();
 }
 
 void MiningScreen::prepareNewRun() {
@@ -295,6 +338,7 @@ int MiningScreen::pullPendingKeyDrop() {
 void MiningScreen::draw(sf::RenderTarget& target,
                          const GameState&  state,
                          float             warpCharge,
+                         float             warpFlashRemain,
                          float             animTime) const {
 
     sf::View oldView = target.getView();
@@ -321,7 +365,7 @@ void MiningScreen::draw(sf::RenderTarget& target,
     bg.setFillColor(sf::Color(4, 6, 16));
     target.draw(bg);
 
-    drawStarfield(target);
+    drawStarfield(target, warpCharge);
     drawCollectRing(target, state);
     drawCollector(target);
 
@@ -333,6 +377,8 @@ void MiningScreen::draw(sf::RenderTarget& target,
     m_player.draw(target);
     m_particles.draw(target, *m_font);
 
+    drawWarpFlashOverlay(target, warpFlashRemain);
+
     target.setView(oldView);
 
     // ── HUD (buiten clipped view) ─────────────────────────
@@ -343,17 +389,39 @@ void MiningScreen::draw(sf::RenderTarget& target,
 // ─────────────────────────────────────────────────────────────
 //  drawStarfield
 // ─────────────────────────────────────────────────────────────
-void MiningScreen::drawStarfield(sf::RenderTarget& target) const {
+void MiningScreen::drawStarfield(sf::RenderTarget& target,
+                                 float             warpCharge) const {
+    const float w = std::clamp(warpCharge, 0.f, 1.f);
+    const float glow =
+        1.f + w * w * 0.85f; // helderder tijdens opladen
     sf::CircleShape star;
     for (const auto& s : m_stars) {
         star.setRadius(s.radius);
         star.setOrigin({ s.radius, s.radius });
         star.setPosition(s.pos);
-        star.setFillColor(sf::Color(
-            s.brightness, s.brightness,
-            s.brightness, 200));
+        const int b = std::min(
+            255,
+            static_cast<int>(static_cast<float>(s.brightness) * glow));
+        const uint8_t bb = static_cast<uint8_t>(b);
+        const uint8_t alpha = static_cast<uint8_t>(
+            std::min(255, 165 + static_cast<int>(90.f * w)));
+        star.setFillColor(sf::Color(bb, bb, bb, alpha));
         target.draw(star);
     }
+}
+
+void MiningScreen::drawWarpFlashOverlay(sf::RenderTarget& target,
+                                        float remain) const {
+    if (remain <= 0.f)
+        return;
+    constexpr float D = 0.28f;
+    const float     t = std::min(1.f, remain / D);
+    const uint8_t   a = static_cast<uint8_t>(
+        std::min(240.f, 255.f * std::sqrt(t)));
+    sf::RectangleShape flash(sf::Vector2f{ m_w, m_h });
+    flash.setPosition({ m_x, m_y });
+    flash.setFillColor(sf::Color(255, 250, 245, a));
+    target.draw(flash);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -407,9 +475,8 @@ void MiningScreen::drawHUD(sf::RenderTarget& target,
                              const GameState&  state,
                              float             warpCharge) const {
 
-// ── Warp UI ───────────────────────────────────────────────
-// ── Warp UI ───────────────────────────────────────────────
-if (state.warpDriveUnlocked()) {
+    // ── Warp UI ───────────────────────────────────────────────
+    if (state.warpDriveUnlocked()) {
     float barW = m_w * 0.25f;                        // 25% van schermbreed
     float barH = m_h * 0.014f;                       // ~1.4% van schermhoog
     float barX = m_x + m_w * 0.5f - barW * 0.5f;
@@ -446,7 +513,7 @@ if (state.warpDriveUnlocked()) {
             std::to_string(state.oreWarpRequirement()) +
             " ore");
     else if (warpCharge <= 0.f)
-        lbl.setString("Warp ready  —  hold Space");
+        lbl.setString("Warp ready - hold Space");
     else
         lbl.setString("Warping...");
 

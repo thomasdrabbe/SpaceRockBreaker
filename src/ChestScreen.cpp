@@ -213,7 +213,7 @@ void ChestScreen::draw(sf::RenderTarget& target,
         if (maxed)
             line << " MAX]";
         else
-            line << "]  —  " << state.keyCostOf(id) << " keys";
+            line << "]  -  " << state.keyCostOf(id) << " keys";
         std::string fx = formatEffect(id, state);
         if (!fx.empty())
             line << "   (" << fx << ")";
