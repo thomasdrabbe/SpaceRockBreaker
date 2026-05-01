@@ -32,6 +32,12 @@ void MiningScreen::init(sf::Font& font,
                   m_y + m_h * 0.5f);
 
     buildStarfield();
+
+    if (m_playerShipTex.loadFromFile("assets/player_ship.png")) {
+        m_playerShipTex.setSmooth(true);
+        m_player.setShipSprite(&m_playerShipTex);
+    } else
+        m_player.setShipSprite(nullptr);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -140,6 +146,17 @@ void MiningScreen::update(float      dt,
                   m_particles);
     oreEarned += oreThisFrame;
 
+    int keysThisFrame = 0;
+    m_keyPickups.update(dt,
+                        m_collectorPos,
+                        state.autoCollectRadius(),
+                        keysThisFrame,
+                        m_particles);
+    if (keysThisFrame > 0) {
+        state.keys += keysThisFrame;
+        m_pendingKeyDrop += keysThisFrame;
+    }
+
     // ── Particles ─────────────────────────────────────────
     m_particles.update(dt);
 
@@ -217,8 +234,7 @@ void MiningScreen::resolveCollisions(GameState& state) {
                     gSfx.play(Sfx::Explosion);
                 if (asteroid.isKeyAsteroid) {
                     int nk = randInt(1, 3);
-                    state.keys += nk;
-                    m_pendingKeyDrop += nk;
+                    m_keyPickups.drop(asteroid.pos, nk, m_particles);
                     m_ores.drop(
                         asteroid.pos,
                         asteroid.oreDrop.color,
@@ -278,9 +294,12 @@ void MiningScreen::resolveCollisions(GameState& state) {
 // ═════════════════════════════════════════════════════════════
 //  collectAllOre
 // ═════════════════════════════════════════════════════════════
-void MiningScreen::collectAllOre(double&          oreOut,
-                                   const GameState& state) {
+void MiningScreen::collectAllOre(double& oreOut, GameState& state) {
     m_ores.collectAll(oreOut, state.bulkProcess());
+    int k = 0;
+    m_keyPickups.collectAll(k);
+    state.keys += k;
+    m_pendingKeyDrop += k;
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -288,6 +307,7 @@ void MiningScreen::collectAllOre(double&          oreOut,
 // ═════════════════════════════════════════════════════════════
 void MiningScreen::clearAll() {
     m_ores.clearAll();
+    m_keyPickups.clearAll();
     for (auto& b : m_bullets.all()) b.alive = false;
     for (auto& a : m_asteroids.all()) a.alive = false;
     m_pendingBossReturnToBase = false;
@@ -303,7 +323,7 @@ void MiningScreen::prepareNewRun() {
 bool MiningScreen::pullBossReturnToBase() {
     if (!m_pendingBossReturnToBase)
         return false;
-    if (m_ores.aliveCount() > 0)
+    if (m_ores.aliveCount() > 0 || m_keyPickups.aliveCount() > 0)
         return false;
     m_pendingBossReturnToBase = false;
     return true;
@@ -372,6 +392,7 @@ void MiningScreen::draw(sf::RenderTarget& target,
     // ── Entities ──────────────────────────────────────────
     m_asteroids.draw(target, animTime, m_font);
     m_ores.draw(target);
+    m_keyPickups.draw(target);
     m_bullets.draw(target);
     m_turrets.draw(target);
     m_player.draw(target);
@@ -554,19 +575,19 @@ void MiningScreen::drawHUD(sf::RenderTarget& target,
         hy += lineH;
     };
 
-    drawLine("Asteroids : " +
+    drawLine("Asteroiden: " +
              std::to_string(m_asteroids.aliveCount()),
              sf::Color(180, 200, 255));
-    drawLine("Bullets   : " +
+    drawLine("Kogels: " +
              std::to_string(m_bullets.aliveCount()),
              sf::Color(160, 230, 255));
-    drawLine("Ore drops : " +
+    drawLine("Ore: " +
              std::to_string(m_ores.aliveCount()),
              sf::Color(200, 220, 140));
-    drawLine("Particles : " +
+    drawLine("Particles: " +
              std::to_string(m_particles.alive()),
              sf::Color(160, 160, 180));
-    drawLine("Turrets   : " +
+    drawLine("Turrets: " +
              std::to_string(m_turrets.activeCount()),
              sf::Color(255, 180, 100));
 

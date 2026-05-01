@@ -7,6 +7,7 @@
 #include "Bullet.h"
 #include "Turret.h"
 #include "Ore.h"
+#include "KeyPickup.h"
 #include "Particle.h"
 #include "Player.h"
 
@@ -55,8 +56,7 @@ public:
 
     void syncTurrets(const GameState& state);
 
-    void collectAllOre(double&          oreOut,
-                       const GameState& state);
+    void collectAllOre(double& oreOut, GameState& state);
     void clearAll();
     void prepareNewRun();
 
@@ -71,7 +71,8 @@ public:
     ParticleSystem& particles() { return m_particles; }
 
 private:
-    sf::Font*    m_font = nullptr;
+    sf::Font*     m_font = nullptr;
+    sf::Texture   m_playerShipTex;
     float        m_x    = 0.f;
     float        m_y    = 0.f;
     float        m_w    = 0.f;
@@ -82,6 +83,7 @@ private:
     BulletManager   m_bullets;
     TurretManager   m_turrets;
     OreManager      m_ores;
+    KeyPickupManager m_keyPickups;
     ParticleSystem  m_particles;
     Player          m_player;
 

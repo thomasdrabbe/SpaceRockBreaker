@@ -97,6 +97,7 @@ enum class OreTier {
 constexpr int MAX_ASTEROIDS    = 80;
 constexpr int MAX_BULLETS      = 300;
 constexpr int MAX_ORE          = 1000;
+constexpr int MAX_KEY_PICKUPS = 64;
 constexpr int MAX_PARTICLES    = 600;
 constexpr int MAX_PLINKO_BALLS = 200;
 

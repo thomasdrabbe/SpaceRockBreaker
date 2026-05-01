@@ -12,6 +12,31 @@ void Player::init(float startX, float startY) {
     angle = -90.f;
 }
 
+void Player::setShipSprite(const sf::Texture* tex) {
+    m_shipTex = tex;
+    if (!tex) {
+        m_shipScale  = 1.f;
+        m_muzzleDist = BARREL_LEN;
+        m_hitRadius  = SHIP_RADIUS;
+        return;
+    }
+    const sf::Vector2u sz = tex->getSize();
+    if (sz.y < 1u) {
+        m_shipTex    = nullptr;
+        m_muzzleDist = BARREL_LEN;
+        m_hitRadius  = SHIP_RADIUS;
+        return;
+    }
+    constexpr float targetH = 56.f;
+    m_shipScale = targetH / static_cast<float>(sz.y);
+    m_muzzleDist = std::max(
+        BARREL_LEN,
+        m_shipScale * static_cast<float>(sz.y) * 0.48f);
+    const float rw =
+        m_shipScale * static_cast<float>(std::max(sz.x, sz.y)) * 0.36f;
+    m_hitRadius = std::max(SHIP_RADIUS, rw);
+}
+
 // ═════════════════════════════════════════════════════════════
 //  update
 // ═════════════════════════════════════════════════════════════
@@ -51,7 +76,7 @@ void Player::update(float            dt,
     for (auto& asteroid : asteroids.all()) {
         if (!asteroid.alive) continue;
         float dist = distance(pos, asteroid.pos);
-        if (dist < SHIP_RADIUS + asteroid.radius * 0.6f) {
+        if (dist < m_hitRadius + asteroid.radius * 0.6f) {
             m_hitThisFrame = true;
             break;
         }
@@ -59,9 +84,9 @@ void Player::update(float            dt,
 
     // ── Grenzen (paneel in wereldcoördinaten; marge = tip + barrel + glow)
     const float pad = std::max({
-        SHIP_RADIUS * 1.55f + 8.f,
-        BARREL_LEN + 8.f,
-        SHIP_RADIUS + 12.f });
+        m_hitRadius * 1.55f + 8.f,
+        m_muzzleDist + 8.f,
+        m_hitRadius + 12.f });
     pos.x = clamp(pos.x, panelLeft + pad, panelLeft + panelW - pad);
     pos.y = clamp(pos.y, panelTop + pad, panelTop + panelH - pad);
 
@@ -92,8 +117,8 @@ void Player::update(float            dt,
 
         float        rad = toRad(angle);
         sf::Vector2f tip = {
-            pos.x + std::cos(rad) * BARREL_LEN,
-            pos.y + std::sin(rad) * BARREL_LEN
+            pos.x + std::cos(rad) * m_muzzleDist,
+            pos.y + std::sin(rad) * m_muzzleDist
         };
         sf::Vector2f dir = normalize(target->pos - tip);
 
@@ -113,7 +138,22 @@ void Player::draw(sf::RenderTarget& target) const {
 
     float rad = toRad(angle);
 
-    // ── Schip driehoek ────────────────────────────────────
+    if (m_shipTex) {
+        sf::Sprite spr(*m_shipTex);
+        const sf::Vector2u tsz = m_shipTex->getSize();
+        const sf::Vector2f origin{
+            static_cast<float>(tsz.x) * 0.5f,
+            static_cast<float>(tsz.y) * 0.56f };
+        spr.setOrigin(origin);
+        spr.setPosition(pos);
+        spr.setScale({ m_shipScale, m_shipScale });
+        // Texture wijst omhoog; game-angle gebruikt dezelfde 0° = rechts-conventie.
+        spr.setRotation(sf::degrees(angle + 90.f));
+        target.draw(spr);
+        return;
+    }
+
+    // ── Schip driehoek (fallback) ─────────────────────────
     sf::ConvexShape ship(3);
     ship.setPoint(0, {
         std::cos(rad)        * SHIP_RADIUS * 1.4f,

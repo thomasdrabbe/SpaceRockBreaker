@@ -20,6 +20,7 @@ set(SOURCES
     src/Bullet.cpp
     src/Turret.cpp
     src/Ore.cpp
+    src/KeyPickup.cpp
     src/Plinko.cpp
     src/Shop.cpp
     src/ChestScreen.cpp
@@ -38,6 +39,7 @@ set(HEADERS
     src/Bullet.h
     src/Turret.h
     src/Ore.h
+    src/KeyPickup.h
     src/Plinko.h
     src/Shop.h
     src/ChestScreen.h

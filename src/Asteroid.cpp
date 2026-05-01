@@ -107,6 +107,51 @@ OreRarity rollAsteroidRarity() {
     return OreRarity::COMMON;
 }
 
+// Sleutel-symbool op sleutel-asteroïde (lokale coördinaten rond (0,0), zelfde tf als de rots).
+void drawKeyAsteroidIcon(sf::RenderTarget&      target,
+                          const sf::Transform&   worldTf,
+                          float                  radius,
+                          float                  pulse) {
+    const float   s      = radius * 0.48f;
+    const uint8_t fillA  = static_cast<uint8_t>(230 + 25.f * pulse);
+
+    sf::RectangleShape stem;
+    stem.setSize({ s * 0.22f, s * 1.05f });
+    stem.setOrigin({ stem.getSize().x * 0.5f, stem.getSize().y * 0.88f });
+    stem.setPosition({ 0.f, s * 0.12f });
+    stem.setRotation(sf::degrees(-11.f));
+    stem.setFillColor(sf::Color(255, 235, 195, fillA));
+    stem.setOutlineColor(sf::Color(
+        255, 255, 255,
+        static_cast<uint8_t>(140 + 80.f * pulse)));
+    stem.setOutlineThickness(std::max(1.f, s * 0.05f));
+    target.draw(stem, worldTf);
+
+    const float bowR = s * 0.52f;
+    sf::CircleShape bow(bowR);
+    bow.setOrigin({ bowR, bowR });
+    bow.setPosition({ -s * 0.1f, -s * 0.34f });
+    bow.setFillColor(sf::Color(255, 220, 140, fillA));
+    bow.setOutlineColor(sf::Color(
+        255, 250, 220,
+        static_cast<uint8_t>(180 + 60.f * pulse)));
+    bow.setOutlineThickness(std::max(1.2f, s * 0.06f));
+    target.draw(bow, worldTf);
+
+    sf::ConvexShape bit;
+    bit.setPointCount(3);
+    bit.setPoint(0, { 0.f, 0.f });
+    bit.setPoint(1, { s * 0.42f, s * 0.07f });
+    bit.setPoint(2, { s * 0.32f, -s * 0.2f });
+    bit.setPosition({ s * 0.14f, s * 0.52f });
+    bit.setFillColor(sf::Color(250, 250, 255, fillA));
+    bit.setOutlineColor(sf::Color(
+        220, 230, 255,
+        static_cast<uint8_t>(150 + 70.f * pulse)));
+    bit.setOutlineThickness(std::max(1.f, s * 0.04f));
+    target.draw(bit, worldTf);
+}
+
 } // anonymous namespace
 
 // ═════════════════════════════════════════════════════════════
@@ -458,25 +503,7 @@ void Asteroid::draw(sf::RenderTarget& target,
         drawShape.setOutlineThickness(3.5f + 2.f * pulse);
         target.draw(drawShape, tf);
 
-        if (labelFont) {
-            sf::Text tag(*labelFont);
-            tag.setString("KEY");
-            tag.setCharacterSize(static_cast<unsigned>(
-                std::max(11.f, radius * 0.42f)));
-            tag.setStyle(sf::Text::Bold);
-            tag.setFillColor(sf::Color(
-                255,
-                250,
-                static_cast<uint8_t>(200.f + 55.f * pulse),
-                245));
-            tag.setOutlineColor(sf::Color(40, 30, 10, 180));
-            tag.setOutlineThickness(2.f);
-            sf::FloatRect b = tag.getLocalBounds();
-            tag.setOrigin({ b.position.x + b.size.x * 0.5f,
-                            b.position.y + b.size.y * 0.5f });
-            tag.setPosition(pos);
-            target.draw(tag);
-        }
+        drawKeyAsteroidIcon(target, tf, radius, pulse);
     } else {
         target.draw(shape, tf);
     }

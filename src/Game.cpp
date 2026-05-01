@@ -22,6 +22,63 @@ void migrateLegacySaveIfNeeded() {
     out << in.rdbuf();
 }
 
+void drawPanelCoin(sf::RenderTarget& rw, float cx, float cy, float r) {
+    sf::CircleShape rim(r);
+    rim.setOrigin({ r, r });
+    rim.setPosition({ cx, cy });
+    rim.setFillColor(sf::Color(255, 200, 70));
+    rim.setOutlineColor(sf::Color(255, 245, 200));
+    rim.setOutlineThickness(std::max(1.f, r * 0.12f));
+    rw.draw(rim);
+    float ir = r * 0.55f;
+    sf::CircleShape in(ir);
+    in.setOrigin({ ir, ir });
+    in.setPosition({ cx - r * 0.08f, cy - r * 0.1f });
+    in.setFillColor(sf::Color(255, 235, 160));
+    rw.draw(in);
+}
+
+void drawPanelCrystal(sf::RenderTarget& rw, float cx, float cy, float s) {
+    sf::ConvexShape d;
+    d.setPointCount(4);
+    d.setPoint(0, { 0.f, -s });
+    d.setPoint(1, { s * 0.72f, 0.f });
+    d.setPoint(2, { 0.f, s });
+    d.setPoint(3, { -s * 0.72f, 0.f });
+    d.setPosition({ cx, cy });
+    d.setFillColor(sf::Color(180, 120, 255));
+    d.setOutlineColor(sf::Color(230, 200, 255));
+    d.setOutlineThickness(1.2f);
+    rw.draw(d);
+    sf::ConvexShape facet;
+    facet.setPointCount(3);
+    facet.setPoint(0, { 0.f, -s * 0.35f });
+    facet.setPoint(1, { s * 0.25f, 0.f });
+    facet.setPoint(2, { 0.f, s * 0.35f });
+    facet.setPosition({ cx - s * 0.22f, cy });
+    facet.setFillColor(sf::Color(220, 180, 255, 200));
+    rw.draw(facet);
+}
+
+void drawPanelKey(sf::RenderTarget& rw, float cx, float cy, float s) {
+    sf::RectangleShape stem(sf::Vector2f{ s * 0.2f, s * 1.05f });
+    stem.setOrigin({ stem.getSize().x * 0.5f, stem.getSize().y * 0.88f });
+    stem.setPosition({ cx, cy + s * 0.12f });
+    stem.setRotation(sf::degrees(-10.f));
+    stem.setFillColor(sf::Color(240, 210, 130));
+    stem.setOutlineColor(sf::Color(255, 255, 255, 160));
+    stem.setOutlineThickness(1.f);
+    rw.draw(stem);
+    float br = s * 0.48f;
+    sf::CircleShape bow(br);
+    bow.setOrigin({ br, br });
+    bow.setPosition({ cx - s * 0.1f, cy - s * 0.35f });
+    bow.setFillColor(sf::Color(255, 225, 140));
+    bow.setOutlineColor(sf::Color(255, 255, 255, 200));
+    bow.setOutlineThickness(1.2f);
+    rw.draw(bow);
+}
+
 } // namespace
 
 // ═════════════════════════════════════════════════════════════
@@ -276,7 +333,7 @@ void Game::update(float dt) {
                 && m_zonePlayTime >= KEY_ASTEROID_SPAWN_DELAY_SEC) {
                 if (m_mining.trySpawnKeyAsteroid(m_state)) {
                     m_keySpawnedThisZone = true;
-                    pushNotif("Sleutel-asteroïde!",
+                    pushNotif("Sleutel-asteroide!",
                               sf::Color(255, 230, 160));
                 }
             }
@@ -662,6 +719,19 @@ void Game::drawSidePanel() const {
         ty += gap;
     };
 
+    using IconFn = void (*)(sf::RenderTarget&, float, float, float);
+    auto lineWithIcon = [&](IconFn iconFn, const std::string& label,
+                            const std::string& val, sf::Color vc) {
+        drawText(label, tx, ty, fNormal, sf::Color(120, 135, 165));
+        float iconR   = std::round(5.5f * m_scale);
+        float iconGap = std::round(17.f * m_scale);
+        float icy     = ty + fNormal * 0.52f;
+        float icx     = valX - iconGap;
+        iconFn(m_window, icx, icy, iconR);
+        drawText(val, valX, ty, fNormal, vc, true);
+        ty += gap;
+    };
+
     auto divider = [&]() {
         sf::RectangleShape d(sf::Vector2f{ m_sideW - 28.f, 1.f });
         d.setPosition({ tx, ty });
@@ -672,10 +742,20 @@ void Game::drawSidePanel() const {
 
     drawText("RESOURCES", tx, ty, fHeader, sf::Color(160, 180, 255), true);
     ty += gap + 2.f;
-    line("Credits",  "$ " + formatBig(m_state.credits),  sf::Color(255, 215, 70));
-    line("Ore",      std::to_string(static_cast<long long>(m_state.ore)), sf::Color(160, 225, 100));
-    line("Crystals", formatBig(m_state.crystals),         sf::Color(170, 110, 255));
-    line("Keys",     std::to_string(m_state.keys),        sf::Color(255, 220, 140));
+    lineWithIcon(drawPanelCoin,
+        "Credits",
+        formatBig(m_state.credits),
+        sf::Color(255, 215, 70));
+    line("Ore", std::to_string(static_cast<long long>(m_state.ore)),
+         sf::Color(160, 225, 100));
+    lineWithIcon(drawPanelCrystal,
+        "Crystals",
+        formatBig(m_state.crystals),
+        sf::Color(170, 110, 255));
+    lineWithIcon(drawPanelKey,
+        "Keys",
+        std::to_string(m_state.keys),
+        sf::Color(255, 220, 140));
     line("Run",
          m_runMode == RunMode::BASE ? "Basis" : "Actief",
          sf::Color(140, 200, 255));
@@ -844,11 +924,11 @@ void Game::drawMainMenu() const {
             sf::Color   col;
         };
         const DiffBtn diffBtns[] = {
-            { "Makkelijk - 4 levens, zwakkere asteroïden",
+            { "Makkelijk - 4 levens, zwakkere asteroiden",
               sf::Color(80, 220, 140) },
             { "Normaal - standaard balans",
               sf::Color(80, 160, 255) },
-            { "Moeilijk - 2 levens, zwaardere asteroïden",
+            { "Moeilijk - 2 levens, zwaardere asteroiden",
               sf::Color(255, 100, 80) },
         };
 

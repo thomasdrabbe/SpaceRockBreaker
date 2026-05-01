@@ -19,6 +19,9 @@ public:
 
     void init(float startX, float startY);
 
+    /// nullptr = vector fallback (development zonder texture).
+    void setShipSprite(const sf::Texture* tex);
+
     void update(float            dt,
                 float            fireInterval,
                 float            damage,
@@ -43,7 +46,13 @@ public:
 private:
 
     bool m_hitThisFrame = false;
-    static constexpr float SHIP_RADIUS  = 14.f;
+
+    const sf::Texture* m_shipTex   = nullptr;
+    float              m_shipScale = 1.f;
+    float              m_muzzleDist  = 18.f;
+    float              m_hitRadius   = 14.f;
+
+    static constexpr float SHIP_RADIUS  = 14.f;  // fallback body
     static constexpr float ROTATE_SPEED = 280.f;
     static constexpr float BARREL_LEN   = 18.f;
 };
