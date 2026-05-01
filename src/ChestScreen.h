@@ -1,16 +1,9 @@
 #pragma once
 #include <SFML/Graphics.hpp>
-#include <vector>
+#include <cstdint>
 #include <string>
 #include "Constants.h"
 #include "GameState.h"
-
-struct ChestCard {
-    ChestUpgradeID id;
-    sf::FloatRect  bounds;
-    bool           hovered    = false;
-    bool           affordable = false;
-};
 
 class ChestScreen {
 public:
@@ -22,7 +15,8 @@ public:
               float scale = 1.f);
 
     bool handleEvent(const sf::Event& event, GameState& state,
-                     const sf::RenderWindow& window);
+                     const sf::RenderWindow& window,
+                     ChestUpgradeID* outPurchased = nullptr);
     void update(sf::Vector2f mousePos, const GameState& state);
     void draw(sf::RenderTarget& target, const GameState& state) const;
     void scrollBy(float delta);
@@ -35,21 +29,17 @@ private:
     float     m_h     = 0.f;
     float     m_scale = 1.f;
 
-    float m_scroll     = 0.f;
-    float m_maxScroll  = 0.f;
-    float m_headerH    = 52.f;
-    float m_cardH      = 96.f;
     float m_cardMargin = 10.f;
     float m_cardPad    = 12.f;
-    float m_scrollBarW = 8.f;
 
-    std::vector<ChestCard> m_cards;
+    sf::FloatRect m_lootBtn{};
+    bool          m_lootHovered = false;
 
-    void buildCards(const GameState& state);
-    void drawScrollBar(sf::RenderTarget& target) const;
-    void drawCard(sf::RenderTarget& target,
-                   const ChestCard& card,
-                   const GameState& state) const;
+    uint64_t m_layoutFp = 0;
+
+    [[nodiscard]] uint64_t layoutFingerprint(const GameState& state) const;
+    void                     rebuildLayout(const GameState& state);
+
     std::string formatEffect(ChestUpgradeID id,
                              const GameState& state) const;
 };

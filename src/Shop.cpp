@@ -1,5 +1,6 @@
 #include "Shop.h"
 #include "Utils.h"
+#include <cstring>
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
@@ -48,6 +49,18 @@ const sf::Color CAT_COLORS[] = {
     sf::Color(120, 180, 255),
 };
 
+uint64_t floatBits64(float f) {
+    uint32_t u = 0;
+    std::memcpy(&u, &f, sizeof(u));
+    return static_cast<uint64_t>(u);
+}
+
+uint64_t doubleBits64(double d) {
+    uint64_t u = 0;
+    std::memcpy(&u, &d, sizeof(u));
+    return u;
+}
+
 } // anonymous namespace
 
 // ═════════════════════════════════════════════════════════════
@@ -72,6 +85,8 @@ void Shop::init(sf::Font& font,
     m_cardMargin = std::round(10.f  * m_scale);
     m_cardPad    = std::round(14.f  * m_scale);
     m_scrollBarW = std::round(8.f   * m_scale);
+
+    m_layoutFp = 0;
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -83,6 +98,30 @@ sf::FloatRect Shop::tabBounds(int idx) const {
     return sf::FloatRect(
         { m_x + idx * tabW, m_y },
         { tabW, m_tabH });
+}
+
+uint64_t Shop::layoutFingerprint(const GameState& state) const {
+    uint64_t h = 1469598103934665603ull;
+    auto     mix = [&](uint64_t x) {
+        h ^= x + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+    };
+
+    mix(doubleBits64(state.credits));
+    for (int lv : state.upgradeLevels)
+        mix(static_cast<uint64_t>(static_cast<unsigned>(lv)));
+
+    mix(static_cast<uint64_t>(static_cast<int>(m_activeCategory)));
+    mix(doubleBits64(static_cast<double>(m_scroll)));
+
+    mix(floatBits64(m_x));
+    mix(floatBits64(m_y));
+    mix(floatBits64(m_w));
+    mix(floatBits64(m_h));
+    mix(floatBits64(m_tabH));
+    mix(floatBits64(m_cardH));
+    mix(floatBits64(m_cardMargin));
+    mix(floatBits64(m_scrollBarW));
+    return h;
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -112,6 +151,8 @@ void Shop::buildCards(const GameState& state) {
     float visibleH = m_h - m_tabH;
     m_maxScroll    = std::max(0.f, totalH - visibleH);
     m_scroll       = clamp(m_scroll, 0.f, m_maxScroll);
+
+    m_layoutFp = layoutFingerprint(state);
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -154,7 +195,9 @@ bool Shop::handleEvent(const sf::Event& event, GameState& state,
 //  update
 // ═════════════════════════════════════════════════════════════
 void Shop::update(sf::Vector2f mousePos, const GameState& state) {
-    buildCards(state);
+    const uint64_t fp = layoutFingerprint(state);
+    if (fp != m_layoutFp)
+        buildCards(state);
     for (auto& card : m_cards)
         card.hovered = card.bounds.contains(mousePos);
 }

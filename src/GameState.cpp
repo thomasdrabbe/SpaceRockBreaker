@@ -114,6 +114,51 @@ int GameState::levelOfChest(ChestUpgradeID id) const {
     return chestLevels[static_cast<int>(id)];
 }
 
+int GameState::maxLives() const {
+    switch (difficulty) {
+        case Difficulty::Easy: return 4;
+        case Difficulty::Medium: return 3;
+        case Difficulty::Hard: return 2;
+    }
+    return 3;
+}
+
+float GameState::difficultyAsteroidHpMult() const {
+    switch (difficulty) {
+        case Difficulty::Easy: return 0.88f;
+        case Difficulty::Medium: return 1.f;
+        case Difficulty::Hard: return 1.14f;
+    }
+    return 1.f;
+}
+
+float GameState::hitInvulnerabilitySec() const {
+    switch (difficulty) {
+        case Difficulty::Easy: return 2.6f;
+        case Difficulty::Medium: return 2.f;
+        case Difficulty::Hard: return 1.45f;
+    }
+    return 2.f;
+}
+
+bool GameState::buyRandomChestUpgrade(ChestUpgradeID* outPurchased) {
+    ChestUpgradeID opts[8];
+    int            n = 0;
+    for (int i = 0; i < static_cast<int>(ChestUpgradeID::CHEST_UPGRADE_COUNT);
+         ++i) {
+        auto id = static_cast<ChestUpgradeID>(i);
+        if (canBuyChest(id))
+            opts[n++] = id;
+    }
+    if (n <= 0)
+        return false;
+    ChestUpgradeID pick = opts[randInt(0, n - 1)];
+    buyChest(pick);
+    if (outPurchased)
+        *outPurchased = pick;
+    return true;
+}
+
 int GameState::keyCostOf(ChestUpgradeID id) const {
     const auto& d = chestCatalog[static_cast<int>(id)];
     int         lv  = levelOfChest(id);
@@ -347,8 +392,9 @@ void GameState::doPrestige() {
     int keep = prestigeLevels[static_cast<int>(
         PrestigeUpgradeID::CRYSTAL_RETENTION)] * 2;
 
-    const int savedKeys = keys;
-    const auto savedChest = chestLevels;
+    const Difficulty   savedDiff = difficulty;
+    const int          savedKeys = keys;
+    const auto         savedChest = chestLevels;
 
     crystals += crystalsOnPrestige();
     prestigeCount++;
@@ -362,9 +408,11 @@ void GameState::doPrestige() {
     std::sort(ranked.begin(), ranked.end(), std::greater<>());
 
     reset();
+    difficulty     = savedDiff;
     keys           = savedKeys;
     chestLevels    = savedChest;
     prestigeLevels = savedPrestige;
+    lives          = maxLives();
 
     for (int i = 0; i < keep &&
          i < static_cast<int>(UpgradeID::UPGRADE_COUNT); i++) {
@@ -384,7 +432,8 @@ void GameState::reset() {
     currentLevel = 1;          // ← nieuw
     upgradeLevels.fill(0);
     oreThisLevel = 0.0;
-    lives        = MAX_LIVES;
+    difficulty   = Difficulty::Medium;
+    lives        = maxLives();
     keys         = 0;
     chestLevels.fill(0);
     nextBossMilestone = 3;
@@ -418,6 +467,8 @@ bool GameState::save(const std::string& path) const {
             chestLevels.size() * sizeof(int));
     f.write(reinterpret_cast<const char*>(&nextBossMilestone),
             sizeof(nextBossMilestone));
+    const uint8_t diffByte = static_cast<uint8_t>(difficulty);
+    f.write(reinterpret_cast<const char*>(&diffByte), sizeof(diffByte));
     return f.good();
 }
 
@@ -489,6 +540,15 @@ bool GameState::load(const std::string& path) {
     if (ver >= 8)
         f.read(reinterpret_cast<char*>(&nextBossMilestone),
                sizeof(nextBossMilestone));
+    difficulty = Difficulty::Medium;
+    if (ver >= 9) {
+        uint8_t db = 0;
+        f.read(reinterpret_cast<char*>(&db), sizeof(db));
+        if (db <= static_cast<uint8_t>(Difficulty::Hard))
+            difficulty = static_cast<Difficulty>(db);
+    }
+    if (lives > maxLives())
+        lives = maxLives();
     return f.good();
 }
 // ── game over ─────────────────────────────────────────────
@@ -503,6 +563,6 @@ void GameState::gameOver() {
     ore          = 0.0;
     oreThisLevel = 0.0;
     currentLevel = 1;
-    lives        = MAX_LIVES;
+    lives        = maxLives();
     // upgrades blijven staan
 }

@@ -69,9 +69,10 @@ private:
     // ── Save timer ────────────────────────────────────────
     float m_saveTimer = 0.f;
     static constexpr float SAVE_INTERVAL = 30.f;
-    //hit cooldown
+    // Onkwetsbaar na hit (duur hangt van moeilijkheid af)
     float m_hitCooldown = 0.f;
-    static constexpr float HIT_COOLDOWN = 2.f;  // seconden onkwetsbaar na hit
+
+    bool m_mainMenuPickDifficulty = false;
 
     void drawLives() const;
 

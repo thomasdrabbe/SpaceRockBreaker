@@ -128,12 +128,16 @@ void Game::processEvents() {
             }
         }
         if (m_activeTab == Tab::CHESTS) {
-            bool bought = m_chest.handleEvent(*event, m_state, m_window);
+            ChestUpgradeID chestGot{};
+            bool           bought = m_chest.handleEvent(
+                *event, m_state, m_window, &chestGot);
             if (bought) {
                 m_mining.syncTurrets(m_state);
                 rebuildPlinko();
                 gSfx.play(Sfx::UiClick);
-                pushNotif("Chest upgrade!", sf::Color(255, 220, 140));
+                const auto& cn =
+                    GameState::chestCatalog[static_cast<int>(chestGot)];
+                pushNotif(cn.name + " +1", sf::Color(255, 220, 140));
             }
         }
 
@@ -170,13 +174,14 @@ void Game::drawLives() const {
     float r = std::round(10.f * m_scale);
     float gap = std::round(28.f * m_scale);
 
-    for (int i = 0; i < GameState::MAX_LIVES; i++) {
+    const int cap = m_state.maxLives();
+    for (int i = 0; i < cap; i++) {
         sf::CircleShape heart(r);
         heart.setOrigin({ r, r });
         heart.setPosition({ x + i * gap, y + r });
         heart.setFillColor(i < m_state.lives
             ? sf::Color(255, 60, 80)
-            : sf::Color(60, 20, 30));
+            : sf::Color(45, 25, 32));
         heart.setOutlineColor(sf::Color(200, 40, 60, 160));
         heart.setOutlineThickness(1.5f);
         m_window.draw(heart);
@@ -206,7 +211,7 @@ void Game::update(float dt) {
         if (m_hitCooldown > 0.f) {
             m_hitCooldown -= dt;
         } else if (m_mining.playerHit()) {
-            m_hitCooldown = HIT_COOLDOWN;
+            m_hitCooldown = m_state.hitInvulnerabilitySec();
             m_state.loseLife();
             m_mining.particles().emitExplosion(
                 m_mining.playerPos(),
@@ -400,8 +405,9 @@ void Game::onMouseClick(sf::Vector2f pos, sf::Mouse::Button btn) {
               case PauseButton::MAIN_MENU:
                   gSfx.play(Sfx::UiClick);
                   m_state.save(currentSavePath());
-                  m_showMainMenu = true;
-                  m_paused       = false;
+                  m_showMainMenu           = true;
+                  m_mainMenuPickDifficulty = false;
+                  m_paused                 = false;
                   break;
               default: break;
           }
@@ -425,7 +431,7 @@ void Game::onMouseClick(sf::Vector2f pos, sf::Mouse::Button btn) {
         if (miningStartRunBounds().contains(pos)) {
             gSfx.play(Sfx::UiClick);
             if (m_state.lives <= 0)
-                m_state.lives = GameState::MAX_LIVES;
+                m_state.lives = m_state.maxLives();
             m_runMode = RunMode::RUNNING;
             m_mining.prepareNewRun();
             m_mining.syncTurrets(m_state);
@@ -631,6 +637,22 @@ void Game::drawSidePanel() const {
     line("Run",
          m_runMode == RunMode::BASE ? "Basis" : "Actief",
          sf::Color(140, 200, 255));
+    {
+        const char* dl = "Normaal";
+        sf::Color   dc = sf::Color(140, 190, 255);
+        switch (m_state.difficulty) {
+            case Difficulty::Easy:
+                dl = "Makkelijk";
+                dc = sf::Color(120, 220, 160);
+                break;
+            case Difficulty::Medium: break;
+            case Difficulty::Hard:
+                dl = "Moeilijk";
+                dc = sf::Color(255, 140, 120);
+                break;
+        }
+        line("Moeilijkheid", dl, dc);
+    }
     line("Boss bij", "Z " + std::to_string(m_state.nextBossMilestone),
          sf::Color(255, 170, 190));
     divider();
@@ -691,8 +713,11 @@ Game::MainMenuLayout Game::computeMainMenuLayout() const {
     // knoppen zijn opak zodat die tekst niet meer door de vulling schijnt.
     const float gBlock = std::round(26.f * m_scale);
     const float titleLineH = static_cast<float>(L.fTitle);
+    const int   btnRows    = m_mainMenuPickDifficulty ? 4 : 3;
     const float totalH =
-        titleLineH + gTitle + L.slotH + gBlock + 3.f * L.btnH + 2.f * L.gap;
+        titleLineH + gTitle + L.slotH + gBlock
+        + static_cast<float>(btnRows) * L.btnH
+        + static_cast<float>(btnRows - 1) * L.gap;
 
     float y0 = (m_scrH - totalH) * 0.5f;
     const float padTop = std::round(16.f * m_scale);
@@ -755,6 +780,95 @@ void Game::drawMainMenu() const {
                  L.fHint,
                  sf::Color(110, 200, 140),
                  true);
+    }
+
+    if (m_mainMenuPickDifficulty) {
+        const float subY =
+            L.firstBtnTop - std::round(26.f * m_scale);
+        drawText("Kies moeilijkheid (nieuw spel)",
+                 cx - std::round(190.f * m_scale),
+                 subY,
+                 L.fHint,
+                 sf::Color(200, 210, 240),
+                 true);
+
+        struct DiffBtn {
+            const char* label;
+            sf::Color   col;
+        };
+        const DiffBtn diffBtns[] = {
+            { "Makkelijk — 4 levens, zwakkere asteroïden",
+              sf::Color(80, 220, 140) },
+            { "Normaal — standaard balans",
+              sf::Color(80, 160, 255) },
+            { "Moeilijk — 2 levens, zwaardere asteroïden",
+              sf::Color(255, 100, 80) },
+        };
+
+        for (int d = 0; d < 3; d++) {
+            float bx = L.slotX0;
+            float by =
+                L.firstBtnTop + static_cast<float>(d) * (L.btnH + L.gap);
+
+            sf::RectangleShape btn(sf::Vector2f{ L.btnW, L.btnH });
+            btn.setPosition({ bx, by });
+            btn.setFillColor(sf::Color(14, 16, 32, 255));
+            btn.setOutlineColor(diffBtns[d].col);
+            btn.setOutlineThickness(2.f);
+            m_window.draw(btn);
+
+            const float midY = by + L.btnH * 0.5f;
+            sf::Text    labMeas(m_font);
+            labMeas.setString(diffBtns[d].label);
+            labMeas.setCharacterSize(L.fBtn);
+            labMeas.setStyle(sf::Text::Bold);
+            const float lw = labMeas.getLocalBounds().size.x;
+            drawText(diffBtns[d].label,
+                     bx + (L.btnW - lw) * 0.5f,
+                     midY - static_cast<float>(L.fBtn) * 0.5f,
+                     L.fBtn,
+                     diffBtns[d].col,
+                     true);
+        }
+
+        const float byBack =
+            L.firstBtnTop + 3.f * (L.btnH + L.gap);
+        sf::RectangleShape backBtn(sf::Vector2f{ L.btnW, L.btnH });
+        backBtn.setPosition({ L.slotX0, byBack });
+        backBtn.setFillColor(sf::Color(14, 16, 32, 255));
+        backBtn.setOutlineColor(sf::Color(140, 145, 170));
+        backBtn.setOutlineThickness(2.f);
+        m_window.draw(backBtn);
+        {
+            const char* backLab = "Terug";
+            sf::Text    lm(m_font);
+            lm.setString(backLab);
+            lm.setCharacterSize(L.fBtn);
+            lm.setStyle(sf::Text::Bold);
+            const float lw    = lm.getLocalBounds().size.x;
+            const float midYB = byBack + L.btnH * 0.5f;
+            drawText(backLab,
+                     L.slotX0 + (L.btnW - lw) * 0.5f,
+                     midYB - static_cast<float>(L.fBtn) * 0.5f,
+                     L.fBtn,
+                     sf::Color(180, 185, 210),
+                     true);
+        }
+
+        const std::string foot =
+            "Klik een slot hierboven  ·  M = geluid aan/uit";
+        sf::Text footMeas(m_font);
+        footMeas.setString(foot);
+        footMeas.setCharacterSize(L.fHint);
+        footMeas.setStyle(sf::Text::Bold);
+        const float footW = footMeas.getLocalBounds().size.x;
+        drawText(foot,
+                 cx - footW * 0.5f,
+                 m_scrH - std::round(36.f * m_scale),
+                 L.fHint,
+                 sf::Color(90, 100, 140),
+                 true);
+        return;
     }
 
     auto selectedSlotSummary = [&]() -> std::string {
@@ -907,6 +1021,43 @@ void Game::handleMainMenuClick(sf::Vector2f pos) {
         }
     }
 
+    if (m_mainMenuPickDifficulty) {
+        for (int d = 0; d < 3; d++) {
+            sf::FloatRect r(
+                { L.slotX0,
+                  L.firstBtnTop + static_cast<float>(d) * (L.btnH + L.gap) },
+                { L.btnW, L.btnH });
+            if (!r.contains(pos))
+                continue;
+            gSfx.play(Sfx::UiClick);
+            m_state.reset();
+            m_state.difficulty =
+                static_cast<Difficulty>(static_cast<int>(Difficulty::Easy) + d);
+            m_state.lives = m_state.maxLives();
+            m_mining.clearAll();
+            m_mining.syncTurrets(m_state);
+            m_plinko.resetGoldenPegRarityState();
+            rebuildPlinko();
+            resetZoneKeyState();
+            m_runMode              = RunMode::BASE;
+            m_mainMenuPickDifficulty = false;
+            m_state.save(currentSavePath());
+            m_showMainMenu         = false;
+            pushNotif("Nieuw spel — slot " +
+                          std::to_string(m_saveSlot + 1) + ".",
+                      sf::Color(180, 180, 180));
+            return;
+        }
+        sf::FloatRect rBack(
+            { L.slotX0, L.firstBtnTop + 3.f * (L.btnH + L.gap) },
+            { L.btnW, L.btnH });
+        if (rBack.contains(pos)) {
+            gSfx.play(Sfx::UiClick);
+            m_mainMenuPickDifficulty = false;
+        }
+        return;
+    }
+
     for (int i = 0; i < 3; i++) {
         sf::FloatRect r(
             { L.slotX0, L.firstBtnTop + static_cast<float>(i) * (L.btnH + L.gap) },
@@ -930,18 +1081,7 @@ void Game::handleMainMenuClick(sf::Vector2f pos) {
                 }
             } else if (i == 1) {                   // Nieuw Spel
                 gSfx.play(Sfx::UiClick);
-                m_state.reset();
-                m_mining.clearAll();
-                m_mining.syncTurrets(m_state);
-                m_plinko.resetGoldenPegRarityState();
-                rebuildPlinko();
-                resetZoneKeyState();
-                m_runMode = RunMode::BASE;
-                m_state.save(currentSavePath());
-                m_showMainMenu = false;
-                pushNotif("Nieuw spel — slot " +
-                              std::to_string(m_saveSlot + 1) + ".",
-                          sf::Color(180, 180, 180));
+                m_mainMenuPickDifficulty = true;
             } else if (i == 2) {                   // Afsluiten
                 m_state.save(currentSavePath());
                 m_window.close();

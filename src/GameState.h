@@ -56,6 +56,15 @@ public:
     int    prestigeCount = 0;
     int    keys          = 0;   // sleutels (blijven bij game over; voor chests)
 
+    Difficulty difficulty = Difficulty::Medium;
+
+    int   maxLives()              const;
+    float difficultyAsteroidHpMult() const;
+    float hitInvulnerabilitySec() const;
+
+    /// Willekeurige koopbare chest-upgrade (betaalt normale key-kosten).
+    bool buyRandomChestUpgrade(ChestUpgradeID* outPurchased = nullptr);
+
     // ── Level / zone ──────────────────────────────────────
     int currentLevel = 1;   // advances via step E (fly to next zone)
 
@@ -75,7 +84,8 @@ public:
 
         // ── Lives ─────────────────────────────────────────────
     int lives = 3;
-    static constexpr int MAX_LIVES = 3;
+    /// Historisch maximum voor UI; werkelijk max = maxLives() (easy/hard).
+    static constexpr int MAX_LIVES = 4;
 
     void loseLife();    // -1 leven, bij 0 → game over
     bool isGameOver() const { return lives <= 0; }

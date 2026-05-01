@@ -1,5 +1,6 @@
 #pragma once
 #include <SFML/Graphics.hpp>
+#include <cstdint>
 #include <vector>
 #include <string>
 #include "Constants.h"
@@ -55,6 +56,10 @@ private:
 
     ShopCategory             m_activeCategory = ShopCategory::WEAPONS;
     std::vector<UpgradeCard> m_cards;
+
+    uint64_t m_layoutFp = 0;
+
+    [[nodiscard]] uint64_t layoutFingerprint(const GameState& state) const;
 
     void buildCards(const GameState& state);
     void drawBackground(sf::RenderTarget& target) const;

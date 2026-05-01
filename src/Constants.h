@@ -114,7 +114,14 @@ constexpr float TAB_BAR_H    = 46.f;
 // ─── Save ─────────────────────────────────────────────────────
 const std::string SAVE_FILE = "srb_save.bin"; // legacy (wordt naar slot 0 gemigreerd)
 constexpr int     SAVE_SLOT_COUNT = 3;
-constexpr int     SAVE_VERSION    = 8;
+constexpr int     SAVE_VERSION    = 9;
+
+// ─── Nieuwe spel-moeilijkheid ─────────────────────────────────
+enum class Difficulty {
+    Easy = 0,
+    Medium,
+    Hard,
+};
 
 inline std::string saveSlotPath(int slot) {
     return "srb_save_" + std::to_string(slot) + ".bin";

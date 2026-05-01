@@ -106,8 +106,10 @@ void MiningScreen::update(float      dt,
     // ── Asteroid field ────────────────────────────────────
     int target = targetAsteroidCount(state.turretCount());
     int spawnTarget = target + state.levelSpawnBonus();
-    m_asteroids.maintainField(spawnTarget, m_x, m_y, m_w, m_h,
-                              hpMult * state.levelHpMult(), state.maxOreTier());
+    m_asteroids.maintainField(
+        spawnTarget, m_x, m_y, m_w, m_h,
+        hpMult * state.levelHpMult() * state.difficultyAsteroidHpMult(),
+        state.maxOreTier());
     m_asteroids.update(dt, m_x, m_y, m_w, m_h, m_player.pos);
 
     // ── Turrets ───────────────────────────────────────────
