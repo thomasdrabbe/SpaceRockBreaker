@@ -25,8 +25,10 @@ public:
                 float            critChance,
                 float            critMult,
                 int              splitShot,
-                float            areaW,
-                float            areaH,
+                float            panelLeft,
+                float            panelTop,
+                float            panelW,
+                float            panelH,
                 AsteroidManager& asteroids,
                 BulletManager&   bullets,
                 ParticleSystem&  particles);

@@ -88,7 +88,7 @@ void MiningScreen::update(float      dt,
                     state.critChance(),
                     state.critMult(),
                     state.splitShot(),
-                    m_w, m_h,
+                    m_x, m_y, m_w, m_h,
                     m_asteroids,
                     m_bullets,
                     m_particles);
@@ -106,8 +106,9 @@ void MiningScreen::update(float      dt,
     // ── Asteroid field ────────────────────────────────────
     int target = targetAsteroidCount(state.turretCount());
     int spawnTarget = target + state.levelSpawnBonus();
-    m_asteroids.maintainField(spawnTarget, m_w, m_h,hpMult * state.levelHpMult(), state.maxOreTier());
-    m_asteroids.update(dt, m_w, m_h, m_player.pos);
+    m_asteroids.maintainField(spawnTarget, m_x, m_y, m_w, m_h,
+                              hpMult * state.levelHpMult(), state.maxOreTier());
+    m_asteroids.update(dt, m_x, m_y, m_w, m_h, m_player.pos);
 
     // ── Turrets ───────────────────────────────────────────
     m_turrets.update(dt,
@@ -121,7 +122,7 @@ void MiningScreen::update(float      dt,
                      m_particles);
 
     // ── Bullets ───────────────────────────────────────────
-    m_bullets.update(dt, m_w, m_h);
+    m_bullets.update(dt, m_x, m_y, m_w, m_h);
 
     // ── Collisions ────────────────────────────────────────
     resolveCollisions(state);
@@ -267,7 +268,7 @@ bool MiningScreen::trySpawnKeyAsteroid(GameState& state) {
     float hpMult = std::max(0.1f,
         1.f - state.levelOf(UpgradeID::ASTEROID_HP) * 0.1f);
     hpMult *= state.levelHpMult();
-    return m_asteroids.trySpawnKey(m_w, m_h, hpMult);
+    return m_asteroids.trySpawnKey(m_x, m_y, m_w, m_h, hpMult);
 }
 
 bool MiningScreen::trySpawnBoss(GameState& state) {
@@ -276,7 +277,8 @@ bool MiningScreen::trySpawnBoss(GameState& state) {
     float hpMult = std::max(0.1f,
         1.f - state.levelOf(UpgradeID::ASTEROID_HP) * 0.1f);
     hpMult *= state.levelHpMult();
-    return m_asteroids.trySpawnBoss(m_w, m_h, hpMult, state.maxOreTier());
+    return m_asteroids.trySpawnBoss(m_x, m_y, m_w, m_h, hpMult,
+                                    state.maxOreTier());
 }
 
 int MiningScreen::pullPendingKeyDrop() {
@@ -295,10 +297,15 @@ void MiningScreen::draw(sf::RenderTarget& target,
 
     sf::View oldView = target.getView();
 
-    float vpX = m_x / WINDOW_WIDTH;
-    float vpY = m_y / WINDOW_HEIGHT;
-    float vpW = m_w / WINDOW_WIDTH;
-    float vpH = m_h / WINDOW_HEIGHT;
+    // Viewport moet t.o.v. de echte venstergrootte — niet WINDOW_* constanten
+    // (anders klopt onder/rechts niet bij andere desktop-resoluties).
+    const auto   pxSz = target.getSize();
+    const float  rw   = std::max(1.f, static_cast<float>(pxSz.x));
+    const float  rh   = std::max(1.f, static_cast<float>(pxSz.y));
+    const float  vpX  = m_x / rw;
+    const float  vpY  = m_y / rh;
+    const float  vpW  = m_w / rw;
+    const float  vpH  = m_h / rh;
 
     sf::View mineView(sf::FloatRect(
         { m_x, m_y }, { m_w, m_h }));

@@ -117,12 +117,11 @@ void Shop::buildCards(const GameState& state) {
 // ═════════════════════════════════════════════════════════════
 //  handleEvent
 // ═════════════════════════════════════════════════════════════
-bool Shop::handleEvent(const sf::Event& event, GameState& state) {
+bool Shop::handleEvent(const sf::Event& event, GameState& state,
+                       const sf::RenderWindow& window) {
     if (const auto* e = event.getIf<sf::Event::MouseButtonPressed>()) {
         if (e->button == sf::Mouse::Button::Left) {
-            sf::Vector2f mp(
-                static_cast<float>(e->position.x),
-                static_cast<float>(e->position.y));
+            sf::Vector2f mp = mapPixelToUi(window, sf::Vector2i(e->position));
 
             for (int i = 0; i < static_cast<int>(ShopCategory::CATEGORY_COUNT); i++) {
                 if (tabBounds(i).contains(mp)) {

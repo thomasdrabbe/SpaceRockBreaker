@@ -55,7 +55,9 @@ GameState::prestigeCatalog = {{
 
 const std::array<ChestDef, static_cast<int>(ChestUpgradeID::CHEST_UPGRADE_COUNT)>
 GameState::chestCatalog = {{
-    { "Golden Pegs",     "Plinko peg hit radius +3.5% / level", 2, 1.22, 12 },
+    { "Golden Pegs",
+      "Random pegs krijgen rarity bonus (+0.5x tot +8x)",
+      2, 1.22, 20 },
     { "Reactive Pegs",   "Peg bounce strength +3% / level",    2, 1.22, 12 },
     { "Ammo Cache",      "Gun damage +1.5 / level",             3, 1.28, 10 },
     { "Refinery Pass",   "Ore value +2% / level",               3, 1.28, 12 },
@@ -89,9 +91,8 @@ float GameState::crystalAmp() const {
 // ═════════════════════════════════════════════════════════════
 //  Chest upgrades
 // ═════════════════════════════════════════════════════════════
-float GameState::chestPlinkoPegRadiusMult() const {
-    int lv = levelOfChest(ChestUpgradeID::PLINKO_PEG_SIZE);
-    return 1.f + 0.035f * static_cast<float>(lv);
+int GameState::chestPegUpgradeCount() const {
+    return levelOfChest(ChestUpgradeID::PLINKO_PEG_SIZE) * 3;
 }
 
 float GameState::chestPlinkoBounceMult() const {

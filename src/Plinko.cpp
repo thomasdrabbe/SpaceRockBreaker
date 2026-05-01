@@ -6,6 +6,79 @@
 #include <sstream>
 #include <iomanip>
 
+namespace pegc {
+
+constexpr float kBonus[static_cast<int>(OreRarity::RARITY_COUNT)] = {
+    0.f, 0.5f, 1.f, 2.f, 4.f, 8.f,
+};
+
+const sf::Color kFill[static_cast<int>(OreRarity::RARITY_COUNT)] = {
+    sf::Color(140, 160, 200), // Common
+    sf::Color( 80, 200,  80), // Uncommon
+    sf::Color( 70, 130, 255), // Rare
+    sf::Color(185,  60, 255), // Epic
+    sf::Color(220,  50,  50), // Mythic
+    sf::Color(255, 170,   0), // Legendary
+};
+
+} // namespace pegc
+
+sf::Color PlinkoPegRarity::fillColor(OreRarity r) {
+    const int i = std::clamp(static_cast<int>(r), 0,
+        static_cast<int>(OreRarity::RARITY_COUNT) - 1);
+    return pegc::kFill[i];
+}
+
+float PlinkoPegRarity::bonusMult(OreRarity r) {
+    const int i = std::clamp(static_cast<int>(r), 0,
+        static_cast<int>(OreRarity::RARITY_COUNT) - 1);
+    return pegc::kBonus[i];
+}
+
+namespace {
+
+std::string fmtPegCreditGain(double v) {
+    std::ostringstream s;
+    s << "+$";
+    if (v >= 1e12) {
+        s << std::fixed << std::setprecision(2) << v / 1e12 << "T";
+        return s.str();
+    }
+    if (v >= 1e9) {
+        s << std::fixed << std::setprecision(2) << v / 1e9 << "B";
+        return s.str();
+    }
+    if (v >= 1e6) {
+        s << std::fixed << std::setprecision(2) << v / 1e6 << "M";
+        return s.str();
+    }
+    if (v >= 1e3) {
+        s << std::fixed << std::setprecision(1) << v / 1e3 << "K";
+        return s.str();
+    }
+    if (v >= 100.0)
+        s << static_cast<long long>(std::llround(v));
+    else
+        s << std::fixed << std::setprecision(1) << v;
+    return s.str();
+}
+
+OreRarity rollPegRarityTier() {
+    static constexpr float w[5] = { 50.f, 30.f, 15.f, 4.f, 1.f };
+    float                  total = 0.f;
+    for (float x : w) total += x;
+    const float r = randFloat(0.f, total);
+    float       cum = 0.f;
+    for (int i = 0; i < 5; i++) {
+        cum += w[i];
+        if (r < cum)
+            return static_cast<OreRarity>(i + 1);
+    }
+    return OreRarity::LEGENDARY;
+}
+
+} // namespace
+
 // ═════════════════════════════════════════════════════════════
 //  Constructor
 // ═════════════════════════════════════════════════════════════
@@ -28,7 +101,15 @@ void PlinkoBoard::build(int   rows,
     m_boardW = boardW;
     m_boardH = boardH;
     m_scale  = scale;
-    m_rows   = clamp(rows, PLINKO_MIN_ROWS, PLINKO_MAX_ROWS);
+
+    const int newRows = clamp(rows, PLINKO_MIN_ROWS, PLINKO_MAX_ROWS);
+    if (m_lastBuildRows >= 0 && newRows != m_lastBuildRows) {
+        m_pegRarityByCell.clear();
+        m_syncedGoldenPegChestLevel = -1;
+    }
+    m_rows = newRows;
+
+    m_pegCreditPopups.clear();
 
     m_pegHitRadius  = std::max(3.f, pegHitRadius);
     m_pegDrawRadius = m_pegHitRadius;
@@ -36,6 +117,8 @@ void PlinkoBoard::build(int   rows,
 
     buildPegs();
     buildSlots(multBonus, plinkoLuck);
+
+    m_lastBuildRows = m_rows;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -60,6 +143,13 @@ void PlinkoBoard::buildPegs() {
             Peg peg;
             peg.pos      = { m_boardX + offset + colStep * (col + 1), y };
             peg.hitFlash = 0.f;
+            peg.cellRow  = row;
+            peg.cellCol  = col;
+            const auto key = std::make_pair(row, col);
+            const auto it  = m_pegRarityByCell.find(key);
+            peg.pegRarity    = (it != m_pegRarityByCell.end())
+                                   ? it->second
+                                   : OreRarity::COMMON;
             m_pegs.push_back(peg);
         }
     }
@@ -161,7 +251,9 @@ void PlinkoBoard::updateAuto(float dt, double& oreStock,
 // ═════════════════════════════════════════════════════════════
 //  resolvePegCollision
 // ═════════════════════════════════════════════════════════════
-void PlinkoBoard::resolvePegCollision(PlinkoBall& ball) {
+void PlinkoBoard::resolvePegCollision(PlinkoBall& ball,
+                                       double&     creditsOut,
+                                       float       creditMult) {
     for (auto& peg : m_pegs) {
         sf::Vector2f diff = ball.pos - peg.pos;
         float        dist = length(diff);
@@ -177,6 +269,18 @@ void PlinkoBoard::resolvePegCollision(PlinkoBall& ball) {
             ball.vel.x += randFloat(-25.f, 25.f);
 
             peg.hitFlash = 0.12f;
+
+            const int ri = static_cast<int>(peg.pegRarity);
+            if (peg.pegRarity > OreRarity::COMMON && ri >= 0
+                && ri < static_cast<int>(OreRarity::RARITY_COUNT)) {
+                const float mult = pegc::kBonus[ri];
+                const double gain =
+                    static_cast<double>(ball.oreValue)
+                    * static_cast<double>(mult)
+                    * static_cast<double>(creditMult);
+                creditsOut += gain;
+                pushPegCreditPopup(peg.pos, gain);
+            }
         }
     }
 }
@@ -234,7 +338,7 @@ void PlinkoBoard::update(float dt, double& creditsOut,
         ball.vel   *= BALL_FRICTION;
         ball.pos   += ball.vel * dt;
 
-        resolvePegCollision(ball);
+        resolvePegCollision(ball, creditsOut, creditMult);
         resolveWallCollision(ball);
 
         // Scoring
@@ -263,6 +367,40 @@ void PlinkoBoard::update(float dt, double& creditsOut,
         if (ball.pos.y > m_boardY + m_boardH + 20.f)
             ball.alive = false;
     }
+
+    updatePegCreditPopups(dt);
+}
+
+void PlinkoBoard::pushPegCreditPopup(sf::Vector2f pegCenter,
+                                      double       credits) {
+    if (credits <= 0.0)
+        return;
+
+    PegCreditPopup p;
+    p.pos  = pegCenter
+           + sf::Vector2f(0.f, -m_pegDrawRadius - std::round(6.f * m_scale));
+    p.text = fmtPegCreditGain(credits);
+    p.age  = 0.f;
+
+    constexpr std::size_t kMaxPopups = 48;
+    if (m_pegCreditPopups.size() >= kMaxPopups)
+        m_pegCreditPopups.erase(m_pegCreditPopups.begin());
+
+    m_pegCreditPopups.push_back(std::move(p));
+}
+
+void PlinkoBoard::updatePegCreditPopups(float dt) {
+    constexpr float kLife = 0.85f;
+    for (auto& p : m_pegCreditPopups) {
+        p.age += dt;
+        p.pos.y -= std::round(38.f * m_scale) * dt;
+    }
+    m_pegCreditPopups.erase(
+        std::remove_if(m_pegCreditPopups.begin(), m_pegCreditPopups.end(),
+                       [kLife](const PegCreditPopup& p) {
+                           return p.age >= kLife;
+                       }),
+        m_pegCreditPopups.end());
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -283,16 +421,51 @@ void PlinkoBoard::draw(sf::RenderTarget& target,
     pegShape.setOrigin({ m_pegDrawRadius, m_pegDrawRadius });
 
     for (const auto& peg : m_pegs) {
-        bool    flash = peg.hitFlash > 0.f;
-        uint8_t r     = flash ? 255 : 140;
-        uint8_t g     = flash ? 255 : 160;
-        uint8_t b     = flash ? 255 : 200;
-
+        const int pr = std::clamp(static_cast<int>(peg.pegRarity), 0,
+            static_cast<int>(OreRarity::RARITY_COUNT) - 1);
+        sf::Color base = pegc::kFill[pr];
+        const float ft =
+            peg.hitFlash > 0.f ? std::min(1.f, peg.hitFlash / 0.12f) : 0.f;
+        auto brighten = [](uint8_t v, float t) {
+            return static_cast<uint8_t>(
+                std::min(255, static_cast<int>(v + (255 - v) * t * 0.9f)));
+        };
         pegShape.setPosition(peg.pos);
-        pegShape.setFillColor(sf::Color(r, g, b));
-        pegShape.setOutlineColor(sf::Color(200, 220, 255, 80));
+        pegShape.setFillColor(
+            sf::Color(brighten(base.r, ft), brighten(base.g, ft),
+                      brighten(base.b, ft)));
+        pegShape.setOutlineColor(sf::Color(
+            std::min(255, base.r + 40), std::min(255, base.g + 40),
+            std::min(255, base.b + 50), 90));
         pegShape.setOutlineThickness(1.f);
         target.draw(pegShape);
+    }
+
+    // ── Bonus-peg credit floaters ─────────────────────────
+    {
+        constexpr float kLife = 0.85f;
+        const unsigned  fs =
+            static_cast<unsigned>(std::round(11.f * m_scale));
+        for (const auto& p : m_pegCreditPopups) {
+            const float   t  = clamp(p.age / kLife, 0.f, 1.f);
+            const uint8_t a  = static_cast<uint8_t>(255.f * (1.f - t));
+            const uint8_t aO = static_cast<uint8_t>(200.f * (1.f - t));
+
+            sf::Text label(font);
+            label.setString(p.text);
+            label.setCharacterSize(fs);
+            label.setStyle(sf::Text::Bold);
+            label.setFillColor(sf::Color(255, 235, 130, a));
+            label.setOutlineColor(sf::Color(50, 40, 20, aO));
+            label.setOutlineThickness(1.f);
+
+            const auto lb    = label.getLocalBounds();
+            const float textW = lb.size.x;
+            label.setPosition({
+                p.pos.x - textW * 0.5f - lb.position.x,
+                p.pos.y - lb.position.y });
+            target.draw(label);
+        }
     }
 
     // ── Slots ─────────────────────────────────────────────
@@ -372,5 +545,68 @@ void PlinkoBoard::draw(sf::RenderTarget& target,
         ballShape.setFillColor(sf::Color(255, 255, 255, 180));
         ballShape.setOutlineThickness(0.f);
         target.draw(ballShape);
+    }
+}
+
+// ═════════════════════════════════════════════════════════════
+//  Peg rarity (Golden Pegs chest) — persistent per (rij, kolom)
+// ═════════════════════════════════════════════════════════════
+
+void PlinkoBoard::resetGoldenPegRarityState() {
+    m_pegRarityByCell.clear();
+    m_syncedGoldenPegChestLevel = -1;
+    m_lastBuildRows             = -1;
+    m_pegCreditPopups.clear();
+    for (auto& p : m_pegs)
+        p.pegRarity = OreRarity::COMMON;
+}
+
+void PlinkoBoard::applyPegRarityRolls(int rollCount) {
+    if (m_pegs.empty() || rollCount <= 0)
+        return;
+
+    const int nPegs = static_cast<int>(m_pegs.size());
+    for (int i = 0; i < rollCount; ++i) {
+        Peg& peg = m_pegs[randInt(0, nPegs - 1)];
+        if (peg.cellRow < 0)
+            continue;
+
+        const OreRarity rolled = rollPegRarityTier();
+        const int       cur    = static_cast<int>(peg.pegRarity);
+        const int       rv     = static_cast<int>(rolled);
+        if (rv > cur)
+            peg.pegRarity = rolled;
+
+        m_pegRarityByCell[{ peg.cellRow, peg.cellCol }] = peg.pegRarity;
+    }
+}
+
+void PlinkoBoard::syncGoldenPegChestRarities(int goldenPegChestLevel) {
+    if (goldenPegChestLevel < 0)
+        goldenPegChestLevel = 0;
+    const int targetRolls = goldenPegChestLevel * 3;
+
+    if (m_pegs.empty()) {
+        m_syncedGoldenPegChestLevel = goldenPegChestLevel;
+        return;
+    }
+
+    if (m_syncedGoldenPegChestLevel < 0) {
+        applyPegRarityRolls(targetRolls);
+        m_syncedGoldenPegChestLevel = goldenPegChestLevel;
+        return;
+    }
+
+    if (goldenPegChestLevel > m_syncedGoldenPegChestLevel) {
+        const int d = goldenPegChestLevel - m_syncedGoldenPegChestLevel;
+        applyPegRarityRolls(d * 3);
+        m_syncedGoldenPegChestLevel = goldenPegChestLevel;
+    } else if (goldenPegChestLevel < m_syncedGoldenPegChestLevel) {
+        m_pegRarityByCell.clear();
+        for (auto& p : m_pegs)
+            p.pegRarity = OreRarity::COMMON;
+        m_syncedGoldenPegChestLevel = -1;
+        applyPegRarityRolls(targetRolls);
+        m_syncedGoldenPegChestLevel = goldenPegChestLevel;
     }
 }

@@ -32,7 +32,7 @@ public:
               int             splitCount,
               ParticleSystem& particles);
 
-    void update(float dt, float areaW, float areaH);
+    void update(float dt, float ox, float oy, float areaW, float areaH);
     void draw(sf::RenderTarget& target) const;
 
     std::array<Bullet, MAX_BULLETS>& all() { return m_pool; }

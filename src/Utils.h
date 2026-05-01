@@ -6,6 +6,8 @@
 #include <iomanip>
 #include <SFML/System/Vector2.hpp>
 #include <SFML/Graphics/Rect.hpp>
+#include <SFML/Graphics/RenderWindow.hpp>
+#include <SFML/Graphics/View.hpp>
 
 
 // ─────────────────────────────────────────────────────────────
@@ -121,3 +123,13 @@ inline float rectLeft  (const sf::FloatRect& r) { return r.position.x; }
 inline float rectTop   (const sf::FloatRect& r) { return r.position.y; }
 inline float rectWidth (const sf::FloatRect& r) { return r.size.x; }
 inline float rectHeight(const sf::FloatRect& r) { return r.size.y; }
+
+/// Zet muispixels om naar dezelfde 2D-coördinaten als drawing (default UI-view),
+/// onafhankelijk van een resterende custom View op het venster (bv. mining-tab).
+inline sf::Vector2f mapPixelToUi(const sf::RenderWindow& w, sf::Vector2i px) {
+    const sf::Vector2u sz = w.getSize();
+    const float        fw = sz.x > 0 ? static_cast<float>(sz.x) : 1.f;
+    const float        fh = sz.y > 0 ? static_cast<float>(sz.y) : 1.f;
+    const sf::View     ui(sf::FloatRect({ 0.f, 0.f }, { fw, fh }));
+    return w.mapPixelToCoords(px, ui);
+}

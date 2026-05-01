@@ -185,7 +185,7 @@ void Asteroid::spawnKey(sf::Vector2f p, sf::Vector2f v, float hpMult) {
 // ═════════════════════════════════════════════════════════════
 //  Asteroid::spawnBoss  — laatste leven; mega HP + loot
 // ═════════════════════════════════════════════════════════════
-void Asteroid::spawnBoss(float areaW, float areaH,
+void Asteroid::spawnBoss(float ox, float oy, float areaW, float areaH,
                          float hpMult, OreTier lootTier) {
     AsteroidTier t = AsteroidTier::GIANT;
     const auto& td  = TIER_TABLE[static_cast<int>(t)];
@@ -198,7 +198,7 @@ void Asteroid::spawnBoss(float areaW, float areaH,
     oreTier       = lootTier;
     rarity        = OreRarity::LEGENDARY;
     radius        = (td.radiusMin + td.radiusMax) * 0.5f * 1.75f;
-    pos           = { areaW * 0.5f, -radius * 0.4f };
+    pos           = { ox + areaW * 0.5f, oy - radius * 0.4f };
     vel           = { randFloat(-28.f, 28.f), randFloat(55.f, 85.f) };
     float baseHp  = td.baseHp * hpMult * 4.2f;
     maxHp         = baseHp;
@@ -483,8 +483,9 @@ Asteroid* AsteroidManager::claim() {
     return nullptr;
 }
 
-void AsteroidManager::spawnRandom(float areaW, float areaH,
-                                   float hpMult, OreTier maxTier) {
+void AsteroidManager::spawnRandom(float ox, float oy, float areaW,
+                                   float areaH, float hpMult,
+                                   OreTier maxTier) {
     Asteroid* a = claim();
     if (!a) return;
 
@@ -497,14 +498,24 @@ void AsteroidManager::spawnRandom(float areaW, float areaH,
 
     int side = randInt(0, 3);
     sf::Vector2f spawnPos;
-    float cx = areaW * 0.5f;
-    float cy = areaH * 0.5f;
+    float cx = ox + areaW * 0.5f;
+    float cy = oy + areaH * 0.5f;
 
     switch (side) {
-        case 0: spawnPos = { randFloat(r, areaW - r), -r };          break;
-        case 1: spawnPos = { randFloat(r, areaW - r), areaH + r };   break;
-        case 2: spawnPos = { -r,          randFloat(r, areaH - r) }; break;
-        default:spawnPos = { areaW + r,   randFloat(r, areaH - r) }; break;
+        case 0:
+            spawnPos = { randFloat(ox + r, ox + areaW - r), oy - r };
+            break;
+        case 1:
+            spawnPos = { randFloat(ox + r, ox + areaW - r),
+                         oy + areaH + r };
+            break;
+        case 2:
+            spawnPos = { ox - r, randFloat(oy + r, oy + areaH - r) };
+            break;
+        default:
+            spawnPos = { ox + areaW + r,
+                         randFloat(oy + r, oy + areaH - r) };
+            break;
     }
 
     sf::Vector2f dir = normalize({
@@ -517,20 +528,21 @@ void AsteroidManager::spawnRandom(float areaW, float areaH,
 }
 
 void AsteroidManager::maintainField(int targetCount,
-                                     float areaW, float areaH,
-                                     float hpMult, OreTier maxTier) {
+                                     float ox, float oy, float areaW,
+                                     float areaH, float hpMult,
+                                     OreTier maxTier) {
     int current = aliveCount();
     for (int i = current; i < targetCount; i++)
-        spawnRandom(areaW, areaH, hpMult, maxTier);
+        spawnRandom(ox, oy, areaW, areaH, hpMult, maxTier);
 }
 
-void AsteroidManager::update(float dt, float areaW, float areaH,
-                              sf::Vector2f playerPos) {
+void AsteroidManager::update(float dt, float ox, float oy, float areaW,
+                              float areaH, sf::Vector2f playerPos) {
     m_alive = 0;
     for (auto& a : m_pool) {
         if (!a.alive) continue;
         a.update(dt, playerPos);
-        a.bounceWalls(0.f, 0.f, areaW, areaH);
+        a.bounceWalls(ox, oy, ox + areaW, oy + areaH);
         m_alive++;
     }
 }
@@ -542,7 +554,8 @@ void AsteroidManager::draw(sf::RenderTarget& target,
         if (a.alive) a.draw(target, animTime, labelFont);
 }
 
-bool AsteroidManager::trySpawnKey(float areaW, float areaH, float hpMult) {
+bool AsteroidManager::trySpawnKey(float ox, float oy, float areaW,
+                                   float areaH, float hpMult) {
     for (const auto& a : m_pool)
         if (a.alive && a.isKeyAsteroid)
             return false;
@@ -558,14 +571,24 @@ bool AsteroidManager::trySpawnKey(float areaW, float areaH, float hpMult) {
 
     int side = randInt(0, 3);
     sf::Vector2f spawnPos;
-    float cx = areaW * 0.5f;
-    float cy = areaH * 0.5f;
+    float cx = ox + areaW * 0.5f;
+    float cy = oy + areaH * 0.5f;
 
     switch (side) {
-        case 0: spawnPos = { randFloat(r, areaW - r), -r };          break;
-        case 1: spawnPos = { randFloat(r, areaW - r), areaH + r };   break;
-        case 2: spawnPos = { -r,          randFloat(r, areaH - r) }; break;
-        default:spawnPos = { areaW + r,   randFloat(r, areaH - r) }; break;
+        case 0:
+            spawnPos = { randFloat(ox + r, ox + areaW - r), oy - r };
+            break;
+        case 1:
+            spawnPos = { randFloat(ox + r, ox + areaW - r),
+                         oy + areaH + r };
+            break;
+        case 2:
+            spawnPos = { ox - r, randFloat(oy + r, oy + areaH - r) };
+            break;
+        default:
+            spawnPos = { ox + areaW + r,
+                         randFloat(oy + r, oy + areaH - r) };
+            break;
     }
 
     sf::Vector2f dir = normalize({
@@ -577,8 +600,9 @@ bool AsteroidManager::trySpawnKey(float areaW, float areaH, float hpMult) {
     return true;
 }
 
-bool AsteroidManager::trySpawnBoss(float areaW, float areaH,
-                                    float hpMult, OreTier lootTier) {
+bool AsteroidManager::trySpawnBoss(float ox, float oy, float areaW,
+                                    float areaH, float hpMult,
+                                    OreTier lootTier) {
     for (const auto& a : m_pool)
         if (a.alive && a.isBoss)
             return false;
@@ -587,7 +611,7 @@ bool AsteroidManager::trySpawnBoss(float areaW, float areaH,
     if (!ast)
         return false;
 
-    ast->spawnBoss(areaW, areaH, hpMult, lootTier);
+    ast->spawnBoss(ox, oy, areaW, areaH, hpMult, lootTier);
     return true;
 }
 

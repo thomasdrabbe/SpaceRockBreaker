@@ -30,7 +30,8 @@ public:
               float panelW, float panelH,
               float scale = 1.f);          // ← nieuw
 
-    bool handleEvent(const sf::Event& event, GameState& state);
+    bool handleEvent(const sf::Event& event, GameState& state,
+                     const sf::RenderWindow& window);
     void update(sf::Vector2f mousePos, const GameState& state);
     void draw(sf::RenderTarget& target, const GameState& state) const;
     void scrollBy(float delta);

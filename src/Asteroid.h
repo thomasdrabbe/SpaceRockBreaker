@@ -46,7 +46,7 @@ public:
 
     void spawnKey(sf::Vector2f pos, sf::Vector2f vel, float hpMult);
 
-    void spawnBoss(float areaW, float areaH,
+    void spawnBoss(float ox, float oy, float areaW, float areaH,
                    float hpMult, OreTier lootTier);
 
     bool hit(float damage, ParticleSystem& particles);
@@ -70,16 +70,17 @@ class AsteroidManager {
 public:
     AsteroidManager();
 
-    void spawnRandom(float areaW, float areaH,
+    void spawnRandom(float ox, float oy, float areaW, float areaH,
                      float hpMult, OreTier maxTier);
 
     void maintainField(int targetCount,
-                       float areaW, float areaH,
+                       float ox, float oy, float areaW, float areaH,
                        float hpMult, OreTier maxTier);
-    bool trySpawnKey(float areaW, float areaH, float hpMult);
-    bool trySpawnBoss(float areaW, float areaH,
-                      float hpMult, OreTier lootTier);
-    void update(float dt, float areaW, float areaH,
+    bool trySpawnKey(float ox, float oy, float areaW, float areaH,
+                     float hpMult);
+    bool trySpawnBoss(float ox, float oy, float areaW, float areaH,
+                       float hpMult, OreTier lootTier);
+    void update(float dt, float ox, float oy, float areaW, float areaH,
                 sf::Vector2f playerPos);
     void draw(sf::RenderTarget& target,
                float               animTime,

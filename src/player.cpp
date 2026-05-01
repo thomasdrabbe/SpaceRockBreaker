@@ -21,8 +21,10 @@ void Player::update(float            dt,
                      float            critChance,
                      float            critMult,
                      int              splitShot,
-                     float            areaW,
-                     float            areaH,
+                     float            panelLeft,
+                     float            panelTop,
+                     float            panelW,
+                     float            panelH,
                      AsteroidManager& asteroids,
                      BulletManager&   bullets,
                      ParticleSystem&  particles) {
@@ -55,9 +57,13 @@ void Player::update(float            dt,
         }
     }
 
-    // ── Grenzen ───────────────────────────────────────────
-    pos.x = clamp(pos.x, SHIP_RADIUS, areaW - SHIP_RADIUS);
-    pos.y = clamp(pos.y, SHIP_RADIUS, areaH - SHIP_RADIUS);
+    // ── Grenzen (paneel in wereldcoördinaten; marge = tip + barrel + glow)
+    const float pad = std::max({
+        SHIP_RADIUS * 1.55f + 8.f,
+        BARREL_LEN + 8.f,
+        SHIP_RADIUS + 12.f });
+    pos.x = clamp(pos.x, panelLeft + pad, panelLeft + panelW - pad);
+    pos.y = clamp(pos.y, panelTop + pad, panelTop + panelH - pad);
 
     // ── Auto-aim ──────────────────────────────────────────
     Asteroid* target = asteroids.nearest(pos);

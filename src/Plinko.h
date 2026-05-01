@@ -1,5 +1,8 @@
 #pragma once
 #include <SFML/Graphics.hpp>
+#include <map>
+#include <utility>
+#include <string>
 #include <vector>
 #include <array>
 #include "Constants.h"
@@ -7,11 +10,22 @@
 #include "Particle.h"
 
 // ─────────────────────────────────────────────────────────────
+//  Peg-rarity (Plinko) — kleuren gelijk aan bord + basis-legenda
+// ─────────────────────────────────────────────────────────────
+struct PlinkoPegRarity {
+    static sf::Color fillColor(OreRarity r);
+    static float     bonusMult(OreRarity r);
+};
+
+// ─────────────────────────────────────────────────────────────
 //  Peg
 // ─────────────────────────────────────────────────────────────
 struct Peg {
     sf::Vector2f pos;
     float        hitFlash = 0.f;
+    OreRarity    pegRarity = OreRarity::COMMON;
+    int          cellRow   = -1;
+    int          cellCol   = -1;
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -65,6 +79,13 @@ public:
     void draw(sf::RenderTarget& target,
               sf::Font&         font) const;
 
+    /// Wis persistente peg-rarity (na load ander slot / nieuw spel).
+    void resetGoldenPegRarityState();
+
+    /// Past Golden-Peg rolls toe: alleen extra rolls bij hogere chest-level;
+    /// zelfde (rij,kolom) blijft zeldzame kleur na rebuild.
+    void syncGoldenPegChestRarities(int goldenPegChestLevel);
+
     int   ballsAlive()  const;
     float boardLeft()   const { return m_boardX; }
     float boardTop()    const { return m_boardY; }
@@ -88,13 +109,30 @@ private:
 
     float m_autoTimer = 0.f;
 
+    std::map<std::pair<int, int>, OreRarity> m_pegRarityByCell;
+    int m_lastBuildRows               = -1;
+    int m_syncedGoldenPegChestLevel   = -1;
+
     void buildPegs();
+    void applyPegRarityRolls(int rollCount);
     void buildSlots(float multBonus, float plinkoLuck);
-    void resolvePegCollision(PlinkoBall& ball);
+    void resolvePegCollision(PlinkoBall& ball,
+                             double&     creditsOut,
+                             float       creditMult);
     void resolveWallCollision(PlinkoBall& ball);
     int  findSlot(float x) const;
 
     PlinkoBall* claimBall();
+
+    struct PegCreditPopup {
+        sf::Vector2f pos{};
+        std::string  text;
+        float        age = 0.f;
+    };
+    std::vector<PegCreditPopup> m_pegCreditPopups;
+
+    void pushPegCreditPopup(sf::Vector2f pegCenter, double credits);
+    void updatePegCreditPopups(float dt);
 
     static float slotMult(int slotIdx, int totalSlots,
                           float bonus, float luck);

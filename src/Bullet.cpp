@@ -69,7 +69,8 @@ void BulletManager::fire(sf::Vector2f    origin,
 // ─────────────────────────────────────────────────────────────
 //  update
 // ─────────────────────────────────────────────────────────────
-void BulletManager::update(float dt, float areaW, float areaH) {
+void BulletManager::update(float dt, float ox, float oy,
+                            float areaW, float areaH) {
     m_alive = 0;
     for (auto& b : m_pool) {
         if (!b.alive) continue;
@@ -77,8 +78,8 @@ void BulletManager::update(float dt, float areaW, float areaH) {
         b.pos      += b.vel * dt;
         b.lifetime -= dt;
 
-        bool out = (b.pos.x < -20.f || b.pos.x > areaW + 20.f ||
-                    b.pos.y < -20.f || b.pos.y > areaH + 20.f);
+        bool out = (b.pos.x < ox - 20.f || b.pos.x > ox + areaW + 20.f ||
+                    b.pos.y < oy - 20.f || b.pos.y > oy + areaH + 20.f);
 
         if (b.lifetime <= 0.f || out) {
             b.alive = false;

@@ -139,6 +139,15 @@ private:
     void drawPauseOverlay() const;
     // ── mainmenu overlay ─────────────────────────────────────
 
+    struct MainMenuLayout {
+        float    titleX = 0.f, titleY = 0.f, titleW = 0.f;
+        unsigned fTitle = 0, fBtn = 0, fSlot = 0, fHint = 0;
+        float    slotY = 0.f, slotX0 = 0.f, slotW = 0.f;
+        float    slotH = 0.f, slotGap = 0.f;
+        float    btnW = 0.f, btnH = 0.f, gap = 0.f, firstBtnTop = 0.f;
+    };
+    MainMenuLayout computeMainMenuLayout() const;
+
     void drawMainMenu() const;
     void handleMainMenuClick(sf::Vector2f pos);
 

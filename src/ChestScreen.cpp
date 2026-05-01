@@ -1,5 +1,6 @@
 #include "ChestScreen.h"
 #include "Utils.h"
+#include <string>
 #include <sstream>
 #include <iomanip>
 #include <cmath>
@@ -49,12 +50,11 @@ void ChestScreen::buildCards(const GameState& state) {
     m_scroll       = clamp(m_scroll, 0.f, m_maxScroll);
 }
 
-bool ChestScreen::handleEvent(const sf::Event& event, GameState& state) {
+bool ChestScreen::handleEvent(const sf::Event& event, GameState& state,
+                               const sf::RenderWindow& window) {
     if (const auto* e = event.getIf<sf::Event::MouseButtonPressed>()) {
         if (e->button == sf::Mouse::Button::Left) {
-            sf::Vector2f mp(
-                static_cast<float>(e->position.x),
-                static_cast<float>(e->position.y));
+            sf::Vector2f mp = mapPixelToUi(window, sf::Vector2i(e->position));
 
             for (auto& card : m_cards) {
                 if (card.bounds.contains(mp) && card.affordable) {
@@ -83,10 +83,9 @@ std::string ChestScreen::formatEffect(ChestUpgradeID id,
                                        const GameState& state) const {
     switch (id) {
         case ChestUpgradeID::PLINKO_PEG_SIZE:
-            return "Radius mult: "
-                + formatBig(static_cast<double>(
-                      state.chestPlinkoPegRadiusMult()))
-                + "x";
+            return "Peg rarity rolls: "
+                + std::to_string(state.chestPegUpgradeCount())
+                + " (lvl x3)";
         case ChestUpgradeID::PLINKO_PEG_BOUNCE:
             return "Bounce mult: "
                 + formatBig(static_cast<double>(

@@ -128,7 +128,8 @@ public:
     float crystalAmp()        const;
 
     // ── Chest (Plinko pegs / combat / mining) ────────────
-    float chestPlinkoPegRadiusMult() const;
+    /// Golden Pegs: aantal peg-upgrade rolls (= level × 3).
+    int   chestPegUpgradeCount() const;
     float chestPlinkoBounceMult()    const;
     float chestGunFlatBonus()        const;
     float chestOreValueMult()        const;

@@ -52,6 +52,9 @@ Game::Game()
                   sf::Color(100, 220, 120));
     }
 
+    m_plinko.resetGoldenPegRarityState();
+    rebuildPlinko();
+
     resetZoneKeyState();
     m_mining.syncTurrets(m_state);
 }
@@ -117,7 +120,7 @@ void Game::processEvents() {
     while (const std::optional event = m_window.pollEvent()) {
 
         if (m_activeTab == Tab::SHOP) {
-            bool bought = m_shop.handleEvent(*event, m_state);
+            bool bought = m_shop.handleEvent(*event, m_state, m_window);
             if (bought) {
                 m_mining.syncTurrets(m_state);
                 gSfx.play(Sfx::UiClick);
@@ -125,7 +128,7 @@ void Game::processEvents() {
             }
         }
         if (m_activeTab == Tab::CHESTS) {
-            bool bought = m_chest.handleEvent(*event, m_state);
+            bool bought = m_chest.handleEvent(*event, m_state, m_window);
             if (bought) {
                 m_mining.syncTurrets(m_state);
                 rebuildPlinko();
@@ -138,18 +141,20 @@ void Game::processEvents() {
             m_state.save(currentSavePath());
             m_window.close();
         }
+        else if (event->is<sf::Event::Resized>()) {
+            initLayout();
+            reinitSystems();
+        }
         else if (const auto* e =
                  event->getIf<sf::Event::MouseButtonPressed>()) {
-            sf::Vector2f pos(
-                static_cast<float>(e->position.x),
-                static_cast<float>(e->position.y));
+            sf::Vector2f pos =
+                mapPixelToUi(m_window, sf::Vector2i(e->position));
             onMouseClick(pos, e->button);
         }
         else if (const auto* e =
                  event->getIf<sf::Event::MouseWheelScrolled>()) {
-            sf::Vector2f pos(
-                static_cast<float>(e->position.x),
-                static_cast<float>(e->position.y));
+            sf::Vector2f pos =
+                mapPixelToUi(m_window, sf::Vector2i(e->position));
             onMouseScroll(e->delta, pos);
         }
         else if (const auto* e =
@@ -294,17 +299,13 @@ void Game::update(float dt) {
     }
 
     if (m_activeTab == Tab::SHOP) {
-        sf::Vector2i mp = sf::Mouse::getPosition(m_window);
         m_shop.update(
-            sf::Vector2f(static_cast<float>(mp.x),
-                         static_cast<float>(mp.y)),
+            mapPixelToUi(m_window, sf::Mouse::getPosition(m_window)),
             m_state);
     }
     if (m_activeTab == Tab::CHESTS) {
-        sf::Vector2i mp = sf::Mouse::getPosition(m_window);
         m_chest.update(
-            sf::Vector2f(static_cast<float>(mp.x),
-                         static_cast<float>(mp.y)),
+            mapPixelToUi(m_window, sf::Mouse::getPosition(m_window)),
             m_state);
     }
 
@@ -332,23 +333,23 @@ void Game::update(float dt) {
         m_state.save(currentSavePath());
     }
 
-    static int   lastRows  = -1;
-    static float lastBonus = -1.f;
-    static float lastLuck  = -1.f;
-    static float lastPegR  = -1.f;
-    static float lastPegB  = -1.f;
+    static int   lastRows    = -1;
+    static float lastBonus   = -1.f;
+    static float lastLuck    = -1.f;
+    static int   lastPegUp   = -1;
+    static float lastPegB    = -1.f;
     int   rows  = m_state.plinkoRows();
     float bonus = m_state.plinkoMultBonus();
     float luck  = m_state.plinkoLuck();
-    float pegR  = m_state.chestPlinkoPegRadiusMult();
+    int   pegUp = m_state.chestPegUpgradeCount();
     float pegB  = m_state.chestPlinkoBounceMult();
     if (rows != lastRows || bonus != lastBonus || luck != lastLuck
-        || pegR != lastPegR || pegB != lastPegB) {
+        || pegUp != lastPegUp || pegB != lastPegB) {
         rebuildPlinko();
         lastRows  = rows;
         lastBonus = bonus;
         lastLuck  = luck;
-        lastPegR  = pegR;
+        lastPegUp = pegUp;
         lastPegB  = pegB;
     }
 }
@@ -357,6 +358,11 @@ void Game::update(float dt) {
 //  render
 // ═════════════════════════════════════════════════════════════
 void Game::render() {
+    const sf::Vector2u ws = m_window.getSize();
+    const float        rw = ws.x > 0 ? static_cast<float>(ws.x) : 1.f;
+    const float        rh = ws.y > 0 ? static_cast<float>(ws.y) : 1.f;
+    m_window.setView(sf::View(sf::FloatRect({ 0.f, 0.f }, { rw, rh })));
+
     m_window.clear(sf::Color(6, 8, 18));
 
     if (m_showMainMenu) {
@@ -418,6 +424,8 @@ void Game::onMouseClick(sf::Vector2f pos, sf::Mouse::Button btn) {
     if (m_activeTab == Tab::MINING && m_runMode == RunMode::BASE) {
         if (miningStartRunBounds().contains(pos)) {
             gSfx.play(Sfx::UiClick);
+            if (m_state.lives <= 0)
+                m_state.lives = GameState::MAX_LIVES;
             m_runMode = RunMode::RUNNING;
             m_mining.prepareNewRun();
             m_mining.syncTurrets(m_state);
@@ -657,40 +665,69 @@ void Game::drawSidePanel() const {
 //  draw mainmenu
 // ═════════════════════════════════════════════════════════════
 
+Game::MainMenuLayout Game::computeMainMenuLayout() const {
+    MainMenuLayout L{};
+    L.fTitle = static_cast<unsigned>(std::round(48.f * m_scale));
+    L.fBtn   = static_cast<unsigned>(std::round(18.f * m_scale));
+    L.fSlot  = static_cast<unsigned>(std::round(13.f * m_scale));
+    L.fHint  = static_cast<unsigned>(std::round(12.f * m_scale));
+
+    L.btnW    = std::round(300.f * m_scale);
+    L.btnH    = std::round(54.f  * m_scale);
+    L.gap     = std::round(16.f  * m_scale);
+    L.slotH   = std::round(56.f * m_scale);
+    L.slotGap = std::round(10.f * m_scale);
+    L.slotW   = (L.btnW - L.slotGap * 2.f) / 3.f;
+    L.slotX0  = m_scrW * 0.5f - L.btnW * 0.5f;
+
+    sf::Text titleMeas(m_font);
+    titleMeas.setString("SPACE ROCK BREAKER");
+    titleMeas.setCharacterSize(L.fTitle);
+    titleMeas.setStyle(sf::Text::Bold);
+    L.titleW = titleMeas.getLocalBounds().size.x;
+
+    const float gTitle = std::round(20.f * m_scale);
+    // Extra ruimte: groene slotregels kunnen iets onder de slotbox uitsteken;
+    // knoppen zijn opak zodat die tekst niet meer door de vulling schijnt.
+    const float gBlock = std::round(26.f * m_scale);
+    const float titleLineH = static_cast<float>(L.fTitle);
+    const float totalH =
+        titleLineH + gTitle + L.slotH + gBlock + 3.f * L.btnH + 2.f * L.gap;
+
+    float y0 = (m_scrH - totalH) * 0.5f;
+    const float padTop = std::round(16.f * m_scale);
+    if (y0 < padTop)
+        y0 = padTop;
+
+    L.titleY = y0;
+    L.titleX = m_scrW * 0.5f - L.titleW * 0.5f;
+
+    float y = y0 + titleLineH + gTitle;
+    L.slotY       = y;
+    L.firstBtnTop = y + L.slotH + gBlock;
+
+    return L;
+}
+
 void Game::drawMainMenu() const {
     sf::RectangleShape bg(sf::Vector2f{ m_scrW, m_scrH });
     bg.setFillColor(sf::Color(6, 8, 18));
     m_window.draw(bg);
 
-    unsigned fTitle = static_cast<unsigned>(std::round(48.f * m_scale));
-    unsigned fBtn   = static_cast<unsigned>(std::round(18.f * m_scale));
-    unsigned fSlot  = static_cast<unsigned>(std::round(13.f * m_scale));
-    unsigned fHint  = static_cast<unsigned>(std::round(12.f * m_scale));
-
-    float cx     = m_scrW * 0.5f;
-    float cy     = m_scrH * 0.5f;
-    float btnW   = std::round(300.f * m_scale);
-    float btnH   = std::round(54.f  * m_scale);
-    float gap    = std::round(16.f  * m_scale);
+    const MainMenuLayout L = computeMainMenuLayout();
+    const float          cx = m_scrW * 0.5f;
 
     drawText("SPACE ROCK BREAKER",
-             cx - fTitle * 4.5f,
-             cy - fTitle * 3.f,
-             fTitle, sf::Color(80, 160, 255), true);
-
-    float       firstBtnTop = cy - btnH * 0.5f;
-    float       slotH       = std::round(56.f * m_scale);
-    float       slotGap     = std::round(10.f * m_scale);
-    float       slotY       = firstBtnTop - gap - slotH;
-    float       slotX0      = cx - btnW * 0.5f;
-    float       slotW       = (btnW - slotGap * 2.f) / 3.f;
+             L.titleX,
+             L.titleY,
+             L.fTitle, sf::Color(80, 160, 255), true);
 
     for (int s = 0; s < SAVE_SLOT_COUNT; s++) {
-        float bx = slotX0 + static_cast<float>(s) * (slotW + slotGap);
+        float bx = L.slotX0 + static_cast<float>(s) * (L.slotW + L.slotGap);
         bool  sel = (s == m_saveSlot);
 
-        sf::RectangleShape slotBox(sf::Vector2f{ slotW, slotH });
-        slotBox.setPosition({ bx, slotY });
+        sf::RectangleShape slotBox(sf::Vector2f{ L.slotW, L.slotH });
+        slotBox.setPosition({ bx, L.slotY });
         slotBox.setFillColor(sf::Color(14, 16, 32, sel ? 245 : 210));
         slotBox.setOutlineColor(sel ? sf::Color(120, 200, 255)
                                     : sf::Color(45, 55, 95));
@@ -699,13 +736,13 @@ void Game::drawMainMenu() const {
 
         drawText("Slot " + std::to_string(s + 1),
                  bx + 10.f,
-                 slotY + 8.f,
-                 fSlot,
+                 L.slotY + 8.f,
+                 L.fSlot,
                  sel ? sf::Color(200, 230, 255) : sf::Color(140, 155, 190),
                  true);
 
-        int    z  = 1;
-        double cr = 0.0;
+        int         z = 1;
+        double      cr = 0.0;
         std::string line2 = "Leeg";
         if (GameState::peekSaveSlot(saveSlotPath(s), z, cr)) {
             std::ostringstream os;
@@ -714,11 +751,24 @@ void Game::drawMainMenu() const {
         }
         drawText(line2,
                  bx + 10.f,
-                 slotY + 8.f + fSlot + 4.f,
-                 fHint,
+                 L.slotY + 8.f + static_cast<float>(L.fSlot) + 4.f,
+                 L.fHint,
                  sf::Color(110, 200, 140),
                  true);
     }
+
+    auto selectedSlotSummary = [&]() -> std::string {
+        int         z = 1;
+        double      cr = 0.0;
+        std::string line = "Leeg";
+        if (GameState::peekSaveSlot(saveSlotPath(m_saveSlot), z, cr)) {
+            std::ostringstream os;
+            os << "Z" << z << "  $" << formatBig(cr);
+            line = os.str();
+        }
+        return line;
+    };
+    const std::string slotStatusTxt = selectedSlotSummary();
 
     struct BtnDef { std::string label; sf::Color color; };
     const BtnDef btns[] = {
@@ -727,27 +777,61 @@ void Game::drawMainMenu() const {
         { "Afsluiten",    sf::Color(255, 100,  80) },
     };
 
-    for (int i = 0; i < 3; i++) {
-        float bx = cx - btnW * 0.5f;
-        float by = cy - btnH * 0.5f + i * (btnH + gap);
+    const float padX = std::round(18.f * m_scale);
 
-        sf::RectangleShape btn(sf::Vector2f{ btnW, btnH });
+    for (int i = 0; i < 3; i++) {
+        float bx = L.slotX0;
+        float by = L.firstBtnTop + static_cast<float>(i) * (L.btnH + L.gap);
+
+        sf::RectangleShape btn(sf::Vector2f{ L.btnW, L.btnH });
         btn.setPosition({ bx, by });
-        btn.setFillColor(sf::Color(14, 16, 32, 230));
+        btn.setFillColor(sf::Color(14, 16, 32, 255));
         btn.setOutlineColor(btns[i].color);
         btn.setOutlineThickness(2.f);
         m_window.draw(btn);
 
-        drawText(btns[i].label,
-                 bx + 20.f,
-                 by + btnH * 0.5f - fBtn * 0.5f,
-                 fBtn, btns[i].color, true);
+        const float midY = by + L.btnH * 0.5f;
+
+        if (i <= 1) {
+            drawText(btns[i].label,
+                     bx + padX,
+                     midY - static_cast<float>(L.fBtn) * 0.5f,
+                     L.fBtn, btns[i].color, true);
+
+            sf::Text hintMeas(m_font);
+            hintMeas.setString(slotStatusTxt);
+            hintMeas.setCharacterSize(L.fHint);
+            hintMeas.setStyle(sf::Text::Bold);
+            const float sw = hintMeas.getLocalBounds().size.x;
+            drawText(slotStatusTxt,
+                     bx + L.btnW - padX - sw,
+                     midY - static_cast<float>(L.fHint) * 0.5f,
+                     L.fHint,
+                     sf::Color(110, 200, 140),
+                     true);
+        } else {
+            sf::Text labMeas(m_font);
+            labMeas.setString(btns[i].label);
+            labMeas.setCharacterSize(L.fBtn);
+            labMeas.setStyle(sf::Text::Bold);
+            const float lw = labMeas.getLocalBounds().size.x;
+            drawText(btns[i].label,
+                     bx + (L.btnW - lw) * 0.5f,
+                     midY - static_cast<float>(L.fBtn) * 0.5f,
+                     L.fBtn, btns[i].color, true);
+        }
     }
 
-    drawText("Klik een slot hierboven  ·  M = geluid aan/uit",
-             cx - 200.f * m_scale,
+    const std::string foot = "Klik een slot hierboven  ·  M = geluid aan/uit";
+    sf::Text          footMeas(m_font);
+    footMeas.setString(foot);
+    footMeas.setCharacterSize(L.fHint);
+    footMeas.setStyle(sf::Text::Bold);
+    const float footW = footMeas.getLocalBounds().size.x;
+    drawText(foot,
+             cx - footW * 0.5f,
              m_scrH - std::round(36.f * m_scale),
-             fHint,
+             L.fHint,
              sf::Color(90, 100, 140),
              true);
 }
@@ -760,11 +844,13 @@ void Game::rebuildPlinko() {
     float by = m_cntY + 20.f;
     float bw = m_cntW - 60.f;
     float bh = m_cntH - 90.f;
-    float pegR = PLINKO_PEG_RADIUS * m_state.chestPlinkoPegRadiusMult();
+    float pegR = PLINKO_PEG_RADIUS;
     float pegB = m_state.chestPlinkoBounceMult();
     m_plinko.build(m_state.plinkoRows(), bx, by, bw, bh,
                    m_state.plinkoMultBonus(), m_state.plinkoLuck(),
                    m_scale, pegR, pegB);
+    m_plinko.syncGoldenPegChestRarities(
+        m_state.levelOfChest(ChestUpgradeID::PLINKO_PEG_SIZE));
 }
 
 void Game::drawPlinkoTab() const {
@@ -809,22 +895,11 @@ void Game::drawPlinkoTab() const {
 }
 
 void Game::handleMainMenuClick(sf::Vector2f pos) {
-    float cx     = m_scrW * 0.5f;
-    float cy     = m_scrH * 0.5f;
-    float btnW   = std::round(300.f * m_scale);
-    float btnH   = std::round(54.f  * m_scale);
-    float gap    = std::round(16.f  * m_scale);
-
-    float firstBtnTop = cy - btnH * 0.5f;
-    float slotH       = std::round(56.f * m_scale);
-    float slotGap     = std::round(10.f * m_scale);
-    float slotY       = firstBtnTop - gap - slotH;
-    float slotX0      = cx - btnW * 0.5f;
-    float slotW       = (btnW - slotGap * 2.f) / 3.f;
+    const MainMenuLayout L = computeMainMenuLayout();
 
     for (int s = 0; s < SAVE_SLOT_COUNT; s++) {
-        float bx = slotX0 + static_cast<float>(s) * (slotW + slotGap);
-        sf::FloatRect slotR({ bx, slotY }, { slotW, slotH });
+        float bx = L.slotX0 + static_cast<float>(s) * (L.slotW + L.slotGap);
+        sf::FloatRect slotR({ bx, L.slotY }, { L.slotW, L.slotH });
         if (slotR.contains(pos)) {
             gSfx.play(Sfx::UiClick);
             m_saveSlot = s;
@@ -834,8 +909,8 @@ void Game::handleMainMenuClick(sf::Vector2f pos) {
 
     for (int i = 0; i < 3; i++) {
         sf::FloatRect r(
-            { cx - btnW * 0.5f, cy - btnH * 0.5f + i * (btnH + gap) },
-            { btnW, btnH });
+            { L.slotX0, L.firstBtnTop + static_cast<float>(i) * (L.btnH + L.gap) },
+            { L.btnW, L.btnH });
 
         if (r.contains(pos)) {
             if (i == 0) {                          // Doorgaan
@@ -844,6 +919,8 @@ void Game::handleMainMenuClick(sf::Vector2f pos) {
                     pushNotif("Save geladen (slot " +
                                     std::to_string(m_saveSlot + 1) + ")!",
                                 sf::Color(100, 220, 120));
+                    m_plinko.resetGoldenPegRarityState();
+                    rebuildPlinko();
                     resetZoneKeyState();
                     m_runMode        = RunMode::BASE;
                     m_showMainMenu   = false;
@@ -856,6 +933,7 @@ void Game::handleMainMenuClick(sf::Vector2f pos) {
                 m_state.reset();
                 m_mining.clearAll();
                 m_mining.syncTurrets(m_state);
+                m_plinko.resetGoldenPegRarityState();
                 rebuildPlinko();
                 resetZoneKeyState();
                 m_runMode = RunMode::BASE;
@@ -1263,6 +1341,39 @@ void Game::drawMiningBasePanel() const {
     drawText("Na de boss: loot oprapen, dan automatisch terug hier.",
              m_cntX + 40.f, ty, fBody, sf::Color(130, 150, 185));
     ty += 36.f;
+
+    if (m_state.chestPegUpgradeCount() > 0) {
+        unsigned fLeg = static_cast<unsigned>(std::round(12.f * m_scale));
+        drawText("Plinko peg — kleur = rarity (hit bonus):",
+                 m_cntX + 40.f, ty, fLeg, sf::Color(175, 195, 225));
+        ty += std::round(20.f * m_scale);
+
+        struct PegLegendRow { OreRarity id; const char* txt; };
+        static const PegLegendRow legend[] = {
+            { OreRarity::COMMON,    "Common — geen bonus" },
+            { OreRarity::UNCOMMON,  "Uncommon +0.5x" },
+            { OreRarity::RARE,      "Rare +1x" },
+            { OreRarity::EPIC,      "Epic +2x" },
+            { OreRarity::MYTHIC,    "Mythic +4x" },
+            { OreRarity::LEGENDARY, "Legendary +8x" },
+        };
+        const float dotR     = std::max(4.f, 5.f * m_scale);
+        const float lineStep = std::round(18.f * m_scale);
+        for (const auto& row : legend) {
+            const float dx = m_cntX + 40.f + dotR;
+            sf::CircleShape dot(dotR);
+            dot.setOrigin({ dotR, dotR });
+            dot.setPosition({ dx, ty + dotR * 0.85f });
+            dot.setFillColor(PlinkoPegRarity::fillColor(row.id));
+            dot.setOutlineColor(sf::Color(255, 255, 255, 60));
+            dot.setOutlineThickness(1.f);
+            m_window.draw(dot);
+            drawText(row.txt, dx + dotR + 8.f, ty, fLeg,
+                     sf::Color(200, 210, 230));
+            ty += lineStep;
+        }
+        ty += std::round(12.f * m_scale);
+    }
 
     sf::FloatRect rb = miningStartRunBounds();
     sf::RectangleShape btn(rb.size);
