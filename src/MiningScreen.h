@@ -64,7 +64,11 @@ public:
     /// Boss verslagen maar nog loot op het veld — mining moet door simuleren.
     bool bossReturnPending() const { return m_pendingBossReturnToBase; }
 
-    bool pullMeteorShowerWarning();
+    /// Meteor-timer + shower-queue starten. Wordt vanuit Game aangeroepen.
+    void tickMeteorShower(float dt, GameState& state, float asteroidHpMult);
+    /// Alleen meteoren bewegen (Game roept dit aan bij gepauzeerde mining-tab).
+    void advanceMeteorsOnly(float dt);
+    void tickMeteorSpawnQueue();
 
     // ── Sub-system toegang ────────────────────────────────
     OreManager&     ores()      { return m_ores;      }
@@ -100,13 +104,9 @@ private:
     int m_pendingKeyDrop = 0;
     bool m_pendingBossReturnToBase = false;
 
-    static constexpr float METEOR_WARN_LEAD_SEC = 5.f;
     float                  m_meteorTimeToNext = -1.f;
-    bool                   m_meteorWarnIssued = false;
-    bool                   m_pullMeteorWarn   = false;
 
     void resetMeteorShowerSchedule();
-    void tickMeteorShower(float dt, GameState& state, float asteroidHpMult);
 
     // ── Collision ─────────────────────────────────────────
     void resolveCollisions(GameState& state);

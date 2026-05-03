@@ -7,7 +7,6 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # ─── SFML ─────────────────────────────────────────────────────
-
 find_package(SFML COMPONENTS Graphics Window System Audio REQUIRED)
 find_package(ImGui-SFML CONFIG REQUIRED)
 
@@ -25,7 +24,7 @@ set(SOURCES
     src/Shop.cpp
     src/ChestScreen.cpp
     src/MiningScreen.cpp
-	  src/Player.cpp
+    src/Player.cpp
     src/Game.cpp
     src/SoundHub.cpp
 )
@@ -44,10 +43,18 @@ set(HEADERS
     src/Shop.h
     src/ChestScreen.h
     src/MiningScreen.h
-	  src/Player.h
+    src/Player.h
     src/Game.h
     src/SoundHub.h
 )
+
+# ─── Windows icoon in .exe inbakken ───────────────────────────
+if(WIN32)
+    set(APP_ICON_RC "${CMAKE_SOURCE_DIR}/assets/icon.rc")
+    file(WRITE ${APP_ICON_RC}
+        "IDI_ICON1 ICON \"${CMAKE_SOURCE_DIR}/assets/icon.ico\"\n")
+    list(APPEND SOURCES ${APP_ICON_RC})
+endif()
 
 # ─── Executable ───────────────────────────────────────────────
 add_executable(SpaceRockBreaker ${SOURCES} ${HEADERS})
@@ -55,16 +62,14 @@ add_executable(SpaceRockBreaker ${SOURCES} ${HEADERS})
 target_include_directories(SpaceRockBreaker PRIVATE src)
 
 target_link_libraries(SpaceRockBreaker PRIVATE
-  SFML::Graphics
-  SFML::Window
-  SFML::System
-  SFML::Audio
-  ImGui-SFML::ImGui-SFML
+    SFML::Graphics
+    SFML::Window
+    SFML::System
+    SFML::Audio
+    ImGui-SFML::ImGui-SFML
 )
 
-# ─── Windows: copy SFML (incl. audio) DLLs next to .exe ───────
-# Gebruikt dezelfde binaries als vcpkg/CMake aan de targets koppelt
-# (geen vaste SFML 2.6-paden meer).
+# ─── Windows: copy SFML DLLs next to .exe ─────────────────────
 if(WIN32)
     add_custom_command(TARGET SpaceRockBreaker POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different

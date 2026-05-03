@@ -10,37 +10,37 @@
 // ═════════════════════════════════════════════════════════════
 const std::array<UpgradeDef, static_cast<int>(UpgradeID::UPGRADE_COUNT)>
 GameState::upgradeCatalog = {{
-    // Weapons
-    { "Gun Damage",        "+8 base damage per shot",         50.0,  1.55, 0 },
-    { "Fire Rate",         "+0.4 shots/sec",                  80.0,  1.60, 0 },
-    { "Turret Count",      "Add 1 turret",                   200.0,  2.20, 0 },
-    { "Crit Chance",       "+5% crit chance",                120.0,  1.70, 0 },
-    { "Crit Multiplier",   "+0.5x crit damage",              150.0,  1.75, 0 },
-    { "Split Shot",        "Bullets split +1",               500.0,  2.50, 0 },
+    // Weapons  (hogere basis, iets mildere mult t.o.v. economy — minder “gratis”)
+    { "Gun Damage",        "+8 base damage per shot",         95.0,  1.52, 0 },
+    { "Fire Rate",         "+0.4 shots/sec",                 140.0,  1.56, 0 },
+    { "Turret Count",      "Add 1 turret",                   340.0,  2.08, 0 },
+    { "Crit Chance",       "+5% crit chance",               190.0,  1.64, 0 },
+    { "Crit Multiplier",   "+0.5x crit damage",             230.0,  1.68, 0 },
+    { "Split Shot",        "Bullets split +1",               920.0,  2.28, 0 },
     // Mining
-    { "Ore Value",         "+20% ore value",                 100.0,  1.60, 0 },
-    { "Collect Radius",    "+30px collect radius",            90.0,  1.50, 0 },
-    { "Ore Luck",          "+5% bonus ore drop",             110.0,  1.65, 0 },
-    { "Asteroid HP",       "-10% asteroid HP",               130.0,  1.70, 0 },
+    { "Ore Value",         "+20% ore value",                 118.0,  1.57, 0 },
+    { "Collect Radius",    "+30px collect radius",           102.0,  1.48, 0 },
+    { "Ore Luck",          "+5% bonus ore drop",             130.0,  1.62, 0 },
+    { "Asteroid HP",       "-10% asteroid HP",               155.0,  1.66, 0 },
     // Plinko
-    { "Plinko Rows",       "Add 1 row to Plinko",            300.0,  2.00, 8  },
-    { "Plinko Multiplier", "+10% slot multipliers",          200.0,  1.80, 0  },
-    { "Plinko Balls",      "+1 max ball at once",            1.0,  1, 0  },
-    { "Plinko Luck",       "+5% high-slot luck",             160.0,  1.70, 0  },
-    // Economy
-    { "Credit Multiplier", "+25% all credits",               250.0,  1.90, 0 },
-    { "Bulk Processor",    "Convert more ore per drop",      400.0,  2.10, 0 },
-    { "Auto-Plinko",       "Auto-drop balls",                750.0,  2.30, 0 },
-    // Ore tier unlocks  (maxLevel = 1 = one-time purchase)
-    { "Unlock Bronze",     "Spawn Bronze asteroids (3x ore)",    1500.0,  1.0, 1 },
-    { "Unlock Silver",     "Spawn Silver asteroids (8x ore)",    8000.0,  1.0, 1 },
-    { "Unlock Gold",       "Spawn Gold asteroids (20x ore)",    40000.0,  1.0, 1 },
-    { "Unlock Diamond",    "Spawn Diamond asteroids (55x ore)", 200000.0, 1.0, 1 },
-    { "Unlock Platinum",   "Spawn Platinum asteroids (140x)",   800000.0, 1.0, 1 },
-    { "Unlock Titanium",   "Spawn Titanium asteroids (380x)",  3000000.0, 1.0, 1 },
-    { "Unlock Iridium",    "Spawn Iridium asteroids (1000x)", 12000000.0, 1.0, 1 },
+    { "Plinko Rows",       "Add 1 row to Plinko",            275.0,  1.92, 8  },
+    { "Plinko Multiplier", "+10% slot multipliers",          215.0,  1.74, 0  },
+    { "Plinko Balls",      "+1 max ball at once",            185.0,  1.48, 0  },
+    { "Plinko Luck",       "+5% high-slot luck",             178.0,  1.64, 0  },
+    // Economy  (iets zachter mult zodat mid-game niet vastloopt)
+    { "Credit Multiplier", "+25% all credits",               198.0,  1.74, 0 },
+    { "Bulk Processor",    "Convert more ore per drop",      315.0,  1.96, 0 },
+    { "Auto-Plinko",       "Auto-drop balls",                540.0,  2.12, 0 },
+    // Ore tier unlocks  (maxLevel = 1; vloeiendere curve, minder “muur” eindgame)
+    { "Unlock Bronze",     "Spawn Bronze asteroids (3x ore)",     1400.0,  1.0, 1 },
+    { "Unlock Silver",     "Spawn Silver asteroids (8x ore)",     6200.0,  1.0, 1 },
+    { "Unlock Gold",       "Spawn Gold asteroids (20x ore)",     26000.0,  1.0, 1 },
+    { "Unlock Diamond",    "Spawn Diamond asteroids (55x ore)", 105000.0, 1.0, 1 },
+    { "Unlock Platinum",   "Spawn Platinum asteroids (140x)",   395000.0, 1.0, 1 },
+    { "Unlock Titanium",   "Spawn Titanium asteroids (380x)",  1350000.0, 1.0, 1 },
+    { "Unlock Iridium",    "Spawn Iridium asteroids (1000x)",  4500000.0, 1.0, 1 },
     // Travel
-    { "Warp Drive", "Hold Space to warp to next zone", 500.0, 1.0, 1 },
+    { "Warp Drive", "Hold Space to warp to next zone", 650.0, 1.0, 1 },
 }};
 
 const std::array<PrestigeUpgradeDef,
@@ -151,11 +151,11 @@ bool GameState::showsRetreatToBaseOnOtherTabs() const {
 
 float GameState::meteorShowerIntervalSec() const {
     switch (difficulty) {
-        case Difficulty::Easy: return 120.f;
-        case Difficulty::Medium: return 60.f;
-        case Difficulty::Hard: return 30.f;
+        case Difficulty::Easy: return 42.f;
+        case Difficulty::Medium: return 32.f;
+        case Difficulty::Hard: return 24.f;
     }
-    return 60.f;
+    return 32.f;
 }
 
 int GameState::meteorShowerMeteorCount() const {

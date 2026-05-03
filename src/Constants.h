@@ -95,6 +95,8 @@ enum class OreTier {
 
 // ─── Entity limits ────────────────────────────────────────────
 constexpr int MAX_ASTEROIDS    = 80;
+/// Vrijhouden in de pool voor meteorregen (max 14) + key/boss overlap.
+constexpr int ASTEROID_POOL_EVENT_HEADROOM = 20;
 constexpr int MAX_BULLETS      = 300;
 constexpr int MAX_ORE          = 1000;
 constexpr int MAX_KEY_PICKUPS = 64;
@@ -133,3 +135,14 @@ enum class RunMode { BASE, RUNNING };
 
 // ─── Key asteroid ───────────────────────────────────────────
 constexpr float KEY_ASTEROID_SPAWN_DELAY_SEC = 30.f;
+
+// ─── Warp hold (mining): star streak + witte flits ──────────
+/// Tijd tot de warp-balk vol is. Warp-geluid (eigen kanaal) mag langer zijn, o.a. ~1 s
+/// na een volle balk nog doorlopen zonder door andere sfx te worden gestopt.
+constexpr float WARP_CHARGE_DURATION_SEC = 15.f;
+constexpr float WARP_FLASH_DURATION_SEC  = 0.44f;
+/// Ster-streak tijdens warp: we = warpCharge^POW; totale factor × SCALE.
+constexpr float WARP_STAR_STREAK_POW       = 2.35f;
+constexpr float WARP_STAR_STREAK_LINEAR  = 22.f;
+constexpr float WARP_STAR_STREAK_QUAD    = 110.f;
+constexpr float WARP_STAR_STREAK_SCALE     = 2.6f;

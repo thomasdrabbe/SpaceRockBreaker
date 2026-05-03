@@ -27,7 +27,7 @@ void Player::setShipSprite(const sf::Texture* tex) {
         m_hitRadius  = SHIP_RADIUS;
         return;
     }
-    constexpr float targetH = 56.f;
+    constexpr float targetH = 112.f;
     m_shipScale = targetH / static_cast<float>(sz.y);
     m_muzzleDist = std::max(
         BARREL_LEN,

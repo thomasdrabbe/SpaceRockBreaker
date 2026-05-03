@@ -98,8 +98,8 @@ private:
     // ── Warp charge ───────────────────────────────────────
     float m_warpCharge = 0.f;   // 0.0 .. 1.0, warp bij 1.0
     float m_warpFlashRemain = 0.f; // witte flits na warp (sec)
-    static constexpr float WARP_CHARGE_TIME = 2.f;
-    static constexpr float WARP_FLASH_DURATION = 0.28f;
+    /// Na loslaten Space weer true → volgende vasthoud start warp-SFX opnieuw.
+    bool m_warpSfxArmed = true;
 
     // ── Key asteroid (één per zone, spawn na delay) ───────
     sf::Clock m_animClock;
@@ -130,7 +130,9 @@ private:
     void onMouseClick (sf::Vector2f pos,
                        sf::Mouse::Button btn);
     void onMouseScroll(float delta, sf::Vector2f pos);
-    void onKeyPress   (sf::Keyboard::Key key);
+    void onKeyPress(sf::Keyboard::Key key,
+                    bool                 ctrl,
+                    bool                 shift);
 
     // ── Tab bar ───────────────────────────────────────────
     sf::FloatRect tabRect(int idx) const;

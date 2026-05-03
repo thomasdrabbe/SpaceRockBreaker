@@ -266,7 +266,7 @@ void Asteroid::spawnBoss(float ox, float oy, float areaW, float areaH,
 // ═════════════════════════════════════════════════════════════
 //  Asteroid::spawnMeteor  — shower: snel, klein, ore bij kill
 // ═════════════════════════════════════════════════════════════
-void Asteroid::spawnMeteor(sf::Vector2f p, sf::Vector2f vel,
+void Asteroid::spawnMeteor(sf::Vector2f p, sf::Vector2f v,
                            float hpMult, OreTier maxOreTier) {
     OreTier ot = pickOreTier(maxOreTier);
 
@@ -278,7 +278,7 @@ void Asteroid::spawnMeteor(sf::Vector2f p, sf::Vector2f vel,
     oreTier       = ot;
     rarity        = OreRarity::COMMON;
     pos           = p;
-    vel           = vel;
+    vel           = v;
     radius        = randFloat(7.f, 11.f);
     float baseHp  = 24.f * hpMult;
     maxHp         = std::max(8.f, baseHp);
@@ -612,21 +612,48 @@ void AsteroidManager::maintainField(int targetCount,
         spawnRandom(ox, oy, areaW, areaH, hpMult, maxTier);
 }
 
+namespace {
+void tickOneMeteor(Asteroid& a, float dt, float ox, float oy, float areaW,
+                   float areaH, sf::Vector2f playerPos) {
+    a.update(dt, playerPos);
+    constexpr float pad = 110.f;
+    if (a.pos.x + a.radius < ox - pad || a.pos.x - a.radius > ox + areaW + pad
+        || a.pos.y + a.radius < oy - pad || a.pos.y - a.radius > oy + areaH + pad) {
+        a.alive = false;
+    }
+}
+} // namespace
+
+void AsteroidManager::updateMeteorsOnly(float dt, float ox, float oy,
+                                          float areaW, float areaH,
+                                          sf::Vector2f playerPos) {
+    for (auto& a : m_pool) {
+        if (!a.alive || !a.isMeteor) continue;
+        tickOneMeteor(a, dt, ox, oy, areaW, areaH, playerPos);
+    }
+    refreshAliveCount();
+}
+
 void AsteroidManager::update(float dt, float ox, float oy, float areaW,
                               float areaH, sf::Vector2f playerPos) {
     m_alive = 0;
     const float bottom = oy + areaH;
     for (auto& a : m_pool) {
         if (!a.alive) continue;
-        a.update(dt, playerPos);
         if (a.isMeteor) {
-            if (a.pos.y - a.radius > bottom + 6.f)
-                a.alive = false;
+            tickOneMeteor(a, dt, ox, oy, areaW, areaH, playerPos);
         } else {
+            a.update(dt, playerPos);
             a.bounceWalls(ox, oy, ox + areaW, bottom);
         }
         m_alive++;
     }
+}
+
+void AsteroidManager::clearMeteorSpawnQueue() {
+    m_meteorQueueActive  = false;
+    m_meteorQueueTotal   = 0;
+    m_meteorQueueSpawned = 0;
 }
 
 void AsteroidManager::spawnMeteorSwarm(float ox, float oy, float areaW,
@@ -634,30 +661,156 @@ void AsteroidManager::spawnMeteorSwarm(float ox, float oy, float areaW,
                                         OreTier maxOreTier) {
     if (count < 1)
         return;
-    const float cx     = ox + areaW * 0.5f;
-    const float spread = std::min(areaW * 0.38f, 300.f);
-    const float baseY  = oy - randFloat(18.f, 42.f);
 
-    for (int i = 0; i < count; i++) {
-        Asteroid* a = claim();
-        if (!a)
+    clearMeteorSpawnQueue();
+
+    // Genoeg lege pool-slots voor de hele shower (zelfde totaal als voorheen).
+    int dead = 0;
+    for (const auto& a : m_pool)
+        if (!a.alive)
+            ++dead;
+    const sf::Vector2f playC{ ox + areaW * 0.5f, oy + areaH * 0.5f };
+    while (dead < count) {
+        Asteroid* victim = nullptr;
+        float     bestD2 = -1.f;
+        for (auto& a : m_pool) {
+            if (!a.alive || a.isBoss || a.isKeyAsteroid || a.isMeteor)
+                continue;
+            const float d2 = distanceSq(a.pos, playC);
+            if (d2 > bestD2) {
+                bestD2 = d2;
+                victim = &a;
+            }
+        }
+        if (!victim)
             break;
-        float t = (count <= 1)
-            ? 0.f
-            : (static_cast<float>(i) / static_cast<float>(count - 1)) * 2.f
-                - 1.f;
-        const float arm = spread * 0.92f;
-        sf::Vector2f p{
-            cx + t * arm,
-            baseY + std::abs(t) * randFloat(10.f, 22.f)
-        };
-        sf::Vector2f dir{ t * 0.62f + randFloat(-0.08f, 0.08f), 1.f };
-        dir         = normalize(dir);
-        const float sp = randFloat(260.f, 340.f);
-        sf::Vector2f v = dir * sp;
-        a->spawnMeteor(p, v, hpMult, maxOreTier);
+        victim->alive = false;
+        ++dead;
     }
     refreshAliveCount();
+
+    // Willekeurige inkomende richting; V wijst mee (tip = voorste punt, armen
+    // lopen schuin achterlangs −forward), zodat de vorm niet "achterstevoren"
+    // naar beneden schuift.
+    const sf::Vector2f fc{ ox + areaW * 0.5f, oy + areaH * 0.5f };
+    const int          side = randInt(0, 3);
+    sf::Vector2f       fwd{};
+    switch (side) {
+        case 0:
+            fwd = normalize({ randFloat(-0.55f, 0.55f), 1.f });
+            break;
+        case 1:
+            fwd = normalize({ randFloat(-0.55f, 0.55f), -1.f });
+            break;
+        case 2:
+            fwd = normalize({ 1.f, randFloat(-0.55f, 0.55f) });
+            break;
+        default:
+            fwd = normalize({ -1.f, randFloat(-0.55f, 0.55f) });
+            break;
+    }
+    const sf::Vector2f perp{ -fwd.y, fwd.x };
+    const float        open = randFloat(0.36f, 0.52f);
+    m_meteorQueueDirL = normalize(-fwd + perp * open);
+    m_meteorQueueDirR = normalize(-fwd - perp * open);
+
+    m_meteorQueueArmLen =
+        std::clamp(std::min(areaW, areaH) * 0.30f, 95.f, 200.f);
+    const float lead =
+        std::clamp(std::min(areaW, areaH) * randFloat(0.20f, 0.38f),
+                   70.f,
+                   220.f);
+
+    // Hele V moet buiten het veld starten (apex was te dicht bij midden).
+    const int leftCount = count / 2;
+    auto relForSlot = [&](int k) -> sf::Vector2f {
+        if (k < leftCount) {
+            const float denom =
+                static_cast<float>(std::max(leftCount, 1) + 1);
+            const float u = static_cast<float>(k + 1) / denom;
+            return m_meteorQueueDirL * (u * m_meteorQueueArmLen);
+        }
+        const int   ri         = k - leftCount;
+        const int   rightCount = count - leftCount;
+        const float denom =
+            static_cast<float>(std::max(rightCount, 1) + 1);
+        const float u = static_cast<float>(ri + 1) / denom;
+        return m_meteorQueueDirR * (u * m_meteorQueueArmLen);
+    };
+    auto insideField = [&](sf::Vector2f p) {
+        return p.x >= ox && p.x <= ox + areaW && p.y >= oy && p.y <= oy + areaH;
+    };
+    const float maxExtra =
+        std::hypot(areaW, areaH) * 2.5f + m_meteorQueueArmLen + 120.f;
+    float       extra = 0.f;
+    for (int iter = 0; iter < 2000; ++iter) {
+        bool anyInside = false;
+        for (int k = 0; k < count; ++k) {
+            const sf::Vector2f p = fc - fwd * (lead + extra) + relForSlot(k);
+            if (insideField(p)) {
+                anyInside = true;
+                break;
+            }
+        }
+        if (!anyInside)
+            break;
+        extra += 12.f;
+        if (extra > maxExtra)
+            break;
+    }
+    m_meteorQueueApex = fc - fwd * (lead + extra);
+    const float sp        = randFloat(300.f, 420.f);
+    m_meteorQueueVel      = fwd * sp;
+    m_meteorQueueHpMult       = hpMult;
+    m_meteorQueueMaxOre       = maxOreTier;
+    m_meteorQueueTotal        = count;
+    m_meteorQueueSpawned      = 0;
+    m_meteorQueueLeftCount    = count / 2;
+    m_meteorQueueActive       = true;
+    m_meteorRectOx            = ox;
+    m_meteorRectOy            = oy;
+    m_meteorRectW             = areaW;
+    m_meteorRectH             = areaH;
+}
+
+bool AsteroidManager::spawnOneQueuedMeteor() {
+    if (!m_meteorQueueActive || m_meteorQueueSpawned >= m_meteorQueueTotal)
+        return false;
+
+    const int k         = m_meteorQueueSpawned;
+    const int leftCount = m_meteorQueueLeftCount;
+    sf::Vector2f pos;
+    if (k < leftCount) {
+        const int   li    = k;
+        const float denom = static_cast<float>(std::max(leftCount, 1) + 1);
+        const float u     = static_cast<float>(li + 1) / denom;
+        pos               = m_meteorQueueApex + m_meteorQueueDirL * (u * m_meteorQueueArmLen);
+    } else {
+        const int   ri         = k - leftCount;
+        const int   rightCount = m_meteorQueueTotal - leftCount;
+        const float denom =
+            static_cast<float>(std::max(rightCount, 1) + 1);
+        const float u = static_cast<float>(ri + 1) / denom;
+        pos           = m_meteorQueueApex + m_meteorQueueDirR * (u * m_meteorQueueArmLen);
+    }
+
+    Asteroid* a = claim();
+    if (!a)
+        return false;
+
+    a->spawnMeteor(pos, m_meteorQueueVel, m_meteorQueueHpMult,
+                   m_meteorQueueMaxOre);
+    ++m_meteorQueueSpawned;
+    if (m_meteorQueueSpawned >= m_meteorQueueTotal)
+        m_meteorQueueActive = false;
+    refreshAliveCount();
+    return true;
+}
+
+void AsteroidManager::tickMeteorSpawnQueue() {
+    if (!m_meteorQueueActive)
+        return;
+    spawnOneQueuedMeteor();
 }
 
 void AsteroidManager::draw(sf::RenderTarget& target,
@@ -728,7 +881,8 @@ bool AsteroidManager::trySpawnBoss(float ox, float oy, float areaW,
     return true;
 }
 
-Asteroid* AsteroidManager::nearest(sf::Vector2f from, float maxDist) {
+Asteroid* AsteroidManager::nearest(sf::Vector2f from, float maxDist,
+                                     float meteorMinYToAcquire) {
     Asteroid* boss = nullptr;
     float     bossD2 = maxDist * maxDist;
     for (auto& a : m_pool) {
@@ -747,6 +901,7 @@ Asteroid* AsteroidManager::nearest(sf::Vector2f from, float maxDist) {
 
     for (auto& a : m_pool) {
         if (!a.alive) continue;
+        if (a.isMeteor && a.pos.y < meteorMinYToAcquire) continue;
         float d2 = distanceSq(from, a.pos);
         if (d2 < bestD2) {
             bestD2 = d2;

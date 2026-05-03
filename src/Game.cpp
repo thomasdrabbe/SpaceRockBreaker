@@ -234,7 +234,7 @@ void Game::processEvents() {
         }
         else if (const auto* e =
                  event->getIf<sf::Event::KeyPressed>()) {
-            onKeyPress(e->code);
+            onKeyPress(e->code, e->control, e->shift);
         }
     }
 }
@@ -276,14 +276,17 @@ void Game::update(float dt) {
             && m_activeTab != Tab::MINING
             && !m_mining.bossReturnPending();
 
+        const float meteorHpMult = std::max(
+            0.1f,
+            1.f - m_state.levelOf(UpgradeID::ASTEROID_HP) * 0.1f);
+        const float meteorAsteroidHp =
+            meteorHpMult * m_state.levelHpMult()
+            * m_state.difficultyAsteroidHpMult();
+
         if (!pauseMining) {
+            m_mining.tickMeteorShower(dt, m_state, meteorAsteroidHp);
             m_mining.update(dt, m_state, creditsEarned, oreEarned,
                              m_warpCharge);
-
-            if (m_mining.pullMeteorShowerWarning()) {
-                pushNotif("Meteor shower over 5 sec!",
-                          sf::Color(255, 170, 120));
-            }
 
             if (m_state.bossCrystalPopup > 0.0) {
                 pushNotif("+ " + formatBig(m_state.bossCrystalPopup)
@@ -357,29 +360,41 @@ void Game::update(float dt) {
         } else {
             if (m_hitCooldown > 0.f)
                 m_hitCooldown -= dt;
+            // Anders bewegen meteoren niet: tickMeteorShower draait wél in Game.
+            m_mining.advanceMeteorsOnly(dt);
+            m_mining.tickMeteorShower(dt, m_state, meteorAsteroidHp);
+            m_mining.tickMeteorSpawnQueue();
         }
 
         if (m_activeTab == Tab::MINING && m_state.canWarp()) {
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Space)) {
-                m_warpCharge += dt / WARP_CHARGE_TIME;
+                // Eén keer SFX per vasthoud (loslaten reset; los van m_warpCharge≈0 float).
+                if (m_warpSfxArmed) {
+                    gSfx.play(Sfx::Warp);
+                    m_warpSfxArmed = false;
+                }
+                m_warpCharge += dt / WARP_CHARGE_DURATION_SEC;
                 if (m_warpCharge >= 1.f) {
                     m_warpCharge = 0.f;
                     m_state.doWarp();
                     m_mining.clearAll();
                     m_mining.syncTurrets(m_state);
-                    gSfx.play(Sfx::Warp);
-                    m_warpFlashRemain = WARP_FLASH_DURATION;
+                    m_warpFlashRemain = WARP_FLASH_DURATION_SEC;
+                    m_warpSfxArmed    = true;
                     pushNotif("Zone " + std::to_string(m_state.currentLevel) + "!",
                               sf::Color(120, 220, 255));
                 }
             } else {
                 m_warpCharge = std::max(0.f, m_warpCharge - dt * 2.f);
+                m_warpSfxArmed = true;
             }
         } else {
-            m_warpCharge = 0.f;
+            m_warpCharge   = 0.f;
+            m_warpSfxArmed = true;
         }
     } else {
-        m_warpCharge = 0.f;
+        m_warpCharge   = 0.f;
+        m_warpSfxArmed = true;
     }
     if (m_state.autoPlinkoEnabled() && m_state.ore >= 1.0)
         m_plinko.updateAuto(dt, m_state.ore, 1.f / m_state.fireRatePerSec());
@@ -561,8 +576,19 @@ void Game::onMouseScroll(float delta, sf::Vector2f /*pos*/) {
 // ═════════════════════════════════════════════════════════════
 //  onKeyPress
 // ═════════════════════════════════════════════════════════════
-void Game::onKeyPress(sf::Keyboard::Key key) {
+void Game::onKeyPress(sf::Keyboard::Key key, bool ctrl, bool shift) {
     using K = sf::Keyboard::Key;
+
+    // Dev: Ctrl+Shift+C = +1 000 000 credits
+    if (ctrl && shift && key == K::C) {
+        constexpr double add = 1'000'000.0;
+        m_state.credits += add;
+        m_state.totalCredits += add;
+        gSfx.play(Sfx::UiClick);
+        pushNotif("+" + formatBig(add) + " credits",
+                  sf::Color(120, 255, 160));
+        return;
+    }
 
     switch (key) {
         case K::Num1: m_activeTab = Tab::MINING;   break;

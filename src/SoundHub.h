@@ -3,8 +3,10 @@
 #include <SFML/Audio/SoundBuffer.hpp>
 #include <SFML/System/Clock.hpp>
 #include <array>
+#include <algorithm>
 #include <optional>
 #include <string>
+#include <vector>
 
 enum class Sfx : int {
     Shot = 0,
@@ -37,6 +39,13 @@ private:
     bool                                                     m_muted = false;
     float                                                    m_masterVol = 55.f;
 
+    /// 14 schoten: `gun sound.mp3` (gelijk opgesplitst, vaste volgorde) of
+    /// `shot_01.wav`…`shot_14.wav`.
+    std::vector<sf::SoundBuffer> m_shotVariants;
+    int                          m_shotRing = 0;
+    /// Eigen kanaal: lang warp-geluid wordt niet door sfx-pool afgekapt.
+    std::optional<sf::Sound> m_warpSound;
+
     sf::Clock m_clk;
     float     m_lastShot   = -1.f;
     float     m_lastOre    = -1.f;
@@ -44,6 +53,7 @@ private:
     float     m_lastPlinko = -1.f;
 
     bool tryLoad(int idx, const std::string& path);
+    void loadShotVariants();
 };
 
 extern SoundHub gSfx;
