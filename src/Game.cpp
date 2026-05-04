@@ -94,6 +94,24 @@ void drawPanelKey(sf::RenderTarget& rw, float cx, float cy, float s,
     rw.draw(bow);
 }
 
+// Bold label centered in a rectangle (origin-based; avoids drawText style order).
+void drawBoldTextCenteredInRect(sf::RenderTarget& target, const sf::Font& font,
+                                const sf::String& str, float bx, float by, float w,
+                                float h, unsigned charSize, sf::Color color,
+                                float yNudgePx = 0.f) {
+    sf::Text text(font);
+    text.setCharacterSize(charSize);
+    text.setString(str);
+    text.setStyle(sf::Text::Bold);
+    text.setFillColor(color);
+    const sf::FloatRect lb = text.getLocalBounds();
+    text.setOrigin({std::round(lb.position.x + lb.size.x * 0.5f),
+                    std::round(lb.position.y + lb.size.y * 0.5f)});
+    text.setPosition({std::round(bx + w * 0.5f),
+                      std::round(by + h * 0.5f + yNudgePx)});
+    target.draw(text);
+}
+
 } // namespace
 
 // ═════════════════════════════════════════════════════════════
@@ -1212,12 +1230,9 @@ void Game::drawMainMenu() const {
             sf::Color   col;
         };
         const DiffBtn diffBtns[] = {
-            { "Makkelijk - 4 levens, zwakkere asteroiden",
-              sf::Color(80, 220, 140) },
-            { "Normaal - standaard balans",
-              sf::Color(80, 160, 255) },
-            { "Moeilijk - 2 levens, zwaardere asteroiden",
-              sf::Color(255, 100, 80) },
+            { "Easy", sf::Color(80, 220, 140) },
+            { "Medium", sf::Color(80, 160, 255) },
+            { "Hard", sf::Color(255, 100, 80) },
         };
 
         for (int d = 0; d < 3; d++) {
@@ -1232,19 +1247,16 @@ void Game::drawMainMenu() const {
             btn.setOutlineThickness(2.f);
             m_window.draw(btn);
 
-            const float        midY = by + L.btnH * 0.5f;
-            const float        cxBtn = bx + L.btnW * 0.5f;
-            sf::Text           labMeas(m_font);
-            labMeas.setString(diffBtns[d].label);
-            labMeas.setCharacterSize(L.fBtn);
-            labMeas.setStyle(sf::Text::Bold);
-            const sf::FloatRect lb = labMeas.getLocalBounds();
-            drawText(diffBtns[d].label,
-                     cxBtn - (lb.position.x + lb.size.x * 0.5f),
-                     midY - (lb.position.y + lb.size.y * 0.5f),
-                     L.fBtn,
-                     diffBtns[d].col,
-                     true);
+            drawBoldTextCenteredInRect(m_window,
+                                       m_font,
+                                       diffBtns[d].label,
+                                       bx,
+                                       by,
+                                       L.btnW,
+                                       L.btnH,
+                                       L.fBtn,
+                                       diffBtns[d].col,
+                                       0.f);
         }
 
         const float byBack =
@@ -1255,22 +1267,16 @@ void Game::drawMainMenu() const {
         backBtn.setOutlineColor(sf::Color(140, 145, 170));
         backBtn.setOutlineThickness(2.f);
         m_window.draw(backBtn);
-        {
-            const char*         backLab = "Terug";
-            sf::Text            lm(m_font);
-            lm.setString(backLab);
-            lm.setCharacterSize(L.fBtn);
-            lm.setStyle(sf::Text::Bold);
-            const sf::FloatRect lbB = lm.getLocalBounds();
-            const float         midYB = byBack + L.btnH * 0.5f;
-            const float         cxBack = L.slotX0 + L.btnW * 0.5f;
-            drawText(backLab,
-                     cxBack - (lbB.position.x + lbB.size.x * 0.5f),
-                     midYB - (lbB.position.y + lbB.size.y * 0.5f),
-                     L.fBtn,
-                     sf::Color(180, 185, 210),
-                     true);
-        }
+        drawBoldTextCenteredInRect(m_window,
+                                   m_font,
+                                   "Terug",
+                                   L.slotX0,
+                                   byBack,
+                                   L.btnW,
+                                   L.btnH,
+                                   L.fBtn,
+                                   sf::Color(180, 185, 210),
+                                   0.f);
 
         const std::string foot =
             "Klik een slot hierboven | M = geluid aan/uit";
@@ -1341,16 +1347,16 @@ void Game::drawMainMenu() const {
                      sf::Color(110, 200, 140),
                      true);
         } else {
-            sf::Text            labMeas(m_font);
-            labMeas.setString(btns[i].label);
-            labMeas.setCharacterSize(L.fBtn);
-            labMeas.setStyle(sf::Text::Bold);
-            const sf::FloatRect lb = labMeas.getLocalBounds();
-            const float         cxBtn = bx + L.btnW * 0.5f;
-            drawText(btns[i].label,
-                     cxBtn - (lb.position.x + lb.size.x * 0.5f),
-                     midY - (lb.position.y + lb.size.y * 0.5f),
-                     L.fBtn, btns[i].color, true);
+            drawBoldTextCenteredInRect(m_window,
+                                       m_font,
+                                       btns[i].label,
+                                       bx,
+                                       by,
+                                       L.btnW,
+                                       L.btnH,
+                                       L.fBtn,
+                                       btns[i].color,
+                                       0.f);
         }
     }
 
@@ -2078,9 +2084,10 @@ void Game::drawText(const std::string& str,
     sf::Text txt(m_font);
     txt.setCharacterSize(size);
     txt.setString(str);
+    if (bold)
+        txt.setStyle(sf::Text::Bold);
     txt.setFillColor(color);
     txt.setPosition({ x, y });
-    if (bold) txt.setStyle(sf::Text::Bold);
     m_window.draw(txt);
 }
 
