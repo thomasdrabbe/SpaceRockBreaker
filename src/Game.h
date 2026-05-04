@@ -49,6 +49,12 @@ private:
     bool      m_paused    = false;
     RunMode   m_runMode   = RunMode::BASE;
 
+    // ── Assets (gedeeld met mining UI) ────────────────────
+    sf::Texture m_keyTex;
+    bool          m_keyTexLoaded = false;
+    sf::Texture m_chestTex;
+    bool        m_chestTexLoaded = false;
+
     // ── Sub-systems ───────────────────────────────────────
     MiningScreen m_mining;
     PlinkoBoard  m_plinko;
@@ -107,6 +113,19 @@ private:
     float     m_zonePlayTime       = 0.f;
     bool      m_keySpawnedThisZone = false;
     void      resetZoneKeyState();
+
+    /// Fullscreen chest-open anim (na 1-key open); blokkeert nieuwe opens.
+    float m_chestOverlayAnim = 0.f;
+    bool  m_chestLootSfxPending = false;
+    void  drawChestOpenOverlay();
+
+    /// Loot-tekst springt uit de chest (midden scherm), niet als rechter-notif.
+    static constexpr float CHEST_LOOT_POPUP_SEC = 2.35f;
+    bool                   m_chestLootPopupActive = false;
+    std::string            m_chestLootPopupText;
+    sf::Color              m_chestLootPopupColor{ 255, 220, 140 };
+    float                  m_chestLootPopupRemain = 0.f;
+    void                   drawChestLootPopup() const;
 
     sf::FloatRect miningStartRunBounds() const;
     void          drawMiningBasePanel() const;

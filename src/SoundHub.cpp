@@ -207,6 +207,8 @@ const char* kRelPaths[static_cast<int>(Sfx::COUNT)] = {
     "assets/sounds/boss.wav",
     "assets/sounds/plinko_drop.wav",
     "assets/sounds/plinko_score.wav",
+    "assets/sounds/chest_open.wav",
+    "assets/sounds/chest_loot.wav",
 };
 
 } // namespace
@@ -295,6 +297,23 @@ void SoundHub::init() {
     const int shotIdx = static_cast<int>(Sfx::Shot);
     m_ok[shotIdx]     = m_ok[shotIdx] || !m_shotVariants.empty();
 
+    // Chest: eigen .wav in assets/sounds; ontbreekt → plinko_drop / plinko_score
+    {
+        const int openI = static_cast<int>(Sfx::ChestOpen);
+        if (!m_ok[openI] && m_ok[static_cast<int>(Sfx::PlinkoDrop)]) {
+            m_buf[openI] = m_buf[static_cast<int>(Sfx::PlinkoDrop)];
+            m_ok[openI]  = true;
+        }
+        const int lootI = static_cast<int>(Sfx::ChestLoot);
+        if (!m_ok[lootI] && m_ok[static_cast<int>(Sfx::PlinkoScore)]) {
+            m_buf[lootI] = m_buf[static_cast<int>(Sfx::PlinkoScore)];
+            m_ok[lootI]  = true;
+        } else if (!m_ok[lootI] && m_ok[static_cast<int>(Sfx::OreCollect)]) {
+            m_buf[lootI] = m_buf[static_cast<int>(Sfx::OreCollect)];
+            m_ok[lootI]  = true;
+        }
+    }
+
     int fb = -1;
     for (int i = 0; i < static_cast<int>(Sfx::COUNT); ++i) {
         if (m_ok[i]) {
@@ -371,12 +390,20 @@ void SoundHub::play(Sfx id) {
     float vol = m_masterVol;
     if (id == Sfx::Warp)
         vol = std::min(100.f, m_masterVol * 1.4f);
+    else if (id == Sfx::ChestOpen)
+        vol = std::min(100.f, m_masterVol * 1.08f);
+    else if (id == Sfx::ChestLoot)
+        vol = std::min(100.f, m_masterVol * 0.92f);
     ch->setVolume(vol);
     float pitch = 1.f;
     if (id == Sfx::UiClick)
         pitch = 0.94f + 0.08f * static_cast<float>(std::fmod(t * 17.0, 1.0));
     else if (id == Sfx::Shot && m_shotVariants.empty())
         pitch = 0.94f + 0.08f * static_cast<float>(std::fmod(t * 17.0, 1.0));
+    else if (id == Sfx::ChestOpen)
+        pitch = 0.94f;
+    else if (id == Sfx::ChestLoot)
+        pitch = 1.05f;
     ch->setPitch(pitch);
     ch->play();
 }

@@ -1,3 +1,1 @@
-reactive pegs vorm sterretje of vierkant
-sleutel symbol nog onduidleijk, aanpassen
-astroid spawn rate te upgraden
+game moet niet automatish al save laden, pas na geklikt is op de save

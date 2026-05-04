@@ -112,7 +112,8 @@ void drawKeyAsteroidIcon(sf::RenderTarget&      target,
                           const sf::Transform&   worldTf,
                           float                  radius,
                           float                  pulse) {
-    const float   s      = radius * 0.48f;
+    // Groter dan vroeger (0.48) zodat de sleutel duidelijk leesbaar is op de rots.
+    const float   s      = radius * 0.78f;
     const uint8_t fillA  = static_cast<uint8_t>(230 + 25.f * pulse);
 
     sf::RectangleShape stem;
@@ -431,7 +432,8 @@ void Asteroid::update(float dt, sf::Vector2f playerPos) {
 // ═════════════════════════════════════════════════════════════
 void Asteroid::draw(sf::RenderTarget& target,
                      float               animTime,
-                     const sf::Font*     labelFont) const {
+                     const sf::Font*     labelFont,
+                     const sf::Texture*  keyIconTex) const {
     if (!alive) return;
 
     sf::Transform tf;
@@ -503,7 +505,21 @@ void Asteroid::draw(sf::RenderTarget& target,
         drawShape.setOutlineThickness(3.5f + 2.f * pulse);
         target.draw(drawShape, tf);
 
-        drawKeyAsteroidIcon(target, tf, radius, pulse);
+        if (keyIconTex && keyIconTex->getSize().x > 0u) {
+            sf::Sprite spr(*keyIconTex);
+            const sf::Vector2u tsz = keyIconTex->getSize();
+            const float          side = radius * 1.45f;
+            const float          sc =
+                side / std::max(1.f, static_cast<float>(std::max(tsz.x, tsz.y)));
+            const uint8_t fillA =
+                static_cast<uint8_t>(230 + 25.f * pulse);
+            spr.setOrigin({ tsz.x * 0.5f, tsz.y * 0.5f });
+            spr.setScale({ sc, sc });
+            spr.setColor(sf::Color(255, 255, 255, fillA));
+            target.draw(spr, tf);
+        } else {
+            drawKeyAsteroidIcon(target, tf, radius, pulse);
+        }
     } else {
         target.draw(shape, tf);
     }
@@ -815,9 +831,10 @@ void AsteroidManager::tickMeteorSpawnQueue() {
 
 void AsteroidManager::draw(sf::RenderTarget& target,
                             float               animTime,
-                            const sf::Font*     labelFont) const {
+                            const sf::Font*     labelFont,
+                            const sf::Texture*  keyIconTex) const {
     for (const auto& a : m_pool)
-        if (a.alive) a.draw(target, animTime, labelFont);
+        if (a.alive) a.draw(target, animTime, labelFont, keyIconTex);
 }
 
 bool AsteroidManager::trySpawnKey(float ox, float oy, float areaW,

@@ -18,6 +18,8 @@ enum class Sfx : int {
     BossExplode,
     PlinkoDrop,
     PlinkoScore,
+    ChestOpen,
+    ChestLoot,
     COUNT
 };
 

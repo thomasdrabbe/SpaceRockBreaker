@@ -32,9 +32,7 @@ struct PrestigeUpgradeDef {
 struct ChestDef {
     std::string name;
     std::string description;
-    int         baseKeyCost;
-    double      keyCostMult;
-    int         maxLevel;
+    int         maxLevel;   // 0 = oneindig
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -70,8 +68,8 @@ public:
     float meteorShowerIntervalSec() const;
     int   meteorShowerMeteorCount() const;
 
-    /// Willekeurige koopbare chest-upgrade (betaalt normale key-kosten).
-    bool buyRandomChestUpgrade(ChestUpgradeID* outPurchased = nullptr);
+    /// 1 key → willekeurige chest-upgrade. Geen keys → false.
+    bool openOneChest(ChestUpgradeID* outChosen = nullptr);
 
     // ── Level / zone ──────────────────────────────────────
     int currentLevel = 1;   // advances via step E (fly to next zone)
@@ -138,6 +136,8 @@ public:
     float plinkoMultBonus()   const;
     int   maxPlinkoBalls()    const;
     float plinkoLuck()        const;
+    /// Ore per Plinko-bal; lichte stijging bij zeer hoge voorraad (sink).
+    double plinkoBallOreCost() const;
 
     float creditMult()        const;
     int   bulkProcess()       const;
@@ -148,13 +148,9 @@ public:
     // ── Chest (Plinko pegs / combat / mining) ────────────
     /// Golden Pegs: aantal peg-upgrade rolls (= level × 3).
     int   chestPegUpgradeCount() const;
-    float chestPlinkoBounceMult()    const;
-    float chestGunFlatBonus()        const;
-    float chestOreValueMult()        const;
+    /// 1.0 zonder Trough Boost; elk niveau ×1.5 extra (1.5^level op valbak-mults).
+    float chestPlinkoSlotMult() const;
 
-    int   keyCostOf(ChestUpgradeID id) const;
-    bool  canBuyChest(ChestUpgradeID id) const;
-    void  buyChest(ChestUpgradeID id);
     int   levelOfChest(ChestUpgradeID id) const;
 
     // ── Upgrade helpers ───────────────────────────────────

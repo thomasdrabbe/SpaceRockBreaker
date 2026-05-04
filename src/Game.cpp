@@ -9,6 +9,8 @@
 
 namespace {
 
+constexpr float CHEST_OVERLAY_SEC = 1.05f;
+
 void migrateLegacySaveIfNeeded() {
     for (int s = 0; s < SAVE_SLOT_COUNT; ++s) {
         std::ifstream probe(saveSlotPath(s), std::ios::binary);
@@ -60,7 +62,20 @@ void drawPanelCrystal(sf::RenderTarget& rw, float cx, float cy, float s) {
     rw.draw(facet);
 }
 
-void drawPanelKey(sf::RenderTarget& rw, float cx, float cy, float s) {
+void drawPanelKey(sf::RenderTarget& rw, float cx, float cy, float s,
+                  const sf::Texture* keyTex) {
+    if (keyTex && keyTex->getSize().x > 0u) {
+        sf::Sprite spr(*keyTex);
+        const sf::Vector2u tsz = keyTex->getSize();
+        const float          side = s * 2.4f;
+        const float          sc =
+            side / std::max(1.f, static_cast<float>(std::max(tsz.x, tsz.y)));
+        spr.setOrigin({ tsz.x * 0.5f, tsz.y * 0.5f });
+        spr.setPosition({ cx, cy });
+        spr.setScale({ sc, sc });
+        rw.draw(spr);
+        return;
+    }
     sf::RectangleShape stem(sf::Vector2f{ s * 0.2f, s * 1.05f });
     stem.setOrigin({ stem.getSize().x * 0.5f, stem.getSize().y * 0.88f });
     stem.setPosition({ cx, cy + s * 0.12f });
@@ -112,6 +127,16 @@ Game::Game()
     (void)notoOk;
 
     initLayout();
+
+    m_keyTexLoaded = m_keyTex.loadFromFile(resolveAssetPath("assets/key.png"));
+    if (m_keyTexLoaded)
+        m_keyTex.setSmooth(true);
+
+    m_chestTexLoaded =
+        m_chestTex.loadFromFile(resolveAssetPath("assets/chest.png"));
+    if (m_chestTexLoaded)
+        m_chestTex.setSmooth(true);
+
     reinitSystems();
 
     migrateLegacySaveIfNeeded();
@@ -163,9 +188,11 @@ void Game::initLayout() {
 //  reinitSystems  — herinitialiseer subsystems met nieuwe layout
 // ─────────────────────────────────────────────────────────────
 void Game::reinitSystems() {
-    m_mining.init(m_font, m_cntX, m_cntY, m_cntW, m_cntH);
+    m_mining.init(m_font, m_cntX, m_cntY, m_cntW, m_cntH,
+                  m_keyTexLoaded ? &m_keyTex : nullptr);
     m_shop.init  (m_font, m_cntX, m_cntY, m_cntW, m_cntH, m_scale);
-    m_chest.init (m_font, m_cntX, m_cntY, m_cntW, m_cntH, m_scale);
+    m_chest.init(m_font, m_cntX, m_cntY, m_cntW, m_cntH, m_scale,
+                 m_chestTexLoaded ? &m_chestTex : nullptr);
     rebuildPlinko();
 }
 
@@ -201,14 +228,20 @@ void Game::processEvents() {
         if (m_activeTab == Tab::CHESTS) {
             ChestUpgradeID chestGot{};
             bool           bought = m_chest.handleEvent(
-                *event, m_state, m_window, &chestGot);
+                *event, m_state, m_window, m_chestOverlayAnim > 0.f, &chestGot);
             if (bought) {
                 m_mining.syncTurrets(m_state);
                 rebuildPlinko();
-                gSfx.play(Sfx::UiClick);
+                gSfx.play(Sfx::ChestOpen);
+                m_chestLootSfxPending = true;
+                m_chestOverlayAnim = CHEST_OVERLAY_SEC;
                 const auto& cn =
                     GameState::chestCatalog[static_cast<int>(chestGot)];
-                pushNotif(cn.name + " +1", sf::Color(255, 220, 140));
+                m_chestLootPopupActive = true;
+                m_chestLootPopupText =
+                    std::string("Chest: ") + cn.name + " +1  (1 key)";
+                m_chestLootPopupColor = sf::Color(255, 220, 140);
+                m_chestLootPopupRemain  = CHEST_LOOT_POPUP_SEC;
             }
         }
 
@@ -263,6 +296,22 @@ void Game::drawLives() const {
 //  update
 // ═════════════════════════════════════════════════════════════
 void Game::update(float dt) {
+    if (m_chestOverlayAnim > 0.f)
+        m_chestOverlayAnim = std::max(0.f, m_chestOverlayAnim - dt);
+    if (m_chestLootPopupActive) {
+        m_chestLootPopupRemain -= dt;
+        if (m_chestLootPopupRemain <= 0.f)
+            m_chestLootPopupActive = false;
+    }
+    if (m_chestLootSfxPending) {
+        const float elapsed = CHEST_OVERLAY_SEC - m_chestOverlayAnim;
+        if (elapsed >= 0.36f) {
+            gSfx.play(Sfx::ChestLoot);
+            m_chestLootSfxPending = false;
+        }
+    }
+    if (m_chestOverlayAnim <= 0.f)
+        m_chestLootSfxPending = false;
     if (m_warpFlashRemain > 0.f)
         m_warpFlashRemain = std::max(0.f, m_warpFlashRemain - dt);
     if (m_paused) return;
@@ -396,8 +445,10 @@ void Game::update(float dt) {
         m_warpCharge   = 0.f;
         m_warpSfxArmed = true;
     }
-    if (m_state.autoPlinkoEnabled() && m_state.ore >= 1.0)
-        m_plinko.updateAuto(dt, m_state.ore, 1.f / m_state.fireRatePerSec());
+    if (m_state.autoPlinkoEnabled()
+        && m_state.ore >= m_state.plinkoBallOreCost())
+        m_plinko.updateAuto(dt, m_state.ore, 1.f / m_state.fireRatePerSec(),
+                             m_state.plinkoBallOreCost());
 
     {
         double plinkoCredits = 0.0;
@@ -415,8 +466,10 @@ void Game::update(float dt) {
     }
     if (m_activeTab == Tab::CHESTS) {
         m_chest.update(
+            dt,
             mapPixelToUi(m_window, sf::Mouse::getPosition(m_window)),
-            m_state);
+            m_state,
+            m_chestOverlayAnim > 0.f);
     }
 
     if (creditsEarned > 0.0) {
@@ -447,21 +500,150 @@ void Game::update(float dt) {
     static float lastBonus   = -1.f;
     static float lastLuck    = -1.f;
     static int   lastPegUp   = -1;
-    static float lastPegB    = -1.f;
+    static float lastSlotChest = -1.f;
     int   rows  = m_state.plinkoRows();
     float bonus = m_state.plinkoMultBonus();
     float luck  = m_state.plinkoLuck();
     int   pegUp = m_state.chestPegUpgradeCount();
-    float pegB  = m_state.chestPlinkoBounceMult();
+    float slotChest = m_state.chestPlinkoSlotMult();
     if (rows != lastRows || bonus != lastBonus || luck != lastLuck
-        || pegUp != lastPegUp || pegB != lastPegB) {
+        || pegUp != lastPegUp || slotChest != lastSlotChest) {
         rebuildPlinko();
         lastRows  = rows;
         lastBonus = bonus;
         lastLuck  = luck;
         lastPegUp = pegUp;
-        lastPegB  = pegB;
+        lastSlotChest = slotChest;
     }
+}
+
+void Game::drawChestOpenOverlay() {
+    const sf::Vector2u ws = m_window.getSize();
+    const float        W = ws.x > 0 ? static_cast<float>(ws.x) : 1.f;
+    const float        H = ws.y > 0 ? static_cast<float>(ws.y) : 1.f;
+
+    const float u =
+        1.f - std::clamp(m_chestOverlayAnim / CHEST_OVERLAY_SEC, 0.f, 1.f);
+    const float open01 = std::clamp(u * 1.18f, 0.f, 1.f);
+
+    sf::RectangleShape dimBg(sf::Vector2f{ W, H });
+    dimBg.setFillColor(sf::Color(4, 6, 14, 218));
+    m_window.draw(dimBg);
+
+    const float cx = W * 0.5f;
+    const float cy = H * 0.46f;
+    const float s  = std::min(W, H) * 0.42f;
+
+    if (m_chestTexLoaded && m_chestTex.getSize().x > 0u) {
+        // Geen horizontale texture-split: bij 3D/isometrische art snijdt dat diagonaal
+        // door de kist. Hele sprite licht achterover (pivot onderaan).
+        const sf::Vector2u tsz = m_chestTex.getSize();
+        const unsigned     tw = tsz.x;
+        const unsigned     th = tsz.y;
+        const float        target = std::min(W, H) * 0.52f;
+        const float        pop    = 0.86f + 0.14f * open01;
+        const float        sc =
+            (target
+             / std::max(1.f, static_cast<float>(std::max(tw, th))))
+            * pop;
+
+        sf::Sprite spr(m_chestTex);
+        const float pivotY = static_cast<float>(th) * 0.9f;
+        spr.setOrigin({ static_cast<float>(tw) * 0.5f, pivotY });
+        spr.setPosition({ cx, cy + static_cast<float>(th) * sc * 0.06f });
+        spr.setScale({ sc, sc });
+        spr.setRotation(sf::degrees(-16.f * open01));
+        m_window.draw(spr);
+    } else {
+        sf::RectangleShape base(sf::Vector2f{ s * 0.72f, s * 0.5f });
+        base.setOrigin({ base.getSize().x * 0.5f, base.getSize().y * 0.5f });
+        base.setPosition({ cx, cy + s * 0.1f });
+        base.setFillColor(sf::Color(95, 62, 38));
+        base.setOutlineColor(sf::Color(210, 170, 90, 220));
+        base.setOutlineThickness(std::max(2.f, m_scale * 2.f));
+        m_window.draw(base);
+
+        sf::ConvexShape lid;
+        lid.setPointCount(4);
+        lid.setPoint(0, { -s * 0.38f, 0.f });
+        lid.setPoint(1, { 0.f, -s * 0.28f });
+        lid.setPoint(2, { s * 0.38f, 0.f });
+        lid.setPoint(3, { 0.f, -s * 0.12f });
+        lid.setOrigin({ -s * 0.38f, 0.f });
+        lid.setPosition({ cx - s * 0.38f, cy - s * 0.12f });
+        lid.setRotation(sf::degrees(-82.f * open01));
+        lid.setFillColor(sf::Color(120, 78, 48));
+        lid.setOutlineColor(sf::Color(255, 215, 130, 230));
+        lid.setOutlineThickness(std::max(2.f, m_scale * 2.f));
+        m_window.draw(lid);
+    }
+
+    const unsigned hintSize = static_cast<unsigned>(
+        std::clamp(std::lround(22.f * m_scale), 16L, 36L));
+    sf::Text hint(m_font);
+    hint.setCharacterSize(hintSize);
+    hint.setString("1 key = 1 chest");
+    hint.setFillColor(sf::Color(255, 230, 180, 220));
+    hint.setOutlineColor(sf::Color(0, 0, 0, 160));
+    hint.setOutlineThickness(2.f);
+    const sf::FloatRect hb = hint.getLocalBounds();
+    hint.setOrigin({ hb.position.x + hb.size.x * 0.5f,
+                     hb.position.y + hb.size.y * 0.5f });
+    hint.setPosition({ cx, H * 0.82f });
+    m_window.draw(hint);
+}
+
+void Game::drawChestLootPopup() const {
+    if (!m_chestLootPopupActive || m_chestLootPopupRemain <= 0.f
+        || m_chestLootPopupText.empty())
+        return;
+
+    const sf::Vector2u ws = m_window.getSize();
+    const float        W = ws.x > 0 ? static_cast<float>(ws.x) : 1.f;
+    const float        H = ws.y > 0 ? static_cast<float>(ws.y) : 1.f;
+    const float        cx = W * 0.5f;
+    const float        cy = H * 0.46f;
+
+    const float elapsed =
+        CHEST_LOOT_POPUP_SEC - m_chestLootPopupRemain;
+    const float rise =
+        195.f * (1.f - std::exp(-elapsed * 2.5f))
+        + 18.f * std::sin(std::min(elapsed, 0.5f) * 12.f)
+              * std::exp(-elapsed * 3.f);
+    const float y = cy + 40.f - rise;
+
+    const float popT = std::min(1.f, elapsed / 0.24f);
+    const float bounce = std::sin(popT * 3.14159265f);
+    const float visScale =
+        (0.38f + 0.62f * (popT * popT)) * (1.f + 0.14f * bounce * (1.f - popT));
+
+    float alpha = 1.f;
+    if (elapsed < 0.09f)
+        alpha = elapsed / 0.09f;
+    if (m_chestLootPopupRemain < 0.55f)
+        alpha = std::min(alpha, m_chestLootPopupRemain / 0.55f);
+
+    const unsigned fs = static_cast<unsigned>(
+        std::clamp(std::lround(26.f * m_scale), 18L, 44L));
+
+    sf::Text txt(m_font);
+    txt.setCharacterSize(fs);
+    txt.setStyle(sf::Text::Bold);
+    txt.setString(m_chestLootPopupText);
+    const auto           C = m_chestLootPopupColor;
+    const std::uint8_t   a =
+        static_cast<std::uint8_t>(std::clamp(alpha, 0.f, 1.f) * 255.f);
+    txt.setFillColor(sf::Color(C.r, C.g, C.b, a));
+    txt.setOutlineColor(sf::Color(0, 0, 0,
+                                   static_cast<std::uint8_t>(
+                                       std::clamp(alpha, 0.f, 1.f) * 210.f)));
+    txt.setOutlineThickness(2.5f);
+    const sf::FloatRect lb = txt.getLocalBounds();
+    txt.setOrigin({ lb.position.x + lb.size.x * 0.5f,
+                    lb.position.y + lb.size.y * 0.5f });
+    txt.setPosition({ cx, y });
+    txt.setScale({ visScale, visScale });
+    m_window.draw(txt);
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -488,6 +670,10 @@ void Game::render() {
     drawSidePanel();
     drawSidePanelAuxButtons();
     drawNotifs();
+    if (m_chestOverlayAnim > 0.f)
+        drawChestOpenOverlay();
+    if (m_chestLootPopupActive && m_chestLootPopupRemain > 0.f)
+        drawChestLootPopup();
     if (m_paused) drawPauseOverlay();
     m_window.display();
 }
@@ -579,14 +765,16 @@ void Game::onMouseScroll(float delta, sf::Vector2f /*pos*/) {
 void Game::onKeyPress(sf::Keyboard::Key key, bool ctrl, bool shift) {
     using K = sf::Keyboard::Key;
 
-    // Dev: Ctrl+Shift+C = +1 000 000 credits
+    // Dev: Ctrl+Shift+C = +1 000 000 credits & +100 keys
     if (ctrl && shift && key == K::C) {
         constexpr double add = 1'000'000.0;
         m_state.credits += add;
         m_state.totalCredits += add;
+        m_state.keys += 100;
         gSfx.play(Sfx::UiClick);
         pushNotif("+" + formatBig(add) + " credits",
                   sf::Color(120, 255, 160));
+        pushNotif("+100 keys", sf::Color(255, 220, 140));
         return;
     }
 
@@ -599,12 +787,12 @@ void Game::onKeyPress(sf::Keyboard::Key key, bool ctrl, bool shift) {
 
         case K::Space:
             if (m_activeTab == Tab::PLINKO) {
-                if (m_state.ore >= 1.0 &&
-                    m_plinko.ballsAlive() < m_state.maxPlinkoBalls()) {
-                    m_state.ore -= 1.0;
+                const double c = m_state.plinkoBallOreCost();
+                if (m_state.ore >= c
+                    && m_plinko.ballsAlive() < m_state.maxPlinkoBalls()) {
+                    m_state.ore -= c;
                     if (m_state.ore < 0.0) m_state.ore = 0.0;
-                    m_plinko.dropBall(m_state.ore >= 1.0 ? 1.0 : 0.0);
-
+                    m_plinko.dropBall(c);
                 }
             }
             break;
@@ -745,8 +933,7 @@ void Game::drawSidePanel() const {
         ty += gap;
     };
 
-    using IconFn = void (*)(sf::RenderTarget&, float, float, float);
-    auto lineWithIcon = [&](IconFn iconFn, const std::string& label,
+    auto lineWithIcon = [&](auto&& iconFn, const std::string& label,
                             const std::string& val, sf::Color vc) {
         drawText(label, tx, ty, fNormal, sf::Color(120, 135, 165));
         float iconR   = std::round(5.5f * m_scale);
@@ -778,7 +965,11 @@ void Game::drawSidePanel() const {
         "Crystals",
         formatBig(m_state.crystals),
         sf::Color(170, 110, 255));
-    lineWithIcon(drawPanelKey,
+    lineWithIcon(
+        [&](sf::RenderTarget& rw, float cx, float cy, float s) {
+            drawPanelKey(rw, cx, cy, s,
+                         m_keyTexLoaded ? &m_keyTex : nullptr);
+        },
         "Keys",
         std::to_string(m_state.keys),
         sf::Color(255, 220, 140));
@@ -1112,10 +1303,9 @@ void Game::rebuildPlinko() {
     float bw = m_cntW - 60.f;
     float bh = m_cntH - 90.f;
     float pegR = PLINKO_PEG_RADIUS;
-    float pegB = m_state.chestPlinkoBounceMult();
     m_plinko.build(m_state.plinkoRows(), bx, by, bw, bh,
                    m_state.plinkoMultBonus(), m_state.plinkoLuck(),
-                   m_scale, pegR, pegB);
+                   m_scale, pegR, 1.f, m_state.chestPlinkoSlotMult());
     m_plinko.syncGoldenPegChestRarities(
         m_state.levelOfChest(ChestUpgradeID::PLINKO_PEG_SIZE));
 }
@@ -1131,6 +1321,11 @@ void Game::drawPlinkoTab() const {
     unsigned fs = static_cast<unsigned>(std::round(14.f * m_scale));
     std::ostringstream os, bs;
     os << "Ore: " << static_cast<long long>(m_state.ore);
+    {
+        const double c = m_state.plinkoBallOreCost();
+        if (c > 1.0001)
+            os << "   (bal: " << formatBig(c) << " ore)";
+    }
     bs << "Balls: " << m_plinko.ballsAlive() << " / " << m_state.maxPlinkoBalls();
 
     const float statusY =
@@ -1227,12 +1422,12 @@ void Game::handlePlinkoClick(sf::Vector2f pos) {
     sf::FloatRect btnRect = plinkoSideDropButtonBounds();
     if (!btnRect.contains(pos)) return;
 
-    if (m_state.ore >= 1.0 &&
-        m_plinko.ballsAlive() < m_state.maxPlinkoBalls()) {
-        m_state.ore -= 1.0;
+    const double c = m_state.plinkoBallOreCost();
+    if (m_state.ore >= c && m_plinko.ballsAlive() < m_state.maxPlinkoBalls()) {
+        m_state.ore -= c;
         if (m_state.ore < 0.0) m_state.ore = 0.0;
-        m_plinko.dropBall(m_state.ore >= 1.0 ? 1.0 : 0.0);
-    } else if (m_state.ore < 1.0) {
+        m_plinko.dropBall(c);
+    } else if (m_state.ore < c) {
         pushNotif("Geen ore!", sf::Color(255, 100, 80));
     }
 }
@@ -1728,8 +1923,8 @@ sf::FloatRect Game::runRetreatButtonBounds() const {
 void Game::drawSidePanelAuxButtons() const {
     if (shouldShowPlinkoSideDrop()) {
         sf::FloatRect rb = plinkoSideDropButtonBounds();
-        bool          canDrop =
-            m_state.ore >= 1.0
+        const double  oreCost = m_state.plinkoBallOreCost();
+        bool          canDrop = m_state.ore >= oreCost
             && m_plinko.ballsAlive() < m_state.maxPlinkoBalls();
         sf::RectangleShape btn(rb.size);
         btn.setPosition(rb.position);
@@ -1742,7 +1937,7 @@ void Game::drawSidePanelAuxButtons() const {
         unsigned fs =
             static_cast<unsigned>(std::round(14.f * m_scale));
         drawText(canDrop ? "DROP [Space]"
-                         : (m_state.ore < 1.0 ? "Geen ore" : "Balls vol"),
+                         : (m_state.ore < oreCost ? "Geen ore" : "Balls vol"),
                  rb.position.x + 12.f,
                  rb.position.y + rb.size.y * 0.5f - fs * 0.5f,
                  fs,

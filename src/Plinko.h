@@ -65,12 +65,13 @@ public:
            float plinkoLuck,
            float scale,
            float pegHitRadius,
-           float pegBounceMult);
+           float pegBounceMult,
+           float chestSlotMult);
 
     bool dropBall(double oreValue, float dropX = -1.f);
 
-    void updateAuto(float dt, double& oreStock,
-                    float autoInterval);
+    void updateAuto(float dt, double& oreStock, float autoInterval,
+                    double orePerBall);
 
     void update(float dt, double& creditsOut,
                 float creditMult, int bulkMult,
@@ -100,7 +101,8 @@ private:
 
     float m_pegHitRadius  = PLINKO_PEG_RADIUS;
     float m_pegDrawRadius = PLINKO_PEG_RADIUS;
-    float m_pegBounceMult = 1.f;
+    float m_pegBounceMult   = 1.f;
+    float m_chestSlotMult   = 1.f;
 
     std::vector<Peg>        m_pegs;
     std::vector<PlinkoSlot> m_slots;
@@ -115,7 +117,7 @@ private:
 
     void buildPegs();
     void applyPegRarityRolls(int rollCount);
-    void buildSlots(float multBonus, float plinkoLuck);
+    void buildSlots(float multBonus, float plinkoLuck, float chestSlotMult);
     void resolvePegCollision(PlinkoBall& ball,
                              double&     creditsOut,
                              float       creditMult);

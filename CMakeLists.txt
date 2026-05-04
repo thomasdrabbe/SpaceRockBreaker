@@ -69,6 +69,11 @@ target_link_libraries(SpaceRockBreaker PRIVATE
     ImGui-SFML::ImGui-SFML
 )
 
+# MSVC: string literals als UTF-8 (voorkomt kapotte tekens zoals -, x, bullets in UI)
+if(MSVC)
+    target_compile_options(SpaceRockBreaker PRIVATE /utf-8)
+endif()
+
 # ─── Windows: copy SFML DLLs next to .exe ─────────────────────
 if(WIN32)
     add_custom_command(TARGET SpaceRockBreaker POST_BUILD

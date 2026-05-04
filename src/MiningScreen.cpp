@@ -18,8 +18,10 @@ MiningScreen::MiningScreen()
 // ═════════════════════════════════════════════════════════════
 void MiningScreen::init(sf::Font& font,
                          float panelX, float panelY,
-                         float panelW, float panelH) {
-    m_font = &font;
+                         float panelW, float panelH,
+                         const sf::Texture* keyIconTex) {
+    m_font       = &font;
+    m_keyIconTex = keyIconTex;
     m_x    = panelX;
     m_y    = panelY;
     m_w    = panelW;
@@ -33,7 +35,7 @@ void MiningScreen::init(sf::Font& font,
 
     buildStarfield();
 
-    if (m_playerShipTex.loadFromFile("assets/player_ship.png")) {
+    if (m_playerShipTex.loadFromFile(resolveAssetPath("assets/player_ship.png"))) {
         m_playerShipTex.setSmooth(true);
         m_player.setShipSprite(&m_playerShipTex);
     } else
@@ -385,9 +387,9 @@ void MiningScreen::draw(sf::RenderTarget& target,
     drawCollector(target);
 
     // ── Entities ──────────────────────────────────────────
-    m_asteroids.draw(target, animTime, m_font);
+    m_asteroids.draw(target, animTime, m_font, m_keyIconTex);
     m_ores.draw(target);
-    m_keyPickups.draw(target);
+    m_keyPickups.draw(target, m_keyIconTex);
     m_bullets.draw(target);
     m_turrets.draw(target);
     m_player.draw(target);

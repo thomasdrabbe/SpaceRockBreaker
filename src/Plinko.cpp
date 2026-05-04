@@ -95,7 +95,8 @@ void PlinkoBoard::build(int   rows,
                          float multBonus, float plinkoLuck,
                          float scale,
                          float pegHitRadius,
-                         float pegBounceMult) {
+                         float pegBounceMult,
+                         float chestSlotMult) {
     m_boardX = boardX;
     m_boardY = boardY;
     m_boardW = boardW;
@@ -114,9 +115,10 @@ void PlinkoBoard::build(int   rows,
     m_pegHitRadius  = std::max(3.f, pegHitRadius);
     m_pegDrawRadius = m_pegHitRadius;
     m_pegBounceMult = std::max(0.5f, pegBounceMult);
+    m_chestSlotMult = std::max(0.1f, chestSlotMult);
 
     buildPegs();
-    buildSlots(multBonus, plinkoLuck);
+    buildSlots(multBonus, plinkoLuck, m_chestSlotMult);
 
     m_lastBuildRows = m_rows;
 }
@@ -170,7 +172,8 @@ float PlinkoBoard::slotMult(int slotIdx, int totalSlots,
 // ─────────────────────────────────────────────────────────────
 //  buildSlots
 // ─────────────────────────────────────────────────────────────
-void PlinkoBoard::buildSlots(float multBonus, float plinkoLuck) {
+void PlinkoBoard::buildSlots(float multBonus, float plinkoLuck,
+                             float chestSlotMult) {
     m_slots.clear();
 
     constexpr int NUM_SLOTS = 13;
@@ -181,7 +184,8 @@ void PlinkoBoard::buildSlots(float multBonus, float plinkoLuck) {
         PlinkoSlot slot;
         slot.pos   = sf::Vector2f(m_boardX + i * slotW, slotY);
         slot.width = slotW;
-        slot.multiplier = slotMult(i, NUM_SLOTS, multBonus, plinkoLuck);
+        slot.multiplier =
+            slotMult(i, NUM_SLOTS, multBonus, plinkoLuck) * chestSlotMult;
 
         // Kleur op basis van multiplier waarde
         float t = static_cast<float>(i) / (NUM_SLOTS - 1);
@@ -235,17 +239,17 @@ bool PlinkoBoard::dropBall(double oreValue, float dropX) {
 // ═════════════════════════════════════════════════════════════
 //  updateAuto
 // ═════════════════════════════════════════════════════════════
-void PlinkoBoard::updateAuto(float dt, double& oreStock,
-                               float autoInterval) {
+void PlinkoBoard::updateAuto(float dt, double& oreStock, float autoInterval,
+                             double orePerBall) {
     m_autoTimer -= dt;
-    if (m_autoTimer > 0.f || oreStock < 1.0) return;
+    if (m_autoTimer > 0.f || oreStock < orePerBall) return;
 
     m_autoTimer = autoInterval;
 
-    oreStock -= 1.0;
+    oreStock -= orePerBall;
     if (oreStock < 0.0) oreStock = 0.0;
 
-    dropBall(1.0);
+    dropBall(orePerBall);
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -358,6 +362,10 @@ void PlinkoBoard::update(float dt, double& creditsOut,
                 creditsOut      += earned;
                 slot.flashTimer  = 0.6f;
                 gSfx.play(Sfx::PlinkoScore);
+
+                const float slotCx = slot.pos.x + slot.width * 0.5f;
+                const float slotCy = slot.pos.y + SLOT_HEIGHT * 0.5f;
+                pushPegCreditPopup({ slotCx, slotCy }, earned);
 
                 particles.emitExplosion(ball.pos, 18.f,
                                          slot.color, 12);

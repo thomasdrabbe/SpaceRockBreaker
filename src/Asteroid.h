@@ -57,7 +57,8 @@ public:
     void update(float dt, sf::Vector2f playerPos = { 0.f, 0.f });
     void draw(sf::RenderTarget& target,
                float               animTime   = 0.f,
-               const sf::Font*     labelFont  = nullptr) const;
+               const sf::Font*     labelFont  = nullptr,
+               const sf::Texture*  keyIconTex = nullptr) const;
     void bounceWalls(float left, float top,
                      float right, float bottom);
 
@@ -96,7 +97,8 @@ public:
                            float areaH, sf::Vector2f playerPos);
     void draw(sf::RenderTarget& target,
                float               animTime,
-               const sf::Font*     labelFont) const;
+               const sf::Font*     labelFont,
+               const sf::Texture*  keyIconTex = nullptr) const;
 
     /// meteorMinYToAcquire: meteoren met pos.y lager worden genegeerd (bv. paneel-top
     /// + marge) zodat torens ze niet afknallen voordat ze in beeld zijn.

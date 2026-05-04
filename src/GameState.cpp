@@ -3,8 +3,6 @@
 #include <fstream>
 #include <cmath>
 #include <algorithm>
-#include <climits>
-
 // ═════════════════════════════════════════════════════════════
 //  Static catalogs
 // ═════════════════════════════════════════════════════════════
@@ -21,11 +19,11 @@ GameState::upgradeCatalog = {{
     { "Ore Value",         "+20% ore value",                 118.0,  1.57, 0 },
     { "Collect Radius",    "+30px collect radius",           102.0,  1.48, 0 },
     { "Ore Luck",          "+5% bonus ore drop",             130.0,  1.62, 0 },
-    { "Asteroid HP",       "-10% asteroid HP",               155.0,  1.66, 0 },
+    { "Asteroid HP",       "-10% asteroid HP",               260.0,  1.75, 0 },
     // Plinko
     { "Plinko Rows",       "Add 1 row to Plinko",            275.0,  1.92, 8  },
     { "Plinko Multiplier", "+10% slot multipliers",          215.0,  1.74, 0  },
-    { "Plinko Balls",      "+1 max ball at once",            185.0,  1.48, 0  },
+    { "Plinko Balls",      "+1 max ball at once",            118.0,  1.42, 0  },
     { "Plinko Luck",       "+5% high-slot luck",             178.0,  1.64, 0  },
     // Economy  (iets zachter mult zodat mid-game niet vastloopt)
     { "Credit Multiplier", "+25% all credits",               198.0,  1.74, 0 },
@@ -56,11 +54,11 @@ GameState::prestigeCatalog = {{
 const std::array<ChestDef, static_cast<int>(ChestUpgradeID::CHEST_UPGRADE_COUNT)>
 GameState::chestCatalog = {{
     { "Golden Pegs",
-      "Random pegs krijgen rarity bonus (+0.5x tot +8x)",
-      2, 1.22, 20 },
-    { "Reactive Pegs",   "Peg bounce strength +3% / level",    2, 1.22, 12 },
-    { "Ammo Cache",      "Gun damage +1.5 / level",             3, 1.28, 10 },
-    { "Refinery Pass",   "Ore value +2% / level",               3, 1.28, 12 },
+      "Random pegs krijgen rarity bonus (+0.5x tot +8x); elk niveau +3 pegs",
+      0 },
+    { "Trough Boost",
+      "Elk niveau: alle valbak-multipliers x1.5 extra (stapelt)",
+      0 },
 }};
 
 // ═════════════════════════════════════════════════════════════
@@ -95,19 +93,11 @@ int GameState::chestPegUpgradeCount() const {
     return levelOfChest(ChestUpgradeID::PLINKO_PEG_SIZE) * 3;
 }
 
-float GameState::chestPlinkoBounceMult() const {
-    int lv = levelOfChest(ChestUpgradeID::PLINKO_PEG_BOUNCE);
-    return 1.f + 0.03f * static_cast<float>(lv);
-}
-
-float GameState::chestGunFlatBonus() const {
-    return 1.5f * static_cast<float>(
-        levelOfChest(ChestUpgradeID::GUN_FLAT_DAMAGE));
-}
-
-float GameState::chestOreValueMult() const {
-    return 1.f + 0.02f * static_cast<float>(
-        levelOfChest(ChestUpgradeID::MINING_ORE_VALUE));
+float GameState::chestPlinkoSlotMult() const {
+    const int lv = levelOfChest(ChestUpgradeID::PLINKO_SLOT_MULT);
+    if (lv <= 0)
+        return 1.f;
+    return std::pow(1.5f, static_cast<float>(lv));
 }
 
 int GameState::levelOfChest(ChestUpgradeID id) const {
@@ -167,44 +157,29 @@ int GameState::meteorShowerMeteorCount() const {
     return 10;
 }
 
-bool GameState::buyRandomChestUpgrade(ChestUpgradeID* outPurchased) {
-    ChestUpgradeID opts[8];
+// Elke chest kost precies 1 key (geen tier-prijs).
+bool GameState::openOneChest(ChestUpgradeID* outChosen) {
+    if (keys < 1)
+        return false;
+    ChestUpgradeID opts[static_cast<int>(ChestUpgradeID::CHEST_UPGRADE_COUNT)];
     int            n = 0;
     for (int i = 0; i < static_cast<int>(ChestUpgradeID::CHEST_UPGRADE_COUNT);
          ++i) {
-        auto id = static_cast<ChestUpgradeID>(i);
-        if (canBuyChest(id))
-            opts[n++] = id;
+        auto          id = static_cast<ChestUpgradeID>(i);
+        const auto&   d  = chestCatalog[static_cast<int>(id)];
+        const int     lv = levelOfChest(id);
+        if (d.maxLevel > 0 && lv >= d.maxLevel)
+            continue;
+        opts[n++] = id;
     }
     if (n <= 0)
         return false;
     ChestUpgradeID pick = opts[randInt(0, n - 1)];
-    buyChest(pick);
-    if (outPurchased)
-        *outPurchased = pick;
+    --keys;
+    chestLevels[static_cast<int>(pick)]++;
+    if (outChosen)
+        *outChosen = pick;
     return true;
-}
-
-int GameState::keyCostOf(ChestUpgradeID id) const {
-    const auto& d = chestCatalog[static_cast<int>(id)];
-    int         lv  = levelOfChest(id);
-    if (d.maxLevel > 0 && lv >= d.maxLevel)
-        return INT_MAX;
-    return static_cast<int>(std::ceil(
-        static_cast<double>(d.baseKeyCost)
-        * std::pow(d.keyCostMult, static_cast<double>(lv))));
-}
-
-bool GameState::canBuyChest(ChestUpgradeID id) const {
-    int c = keyCostOf(id);
-    if (c == INT_MAX) return false;
-    return keys >= c;
-}
-
-void GameState::buyChest(ChestUpgradeID id) {
-    if (!canBuyChest(id)) return;
-    keys -= keyCostOf(id);
-    chestLevels[static_cast<int>(id)]++;
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -219,8 +194,7 @@ int GameState::oreWarpRequirement() const {
 // ═════════════════════════════════════════════════════════════
 float GameState::gunDamage() const {
     return (10.f + levelOf(UpgradeID::GUN_DAMAGE) * 8.f)
-           * _crystalDamageBonus()
-           + chestGunFlatBonus();
+           * _crystalDamageBonus();
 }
 
 float GameState::fireRatePerSec() const {
@@ -245,8 +219,7 @@ int GameState::splitShot() const {
 
 float GameState::oreValueMult() const {
     return (1.f + levelOf(UpgradeID::ORE_VALUE) * 0.2f)
-           * _crystalMiningBonus()
-           * chestOreValueMult();
+           * _crystalMiningBonus();
 }
 
 float GameState::autoCollectRadius() const {
@@ -274,6 +247,12 @@ int GameState::maxPlinkoBalls() const {
 
 float GameState::plinkoLuck() const {
     return levelOf(UpgradeID::PLINKO_LUCK) * 0.05f;
+}
+
+double GameState::plinkoBallOreCost() const {
+    const double o = std::max(0.0, ore);
+    const double extra = std::max(0.0, o - 5000.0);
+    return 1.0 + std::min(3.0, extra / 12000.0);
 }
 
 float GameState::creditMult() const {
@@ -559,8 +538,16 @@ bool GameState::load(const std::string& path) {
            prestigeLevels.size() * sizeof(int));
     chestLevels.fill(0);
     if (ver >= 7) {
-        f.read(reinterpret_cast<char*>(chestLevels.data()),
-               chestLevels.size() * sizeof(int));
+        if (ver >= 10) {
+            f.read(reinterpret_cast<char*>(chestLevels.data()),
+                   chestLevels.size() * sizeof(int));
+        } else {
+            std::array<int, 4> oldChest{};
+            f.read(reinterpret_cast<char*>(oldChest.data()),
+                   oldChest.size() * sizeof(int));
+            chestLevels[0] = oldChest[0];
+            chestLevels[1] = oldChest[1];
+        }
     }
     nextBossMilestone = 3;
     if (ver >= 8)

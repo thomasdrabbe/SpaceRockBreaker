@@ -26,7 +26,8 @@ public:
                 int&             keysOut,
                 ParticleSystem&  particles);
 
-    void draw(sf::RenderTarget& target) const;
+    void draw(sf::RenderTarget& target,
+              const sf::Texture* keyIconTex = nullptr) const;
 
     int aliveCount() const { return m_alive; }
 

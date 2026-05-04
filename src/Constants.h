@@ -14,9 +14,7 @@ constexpr int TAB_COUNT = 5;
 // ─── Chest upgrades (keys, permanent; blijven bij prestige) ──
 enum class ChestUpgradeID {
     PLINKO_PEG_SIZE = 0,
-    PLINKO_PEG_BOUNCE,
-    GUN_FLAT_DAMAGE,
-    MINING_ORE_VALUE,
+    PLINKO_SLOT_MULT,
     CHEST_UPGRADE_COUNT
 };
 
@@ -117,7 +115,7 @@ constexpr float TAB_BAR_H    = 46.f;
 // ─── Save ─────────────────────────────────────────────────────
 const std::string SAVE_FILE = "srb_save.bin"; // legacy (wordt naar slot 0 gemigreerd)
 constexpr int     SAVE_SLOT_COUNT = 3;
-constexpr int     SAVE_VERSION    = 9;
+constexpr int     SAVE_VERSION    = 11;
 
 // ─── Nieuwe spel-moeilijkheid ─────────────────────────────────
 enum class Difficulty {

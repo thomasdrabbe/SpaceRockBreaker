@@ -4,6 +4,7 @@
 #include <sstream>
 #include <iomanip>
 #include <cmath>
+#include <algorithm>
 
 namespace {
 
@@ -13,14 +14,53 @@ uint64_t floatBits64(float f) {
     return static_cast<uint64_t>(u);
 }
 
-int affordableChestCount(const GameState& state) {
-    int n = 0;
+bool chestPoolHasRoom(const GameState& state) {
     for (int i = 0; i < static_cast<int>(ChestUpgradeID::CHEST_UPGRADE_COUNT);
          ++i) {
-        if (state.canBuyChest(static_cast<ChestUpgradeID>(i)))
-            ++n;
+        const auto& d = GameState::chestCatalog[i];
+        if (d.maxLevel <= 0
+            || state.levelOfChest(static_cast<ChestUpgradeID>(i)) < d.maxLevel)
+            return true;
     }
-    return n;
+    return false;
+}
+
+bool canOpenOneChest(const GameState& state) {
+    return state.keys >= 1 && chestPoolHasRoom(state);
+}
+
+void drawMiniChest(sf::RenderTarget& target, sf::Vector2f c, float s,
+                   const sf::Texture* chestTex) {
+    if (chestTex && chestTex->getSize().x > 0u) {
+        sf::Sprite spr(*chestTex);
+        const sf::Vector2u tsz = chestTex->getSize();
+        const float          side = s * 1.05f;
+        const float          sc =
+            side / std::max(1.f, static_cast<float>(std::max(tsz.x, tsz.y)));
+        spr.setOrigin({ tsz.x * 0.5f, tsz.y * 0.5f });
+        spr.setPosition(c);
+        spr.setScale({ sc, sc });
+        target.draw(spr);
+        return;
+    }
+    sf::RectangleShape base(sf::Vector2f{ s * 0.72f, s * 0.5f });
+    base.setOrigin({ base.getSize().x * 0.5f, base.getSize().y * 0.5f });
+    base.setPosition(c + sf::Vector2f(0.f, s * 0.08f));
+    base.setFillColor(sf::Color(95, 62, 38));
+    base.setOutlineColor(sf::Color(210, 170, 90, 200));
+    base.setOutlineThickness(1.f);
+    target.draw(base);
+    sf::ConvexShape lid;
+    lid.setPointCount(4);
+    lid.setPoint(0, { -s * 0.38f, 0.f });
+    lid.setPoint(1, { 0.f, -s * 0.28f });
+    lid.setPoint(2, { s * 0.38f, 0.f });
+    lid.setPoint(3, { 0.f, -s * 0.12f });
+    lid.setPosition(c + sf::Vector2f(0.f, -s * 0.12f));
+    lid.setFillColor(sf::Color(120, 78, 48));
+    lid.setOutlineColor(sf::Color(255, 215, 130, 220));
+    lid.setOutlineThickness(1.f);
+    target.draw(lid);
 }
 
 } // namespace
@@ -30,13 +70,15 @@ ChestScreen::ChestScreen() {}
 void ChestScreen::init(sf::Font& font,
                        float panelX, float panelY,
                        float panelW, float panelH,
-                       float scale) {
-    m_font  = &font;
-    m_x     = panelX;
-    m_y     = panelY;
-    m_w     = panelW;
-    m_h     = panelH;
-    m_scale = scale;
+                       float scale,
+                       const sf::Texture* chestTex) {
+    m_font     = &font;
+    m_x        = panelX;
+    m_y        = panelY;
+    m_w        = panelW;
+    m_h        = panelH;
+    m_scale    = scale;
+    m_chestTex = chestTex;
 
     m_cardMargin = std::round(10.f * m_scale);
     m_cardPad    = std::round(12.f * m_scale);
@@ -63,15 +105,16 @@ uint64_t ChestScreen::layoutFingerprint(const GameState& state) const {
     mix(floatBits64(m_lootBtn.position.y));
     mix(floatBits64(m_lootBtn.size.x));
     mix(floatBits64(m_lootBtn.size.y));
+    mix(static_cast<uint64_t>(m_overlayPlaying ? 1u : 0u));
+    mix(static_cast<uint64_t>(m_chestTex ? 1u : 0u));
     return h;
 }
 
 void ChestScreen::rebuildLayout(const GameState& state) {
-    const float headerH = std::round(52.f * m_scale);
-    const float btnW    = std::min(m_w - m_cardMargin * 2.f, 420.f);
-    const float btnH    = std::round(56.f * m_scale);
-    const float bx      = m_x + (m_w - btnW) * 0.5f;
-    const float by      = m_y + m_h - btnH - m_cardMargin - std::round(20.f * m_scale);
+    const float btnW = std::min(m_w - m_cardMargin * 2.f, 440.f);
+    const float btnH = std::round(56.f * m_scale);
+    const float bx   = m_x + (m_w - btnW) * 0.5f;
+    const float by   = m_y + m_h - btnH - m_cardMargin - std::round(18.f * m_scale);
 
     m_lootBtn = sf::FloatRect({ bx, by }, { btnW, btnH });
     m_layoutFp = layoutFingerprint(state);
@@ -79,14 +122,18 @@ void ChestScreen::rebuildLayout(const GameState& state) {
 
 bool ChestScreen::handleEvent(const sf::Event& event, GameState& state,
                               const sf::RenderWindow& window,
+                              bool chestOverlayBlocking,
                               ChestUpgradeID* outPurchased) {
+    if (chestOverlayBlocking)
+        return false;
+
     if (const auto* e = event.getIf<sf::Event::MouseButtonPressed>()) {
         if (e->button == sf::Mouse::Button::Left) {
             sf::Vector2f mp = mapPixelToUi(window, sf::Vector2i(e->position));
 
             if (m_lootBtn.contains(mp)) {
                 ChestUpgradeID got{};
-                if (state.buyRandomChestUpgrade(&got)) {
+                if (state.openOneChest(&got)) {
                     if (outPurchased)
                         *outPurchased = got;
                     rebuildLayout(state);
@@ -99,12 +146,15 @@ bool ChestScreen::handleEvent(const sf::Event& event, GameState& state,
     return false;
 }
 
-void ChestScreen::update(sf::Vector2f mousePos, const GameState& state) {
+void ChestScreen::update(float dt, sf::Vector2f mousePos,
+                         const GameState& state, bool chestOverlayPlaying) {
+    (void)dt;
+    m_overlayPlaying = chestOverlayPlaying;
     const uint64_t fp = layoutFingerprint(state);
     if (fp != m_layoutFp)
         rebuildLayout(state);
-    m_lootHovered =
-        m_lootBtn.contains(mousePos) && affordableChestCount(state) > 0;
+    m_lootHovered = m_lootBtn.contains(mousePos) && canOpenOneChest(state)
+                    && !m_overlayPlaying;
 }
 
 void ChestScreen::scrollBy(float /*delta*/) {}
@@ -115,20 +165,10 @@ std::string ChestScreen::formatEffect(ChestUpgradeID id,
         case ChestUpgradeID::PLINKO_PEG_SIZE:
             return "Peg rolls: "
                 + std::to_string(state.chestPegUpgradeCount());
-        case ChestUpgradeID::PLINKO_PEG_BOUNCE:
-            return "Bounce: "
+        case ChestUpgradeID::PLINKO_SLOT_MULT:
+            return "Alle valbak-waarden x"
                 + formatBig(static_cast<double>(
-                      state.chestPlinkoBounceMult()))
-                + "x";
-        case ChestUpgradeID::GUN_FLAT_DAMAGE:
-            return "Flat dmg: +"
-                + formatBig(static_cast<double>(
-                      state.chestGunFlatBonus()));
-        case ChestUpgradeID::MINING_ORE_VALUE:
-            return "Ore mult: "
-                + formatBig(static_cast<double>(
-                      state.chestOreValueMult()))
-                + "x";
+                      state.chestPlinkoSlotMult()));
         default:
             return "";
     }
@@ -158,7 +198,8 @@ void ChestScreen::draw(sf::RenderTarget& target,
     target.draw(title);
 
     std::ostringstream ks;
-    ks << "Keys: " << state.keys;
+    ks << "Keys: " << state.keys
+       << "  |  elke chest kost altijd precies 1 key";
     sf::Text sub(*m_font);
     sub.setCharacterSize(fSub);
     sub.setString(ks.str());
@@ -172,28 +213,46 @@ void ChestScreen::draw(sf::RenderTarget& target,
     target.draw(sep);
 
     float ty = m_y + headerH + m_cardMargin;
-    const int affordN = affordableChestCount(state);
+
+    {
+        const int nk = std::max(0, state.keys);
+        const int show = std::min(nk, 28);
+        const float sp = std::round(30.f * m_scale);
+        float       x0 = m_x + m_cardMargin;
+        const float yc = ty + sp * 0.55f;
+        for (int i = 0; i < show; ++i)
+            drawMiniChest(target, { x0 + sp * 0.5f + i * sp, yc }, sp * 0.85f,
+                          m_chestTex);
+        if (nk > show) {
+            sf::Text more(*m_font);
+            more.setCharacterSize(fSmall);
+            more.setString("+" + std::to_string(nk - show));
+            more.setFillColor(sf::Color(180, 170, 140));
+            more.setPosition({ x0 + sp * 0.5f + show * sp + 4.f, yc - fSmall * 0.35f });
+            target.draw(more);
+        }
+        ty += sp * 1.15f + std::round(8.f * m_scale);
+    }
+
+    sf::Text costNote(*m_font);
+    costNote.setCharacterSize(fBody);
+    costNote.setString(
+        "Niveaus hieronder = upgrade-voortgang (geen stijgende key-prijs).");
+    costNote.setFillColor(sf::Color(140, 165, 210));
+    costNote.setPosition({ m_x + m_cardMargin, ty });
+    target.draw(costNote);
+    ty += fBody + std::round(10.f * m_scale);
 
     sf::Text hint(*m_font);
     hint.setCharacterSize(fBody);
-    if (affordN <= 0) {
-        bool anyOpen = false;
-        for (int i = 0; i < static_cast<int>(ChestUpgradeID::CHEST_UPGRADE_COUNT);
-             ++i) {
-            const auto id = static_cast<ChestUpgradeID>(i);
-            const auto& d = GameState::chestCatalog[static_cast<int>(id)];
-            if (d.maxLevel <= 0 || state.levelOfChest(id) < d.maxLevel) {
-                anyOpen = true;
-                break;
-            }
-        }
-        hint.setString(anyOpen ? "Niet genoeg keys voor een upgrade."
-                               : "Alle chest-upgrades zijn op max level.");
+    if (!chestPoolHasRoom(state)) {
+        hint.setString("Alle chest-bonussen zijn op maximum.");
         hint.setFillColor(sf::Color(180, 140, 120));
+    } else if (state.keys < 1) {
+        hint.setString("Geen keys - versla de sleutel-asteroide in een run.");
+        hint.setFillColor(sf::Color(180, 150, 130));
     } else {
-        hint.setString(
-            "Open een chest: je krijgt een willekeurige upgrade waar je "
-            "keys voor hebt (normale key-prijs).");
+        hint.setString("Willekeurige permanente bonus (na prestige behouden).");
         hint.setFillColor(sf::Color(160, 175, 210));
     }
     hint.setPosition({ m_x + m_cardMargin, ty });
@@ -209,14 +268,14 @@ void ChestScreen::draw(sf::RenderTarget& target,
             def.maxLevel > 0 && lv >= def.maxLevel;
 
         std::ostringstream line;
-        line << def.name << "  [Lv " << lv;
+        line << def.name << "  |  niveau " << lv;
+        if (def.maxLevel > 0)
+            line << " / " << def.maxLevel;
         if (maxed)
-            line << " MAX]";
-        else
-            line << "]  -  " << state.keyCostOf(id) << " keys";
+            line << "  (MAX)";
         std::string fx = formatEffect(id, state);
         if (!fx.empty())
-            line << "   (" << fx << ")";
+            line << "  |  " << fx;
 
         sf::Text row(*m_font);
         row.setCharacterSize(fSmall);
@@ -225,10 +284,19 @@ void ChestScreen::draw(sf::RenderTarget& target,
                                : sf::Color(190, 200, 225));
         row.setPosition({ m_x + m_cardMargin, ty });
         target.draw(row);
-        ty += fSmall + std::round(5.f * m_scale);
+        ty += fSmall + std::round(4.f * m_scale);
+
+        sf::Text desc(*m_font);
+        desc.setCharacterSize(static_cast<unsigned>(
+            std::max(10, static_cast<int>(fSmall) - 1)));
+        desc.setString(def.description);
+        desc.setFillColor(sf::Color(130, 140, 165));
+        desc.setPosition({ m_x + m_cardMargin + std::round(8.f * m_scale), ty });
+        target.draw(desc);
+        ty += fSmall + std::round(6.f * m_scale);
     }
 
-    const bool canLoot = affordN > 0;
+    const bool canLoot = canOpenOneChest(state) && !m_overlayPlaying;
     sf::RectangleShape btn(sf::Vector2f{ m_lootBtn.size.x, m_lootBtn.size.y });
     btn.setPosition(m_lootBtn.position);
     btn.setFillColor(canLoot && m_lootHovered
@@ -242,8 +310,14 @@ void ChestScreen::draw(sf::RenderTarget& target,
     sf::Text lootLbl(*m_font);
     lootLbl.setCharacterSize(static_cast<unsigned>(std::round(17.f * m_scale)));
     lootLbl.setStyle(sf::Text::Bold);
-    lootLbl.setString(canLoot ? "OPEN CHEST (willekeurige upgrade)"
-                              : "Geen loot beschikbaar");
+    if (m_overlayPlaying)
+        lootLbl.setString("Even geduld…");
+    else if (canLoot)
+        lootLbl.setString("OPEN CHEST  (1 key)");
+    else if (!chestPoolHasRoom(state))
+        lootLbl.setString("Geen chests meer");
+    else
+        lootLbl.setString("Geen keys");
     lootLbl.setFillColor(canLoot ? sf::Color(255, 235, 160)
                                  : sf::Color(120, 115, 105));
     auto lb = lootLbl.getLocalBounds();

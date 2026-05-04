@@ -34,7 +34,8 @@ public:
 
     void init(sf::Font& font,
               float panelX, float panelY,
-              float panelW, float panelH);
+              float panelW, float panelH,
+              const sf::Texture* keyIconTex = nullptr);
 
     /// creditsEarned : credits verdiend via Plinko (niet hier)
     /// oreEarned     : ore opgepakt deze frame
@@ -75,8 +76,9 @@ public:
     ParticleSystem& particles() { return m_particles; }
 
 private:
-    sf::Font*     m_font = nullptr;
-    sf::Texture   m_playerShipTex;
+    sf::Font*          m_font = nullptr;
+    const sf::Texture* m_keyIconTex = nullptr;
+    sf::Texture        m_playerShipTex;
     float        m_x    = 0.f;
     float        m_y    = 0.f;
     float        m_w    = 0.f;

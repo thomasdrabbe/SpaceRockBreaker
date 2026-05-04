@@ -4,6 +4,13 @@
 #include <string>
 #include <sstream>
 #include <iomanip>
+#include <filesystem>
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 #include <SFML/System/Vector2.hpp>
 #include <SFML/Graphics/Rect.hpp>
 #include <SFML/Graphics/RenderWindow.hpp>
@@ -132,4 +139,50 @@ inline sf::Vector2f mapPixelToUi(const sf::RenderWindow& w, sf::Vector2i px) {
     const float        fh = sz.y > 0 ? static_cast<float>(sz.y) : 1.f;
     const sf::View     ui(sf::FloatRect({ 0.f, 0.f }, { fw, fh }));
     return w.mapPixelToCoords(px, ui);
+}
+
+// ─────────────────────────────────────────────────────────────
+//  Asset paden — altijd eerst naast de .exe (Release/Debug),
+//  daarna cwd / ../ (ontwikkelen vanuit IDE).
+// ─────────────────────────────────────────────────────────────
+inline std::string applicationDirectory() {
+#if defined(_WIN32)
+    char buf[MAX_PATH];
+    DWORD n = GetModuleFileNameA(nullptr, buf, MAX_PATH);
+    if (n == 0 || n >= MAX_PATH)
+        return {};
+    std::string s(buf, buf + n);
+    const auto slash = s.find_last_of("\\/");
+    if (slash == std::string::npos)
+        return {};
+    s.resize(slash);
+    return s;
+#else
+    (void)0;
+    return {};
+#endif
+}
+
+inline std::string resolveAssetPath(const std::string& rel) {
+    namespace fs = std::filesystem;
+    auto isFile = [](const std::string& p) {
+        std::error_code ec;
+        return fs::is_regular_file(fs::path(p), ec);
+    };
+    if (isFile(rel))
+        return rel;
+    if (isFile("../" + rel))
+        return "../" + rel;
+    if (isFile("../../" + rel))
+        return "../../" + rel;
+    const std::string app = applicationDirectory();
+    if (!app.empty()) {
+        const std::string p1 = app + "/" + rel;
+        if (isFile(p1))
+            return p1;
+        const std::string p2 = app + "/../" + rel;
+        if (isFile(p2))
+            return p2;
+    }
+    return rel;
 }

@@ -12,12 +12,15 @@ public:
     void init(sf::Font& font,
               float panelX, float panelY,
               float panelW, float panelH,
-              float scale = 1.f);
+              float scale = 1.f,
+              const sf::Texture* chestTex = nullptr);
 
     bool handleEvent(const sf::Event& event, GameState& state,
                      const sf::RenderWindow& window,
-                     ChestUpgradeID* outPurchased = nullptr);
-    void update(sf::Vector2f mousePos, const GameState& state);
+                     bool              chestOverlayBlocking,
+                     ChestUpgradeID*   outPurchased = nullptr);
+    void update(float dt, sf::Vector2f mousePos, const GameState& state,
+                bool chestOverlayPlaying);
     void draw(sf::RenderTarget& target, const GameState& state) const;
     void scrollBy(float delta);
 
@@ -34,6 +37,9 @@ private:
 
     sf::FloatRect m_lootBtn{};
     bool          m_lootHovered = false;
+    bool          m_overlayPlaying = false;
+
+    const sf::Texture* m_chestTex = nullptr;
 
     uint64_t m_layoutFp = 0;
 
