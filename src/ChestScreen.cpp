@@ -30,14 +30,29 @@ bool canOpenOneChest(const GameState& state) {
 }
 
 void drawMiniChest(sf::RenderTarget& target, sf::Vector2f c, float s,
-                   const sf::Texture* chestTex) {
+                   const sf::Texture* chestTex, float animT, int index) {
     if (chestTex && chestTex->getSize().x > 0u) {
-        sf::Sprite spr(*chestTex);
         const sf::Vector2u tsz = chestTex->getSize();
-        const float          side = s * 1.05f;
-        const float          sc =
-            side / std::max(1.f, static_cast<float>(std::max(tsz.x, tsz.y)));
-        spr.setOrigin({ tsz.x * 0.5f, tsz.y * 0.5f });
+        const float          bob =
+            std::sin(animT * 2.1f + static_cast<float>(index) * 0.58f) * (s * 0.08f);
+        c.y += bob;
+
+        sf::Sprite         spr(*chestTex);
+        const sf::Vector2u fpx = chestSheetFrameSize(tsz);
+        const bool         sheet = chestTexIsAnimatedSheet(tsz);
+        if (sheet) {
+            const unsigned idleRow = 0;
+            const int      idleCol =
+                static_cast<int>(animT * 1.15f + static_cast<float>(index) * 0.31f)
+                % static_cast<int>(CHEST_SHEET_COLS);
+            spr.setTextureRect(
+                chestSheetFrameRect(fpx, static_cast<unsigned>(idleCol), idleRow));
+        }
+        const float tw = sheet ? static_cast<float>(fpx.x) : static_cast<float>(tsz.x);
+        const float th = sheet ? static_cast<float>(fpx.y) : static_cast<float>(tsz.y);
+        const float side = s * 1.05f;
+        const float sc   = side / std::max(1.f, std::max(tw, th));
+        spr.setOrigin({ tw * 0.5f, th * 0.5f });
         spr.setPosition(c);
         spr.setScale({ sc, sc });
         target.draw(spr);
@@ -148,7 +163,7 @@ bool ChestScreen::handleEvent(const sf::Event& event, GameState& state,
 
 void ChestScreen::update(float dt, sf::Vector2f mousePos,
                          const GameState& state, bool chestOverlayPlaying) {
-    (void)dt;
+    m_chestAnimT += dt;
     m_overlayPlaying = chestOverlayPlaying;
     const uint64_t fp = layoutFingerprint(state);
     if (fp != m_layoutFp)
@@ -169,6 +184,9 @@ std::string ChestScreen::formatEffect(ChestUpgradeID id,
             return "Alle valbak-waarden x"
                 + formatBig(static_cast<double>(
                       state.chestPlinkoSlotMult()));
+        case ChestUpgradeID::PLINKO_DUPLICATOR_PEG:
+            return "Duplicator rolls: "
+                + std::to_string(state.chestDuplicatorRollCount());
         default:
             return "";
     }
@@ -222,7 +240,7 @@ void ChestScreen::draw(sf::RenderTarget& target,
         const float yc = ty + sp * 0.55f;
         for (int i = 0; i < show; ++i)
             drawMiniChest(target, { x0 + sp * 0.5f + i * sp, yc }, sp * 0.85f,
-                          m_chestTex);
+                          m_chestTex, m_chestAnimT, i);
         if (nk > show) {
             sf::Text more(*m_font);
             more.setCharacterSize(fSmall);

@@ -100,11 +100,10 @@ void drawPanelKey(sf::RenderTarget& rw, float cx, float cy, float s,
 //  Constructor
 // ═════════════════════════════════════════════════════════════
 Game::Game()
-    : m_window(
-        sf::VideoMode::getDesktopMode(),
-        WINDOW_TITLE)
+    : m_window(sf::VideoMode::getDesktopMode(),
+               sf::String{WINDOW_TITLE},
+               sf::State::Fullscreen)
 {
-    m_window.setPosition(sf::Vector2i(0, 0));
     m_window.setFramerateLimit(TARGET_FPS);
 
     const bool notoOk =
@@ -132,21 +131,23 @@ Game::Game()
     if (m_keyTexLoaded)
         m_keyTex.setSmooth(true);
 
-    m_chestTexLoaded =
-        m_chestTex.loadFromFile(resolveAssetPath("assets/chest.png"));
-    if (m_chestTexLoaded)
-        m_chestTex.setSmooth(true);
+    m_chestTexLoaded = m_chestTex.loadFromFile(
+        resolveAssetPath("assets/Animated Chests/Chests.png"));
+    if (!m_chestTexLoaded)
+        m_chestTexLoaded =
+            m_chestTex.loadFromFile(resolveAssetPath("assets/chest.png"));
+    if (m_chestTexLoaded) {
+        const bool sheet = chestTexIsAnimatedSheet(m_chestTex.getSize());
+        m_chestTex.setSmooth(!sheet);
+    }
 
     reinitSystems();
 
     migrateLegacySaveIfNeeded();
     gSfx.init();
 
-    m_saveSlot = 0;
-    if (m_state.load(currentSavePath())) {
-        pushNotif("Save automatisch geladen (slot 1).",
-                  sf::Color(100, 220, 120));
-    }
+    m_saveSlot           = 0;
+    m_diskSessionActive  = false;
 
     m_plinko.resetGoldenPegRarityState();
     rebuildPlinko();
@@ -208,7 +209,8 @@ void Game::run() {
         update(dt);
         render();
     }
-    m_state.save(currentSavePath());
+    if (m_diskSessionActive)
+        m_state.save(currentSavePath());
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -217,7 +219,7 @@ void Game::run() {
 void Game::processEvents() {
     while (const std::optional event = m_window.pollEvent()) {
 
-        if (m_activeTab == Tab::SHOP) {
+        if (!m_showMainMenu && m_activeTab == Tab::SHOP) {
             bool bought = m_shop.handleEvent(*event, m_state, m_window);
             if (bought) {
                 m_mining.syncTurrets(m_state);
@@ -225,7 +227,7 @@ void Game::processEvents() {
                 pushNotif("Upgrade gekocht!", sf::Color(120, 220, 255));
             }
         }
-        if (m_activeTab == Tab::CHESTS) {
+        if (!m_showMainMenu && m_activeTab == Tab::CHESTS) {
             ChestUpgradeID chestGot{};
             bool           bought = m_chest.handleEvent(
                 *event, m_state, m_window, m_chestOverlayAnim > 0.f, &chestGot);
@@ -233,6 +235,7 @@ void Game::processEvents() {
                 m_mining.syncTurrets(m_state);
                 rebuildPlinko();
                 gSfx.play(Sfx::ChestOpen);
+                gSfx.play(Sfx::LevelUp);
                 m_chestLootSfxPending = true;
                 m_chestOverlayAnim = CHEST_OVERLAY_SEC;
                 const auto& cn =
@@ -246,7 +249,8 @@ void Game::processEvents() {
         }
 
         if (event->is<sf::Event::Closed>()) {
-            m_state.save(currentSavePath());
+            if (m_diskSessionActive)
+                m_state.save(currentSavePath());
             m_window.close();
         }
         else if (event->is<sf::Event::Resized>()) {
@@ -314,7 +318,28 @@ void Game::update(float dt) {
         m_chestLootSfxPending = false;
     if (m_warpFlashRemain > 0.f)
         m_warpFlashRemain = std::max(0.f, m_warpFlashRemain - dt);
+
+    const bool bossLiveForAudio = !m_showMainMenu
+                                  && m_runMode == RunMode::RUNNING
+                                  && m_mining.hasLivingBoss();
+
+    if (!m_showMainMenu)
+        gSfx.syncBossMusic(bossLiveForAudio);
+    else
+        gSfx.syncBossMusic(false);
+
+    gSfx.syncMainMenuMusic(m_showMainMenu);
+
+    const bool miningBgmActive =
+        !m_showMainMenu && m_activeTab == Tab::MINING && !m_paused;
+    gSfx.syncMiningAmbientMusic(miningBgmActive, bossLiveForAudio);
+
     if (m_paused) return;
+
+    if (m_showMainMenu) {
+        updateNotifs(dt);
+        return;
+    }
 
     double creditsEarned = 0.0;
     double oreEarned     = 0.0;
@@ -354,7 +379,8 @@ void Game::update(float dt) {
                     40.f, sf::Color(255, 80, 60), 30);
 
                 if (m_state.isGameOver()) {
-                    gSfx.play(Sfx::GameOver);
+                    if (!gSfx.playGameOverMusicOnce())
+                        gSfx.play(Sfx::GameOver);
                     m_state.gameOver();
                     m_mining.clearAll();
                     m_mining.syncTurrets(m_state);
@@ -491,7 +517,7 @@ void Game::update(float dt) {
     updateNotifs(dt);
 
     m_saveTimer += dt;
-    if (m_saveTimer >= SAVE_INTERVAL) {
+    if (m_diskSessionActive && m_saveTimer >= SAVE_INTERVAL) {
         m_saveTimer = 0.f;
         m_state.save(currentSavePath());
     }
@@ -501,19 +527,23 @@ void Game::update(float dt) {
     static float lastLuck    = -1.f;
     static int   lastPegUp   = -1;
     static float lastSlotChest = -1.f;
+    static int   lastDupRolls  = -1;
     int   rows  = m_state.plinkoRows();
     float bonus = m_state.plinkoMultBonus();
     float luck  = m_state.plinkoLuck();
     int   pegUp = m_state.chestPegUpgradeCount();
+    int   dupUp = m_state.chestDuplicatorRollCount();
     float slotChest = m_state.chestPlinkoSlotMult();
     if (rows != lastRows || bonus != lastBonus || luck != lastLuck
-        || pegUp != lastPegUp || slotChest != lastSlotChest) {
+        || pegUp != lastPegUp || slotChest != lastSlotChest
+        || dupUp != lastDupRolls) {
         rebuildPlinko();
         lastRows  = rows;
         lastBonus = bonus;
         lastLuck  = luck;
         lastPegUp = pegUp;
         lastSlotChest = slotChest;
+        lastDupRolls  = dupUp;
     }
 }
 
@@ -535,25 +565,44 @@ void Game::drawChestOpenOverlay() {
     const float s  = std::min(W, H) * 0.42f;
 
     if (m_chestTexLoaded && m_chestTex.getSize().x > 0u) {
-        // Geen horizontale texture-split: bij 3D/isometrische art snijdt dat diagonaal
-        // door de kist. Hele sprite licht achterover (pivot onderaan).
         const sf::Vector2u tsz = m_chestTex.getSize();
-        const unsigned     tw = tsz.x;
-        const unsigned     th = tsz.y;
         const float        target = std::min(W, H) * 0.52f;
         const float        pop    = 0.86f + 0.14f * open01;
-        const float        sc =
-            (target
-             / std::max(1.f, static_cast<float>(std::max(tw, th))))
-            * pop;
 
-        sf::Sprite spr(m_chestTex);
-        const float pivotY = static_cast<float>(th) * 0.9f;
-        spr.setOrigin({ static_cast<float>(tw) * 0.5f, pivotY });
-        spr.setPosition({ cx, cy + static_cast<float>(th) * sc * 0.06f });
-        spr.setScale({ sc, sc });
-        spr.setRotation(sf::degrees(-16.f * open01));
-        m_window.draw(spr);
+        if (chestTexIsAnimatedSheet(tsz)) {
+            const sf::Vector2u fpx    = chestSheetFrameSize(tsz);
+            const unsigned     openRow = 1;
+            const int col =
+                std::min(4, static_cast<int>(std::floor(open01 * 5.f - 1e-4f)));
+            sf::Sprite spr(m_chestTex);
+            spr.setTextureRect(
+                chestSheetFrameRect(fpx, static_cast<unsigned>(col), openRow));
+            const float tw = static_cast<float>(fpx.x);
+            const float th = static_cast<float>(fpx.y);
+            const float sc =
+                (target / std::max(1.f, std::max(tw, th))) * pop;
+            const float pivotY = th * 0.88f;
+            spr.setOrigin({ tw * 0.5f, pivotY });
+            spr.setPosition({ cx, cy + th * sc * 0.06f });
+            spr.setScale({ sc, sc });
+            m_window.draw(spr);
+        } else {
+            // Legacy: enkel frame; kantelt als “deksel” (geen sheet-split).
+            const unsigned tw = tsz.x;
+            const unsigned th = tsz.y;
+            const float    sc =
+                (target
+                 / std::max(1.f, static_cast<float>(std::max(tw, th))))
+                * pop;
+
+            sf::Sprite spr(m_chestTex);
+            const float pivotY = static_cast<float>(th) * 0.9f;
+            spr.setOrigin({ static_cast<float>(tw) * 0.5f, pivotY });
+            spr.setPosition({ cx, cy + static_cast<float>(th) * sc * 0.06f });
+            spr.setScale({ sc, sc });
+            spr.setRotation(sf::degrees(-16.f * open01));
+            m_window.draw(spr);
+        }
     } else {
         sf::RectangleShape base(sf::Vector2f{ s * 0.72f, s * 0.5f });
         base.setOrigin({ base.getSize().x * 0.5f, base.getSize().y * 0.5f });
@@ -683,6 +732,15 @@ void Game::render() {
 // ═════════════════════════════════════════════════════════════
 void Game::onMouseClick(sf::Vector2f pos, sf::Mouse::Button btn) {
     if (btn != sf::Mouse::Button::Left) return;
+    // Alleen skippen ná minstens één update-tick: dezelfde klik die de chest
+    // opent zet eerst m_chestOverlayAnim = CHEST_OVERLAY_SEC en roept daarna
+    // onMouseClick aan — dan nog niet skippen.
+    if (m_chestOverlayAnim > 0.f
+        && m_chestOverlayAnim < CHEST_OVERLAY_SEC - 1e-4f) {
+        m_chestOverlayAnim    = 0.f;
+        m_chestLootSfxPending = false;
+        return;
+    }
     if (m_paused) {
           switch (pauseButtonAt(pos)) {
               case PauseButton::RESUME:
@@ -697,6 +755,7 @@ void Game::onMouseClick(sf::Vector2f pos, sf::Mouse::Button btn) {
               case PauseButton::MAIN_MENU:
                   gSfx.play(Sfx::UiClick);
                   m_state.save(currentSavePath());
+                  gSfx.stopGameOverMusic();
                   m_showMainMenu           = true;
                   m_mainMenuPickDifficulty = false;
                   m_paused                 = false;
@@ -731,6 +790,7 @@ void Game::onMouseClick(sf::Vector2f pos, sf::Mouse::Button btn) {
             gSfx.play(Sfx::UiClick);
             if (m_state.lives <= 0)
                 m_state.lives = m_state.maxLives();
+            gSfx.stopGameOverMusic();
             m_runMode = RunMode::RUNNING;
             m_mining.prepareNewRun();
             m_mining.syncTurrets(m_state);
@@ -765,7 +825,7 @@ void Game::onMouseScroll(float delta, sf::Vector2f /*pos*/) {
 void Game::onKeyPress(sf::Keyboard::Key key, bool ctrl, bool shift) {
     using K = sf::Keyboard::Key;
 
-    // Dev: Ctrl+Shift+C = +1 000 000 credits & +100 keys
+    // Dev: Ctrl+Shift+C = +1 000 000 credits & +100 keys (ook vóór main menu)
     if (ctrl && shift && key == K::C) {
         constexpr double add = 1'000'000.0;
         m_state.credits += add;
@@ -775,6 +835,15 @@ void Game::onKeyPress(sf::Keyboard::Key key, bool ctrl, bool shift) {
         pushNotif("+" + formatBig(add) + " credits",
                   sf::Color(120, 255, 160));
         pushNotif("+100 keys", sf::Color(255, 220, 140));
+        return;
+    }
+
+    if (m_showMainMenu) {
+        if (key == K::M) {
+            gSfx.setMuted(!gSfx.isMuted());
+            pushNotif(gSfx.isMuted() ? "Geluid uit" : "Geluid aan",
+                      sf::Color(160, 200, 255));
+        }
         return;
     }
 
@@ -798,9 +867,11 @@ void Game::onKeyPress(sf::Keyboard::Key key, bool ctrl, bool shift) {
             break;
 
         case K::P:
-            m_state.save(currentSavePath());
-            gSfx.play(Sfx::UiClick);
-            pushNotif("Opgeslagen.", sf::Color(100, 220, 120));
+            if (m_diskSessionActive) {
+                m_state.save(currentSavePath());
+                gSfx.play(Sfx::UiClick);
+                pushNotif("Opgeslagen.", sf::Color(100, 220, 120));
+            }
             break;
 
         case K::M:
@@ -1308,6 +1379,8 @@ void Game::rebuildPlinko() {
                    m_scale, pegR, 1.f, m_state.chestPlinkoSlotMult());
     m_plinko.syncGoldenPegChestRarities(
         m_state.levelOfChest(ChestUpgradeID::PLINKO_PEG_SIZE));
+    m_plinko.syncDuplicatorPegChestRarities(
+        m_state.levelOfChest(ChestUpgradeID::PLINKO_DUPLICATOR_PEG));
 }
 
 void Game::drawPlinkoTab() const {
@@ -1333,6 +1406,14 @@ void Game::drawPlinkoTab() const {
     drawText(os.str(), m_cntX + 16.f, statusY, fs, sf::Color(170, 225, 110));
     drawText(bs.str(), m_cntX + 16.f, statusY + fs + 4.f, fs,
              sf::Color(150, 130, 195));
+    if (m_state.chestDuplicatorRollCount() > 0) {
+        const float ly = statusY + (fs + 4.f) * 2.f;
+        drawText(
+            "Cyan ring = duplicator peg (extra bal, zelfde ore; keten max 4)",
+            m_cntX + 16.f, ly,
+            static_cast<unsigned>(std::max(11, static_cast<int>(fs) - 2)),
+            sf::Color(120, 210, 220));
+    }
 }
 
 void Game::handleMainMenuClick(sf::Vector2f pos) {
@@ -1358,6 +1439,7 @@ void Game::handleMainMenuClick(sf::Vector2f pos) {
                 continue;
             gSfx.play(Sfx::UiClick);
             m_state.reset();
+            gSfx.stopGameOverMusic();
             m_state.difficulty =
                 static_cast<Difficulty>(static_cast<int>(Difficulty::Easy) + d);
             m_state.lives = m_state.maxLives();
@@ -1369,6 +1451,7 @@ void Game::handleMainMenuClick(sf::Vector2f pos) {
             m_runMode              = RunMode::BASE;
             m_mainMenuPickDifficulty = false;
             m_state.save(currentSavePath());
+            m_diskSessionActive    = true;
             m_showMainMenu         = false;
             pushNotif("Nieuw spel - slot " +
                           std::to_string(m_saveSlot + 1) + ".",
@@ -1393,6 +1476,7 @@ void Game::handleMainMenuClick(sf::Vector2f pos) {
         if (r.contains(pos)) {
             if (i == 0) {                          // Doorgaan
                 if (m_state.load(currentSavePath())) {
+                    gSfx.stopGameOverMusic();
                     gSfx.play(Sfx::UiClick);
                     pushNotif("Save geladen (slot " +
                                     std::to_string(m_saveSlot + 1) + ")!",
@@ -1400,8 +1484,9 @@ void Game::handleMainMenuClick(sf::Vector2f pos) {
                     m_plinko.resetGoldenPegRarityState();
                     rebuildPlinko();
                     resetZoneKeyState();
-                    m_runMode        = RunMode::BASE;
-                    m_showMainMenu   = false;
+                    m_runMode             = RunMode::BASE;
+                    m_diskSessionActive   = true;
+                    m_showMainMenu        = false;
                 } else {
                     pushNotif("Geen save in dit slot.",
                               sf::Color(255, 100, 80));
@@ -1410,7 +1495,8 @@ void Game::handleMainMenuClick(sf::Vector2f pos) {
                 gSfx.play(Sfx::UiClick);
                 m_mainMenuPickDifficulty = true;
             } else if (i == 2) {                   // Afsluiten
-                m_state.save(currentSavePath());
+                if (m_diskSessionActive)
+                    m_state.save(currentSavePath());
                 m_window.close();
             }
             return;

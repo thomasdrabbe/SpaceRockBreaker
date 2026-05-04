@@ -19,7 +19,8 @@ const std::vector<CatInfo> CATEGORIES = {
     { "[W] Weapons", ShopCategory::WEAPONS,
       { UpgradeID::GUN_DAMAGE,   UpgradeID::FIRE_RATE,
         UpgradeID::TURRET_COUNT, UpgradeID::CRIT_CHANCE,
-        UpgradeID::CRIT_MULT,    UpgradeID::SPLIT_SHOT } },
+        UpgradeID::CRIT_MULT,    UpgradeID::SPLIT_SHOT,
+        UpgradeID::BULLET_RANGE } },
     { "[M] Mining", ShopCategory::MINING,
       { UpgradeID::ORE_VALUE,          UpgradeID::AUTO_COLLECT_RADIUS,
         UpgradeID::ORE_LUCK,           UpgradeID::ASTEROID_HP,
@@ -454,6 +455,9 @@ std::string Shop::formatEffect(UpgradeID id,
             ss << "Crit mult: " << state.critMult() << "x"; break;
         case UpgradeID::SPLIT_SHOT:
             ss << "Bullets: " << state.splitShot(); break;
+        case UpgradeID::BULLET_RANGE:
+            ss << "Bullet lifetime: " << state.bulletLifetimeSec() << "s";
+            break;
         case UpgradeID::ORE_VALUE:
             ss << "Ore value: " << state.oreValueMult() << "x"; break;
         case UpgradeID::AUTO_COLLECT_RADIUS:

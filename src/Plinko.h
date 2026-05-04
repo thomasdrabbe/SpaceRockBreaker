@@ -1,6 +1,7 @@
 #pragma once
 #include <SFML/Graphics.hpp>
 #include <map>
+#include <set>
 #include <utility>
 #include <string>
 #include <vector>
@@ -24,6 +25,7 @@ struct Peg {
     sf::Vector2f pos;
     float        hitFlash = 0.f;
     OreRarity    pegRarity = OreRarity::COMMON;
+    bool         duplicator = false;
     int          cellRow   = -1;
     int          cellCol   = -1;
 };
@@ -49,6 +51,8 @@ struct PlinkoBall {
     bool         alive    = false;
     bool         scored   = false;
     double       oreValue = 0.0;
+    /// Beperkt ketting-duplicaties (duplicator pegs).
+    int          forkDepth = 0;
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -86,6 +90,7 @@ public:
     /// Past Golden-Peg rolls toe: alleen extra rolls bij hogere chest-level;
     /// zelfde (rij,kolom) blijft zeldzame kleur na rebuild.
     void syncGoldenPegChestRarities(int goldenPegChestLevel);
+    void syncDuplicatorPegChestRarities(int duplicatorChestLevel);
 
     int   ballsAlive()  const;
     float boardLeft()   const { return m_boardX; }
@@ -112,11 +117,14 @@ private:
     float m_autoTimer = 0.f;
 
     std::map<std::pair<int, int>, OreRarity> m_pegRarityByCell;
-    int m_lastBuildRows               = -1;
-    int m_syncedGoldenPegChestLevel   = -1;
+    std::set<std::pair<int, int>>            m_duplicatorCells;
+    int m_lastBuildRows                 = -1;
+    int m_syncedGoldenPegChestLevel     = -1;
+    int m_syncedDuplicatorChestLevel    = -1;
 
     void buildPegs();
     void applyPegRarityRolls(int rollCount);
+    void applyDuplicatorRolls(int rollCount);
     void buildSlots(float multBonus, float plinkoLuck, float chestSlotMult);
     void resolvePegCollision(PlinkoBall& ball,
                              double&     creditsOut,

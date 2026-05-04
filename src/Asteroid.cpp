@@ -898,6 +898,13 @@ bool AsteroidManager::trySpawnBoss(float ox, float oy, float areaW,
     return true;
 }
 
+bool AsteroidManager::hasLivingBoss() const {
+    for (const auto& a : m_pool)
+        if (a.alive && a.isBoss)
+            return true;
+    return false;
+}
+
 Asteroid* AsteroidManager::nearest(sf::Vector2f from, float maxDist,
                                      float meteorMinYToAcquire) {
     Asteroid* boss = nullptr;

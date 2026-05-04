@@ -15,6 +15,7 @@ constexpr int TAB_COUNT = 5;
 enum class ChestUpgradeID {
     PLINKO_PEG_SIZE = 0,
     PLINKO_SLOT_MULT,
+    PLINKO_DUPLICATOR_PEG,
     CHEST_UPGRADE_COUNT
 };
 
@@ -50,6 +51,7 @@ enum class UpgradeID {
     UNLOCK_TITANIUM,
     UNLOCK_IRIDIUM,
     WARP_DRIVE,
+    BULLET_RANGE,
     UPGRADE_COUNT   // sentinel
 
 };
@@ -115,7 +117,7 @@ constexpr float TAB_BAR_H    = 46.f;
 // ─── Save ─────────────────────────────────────────────────────
 const std::string SAVE_FILE = "srb_save.bin"; // legacy (wordt naar slot 0 gemigreerd)
 constexpr int     SAVE_SLOT_COUNT = 3;
-constexpr int     SAVE_VERSION    = 11;
+constexpr int     SAVE_VERSION    = 13;
 
 // ─── Nieuwe spel-moeilijkheid ─────────────────────────────────
 enum class Difficulty {

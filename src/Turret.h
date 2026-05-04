@@ -25,6 +25,7 @@ public:
                 float            critChance,
                 float            critMult,
                 int              splitShot,
+                float            bulletLifetimeSec,
                 AsteroidManager& asteroids,
                 BulletManager&   bullets,
                 ParticleSystem&  particles);
@@ -56,6 +57,7 @@ public:
                 float            critChance,
                 float            critMult,
                 int              splitShot,
+                float            bulletLifetimeSec,
                 AsteroidManager& asteroids,
                 BulletManager&   bullets,
                 ParticleSystem&  particles);

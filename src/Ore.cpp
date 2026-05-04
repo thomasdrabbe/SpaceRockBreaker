@@ -74,8 +74,16 @@ void OreManager::update(float           dt,
             continue;
         }
 
-        float dist = distance(o.pos, collectorPos);
-        if (dist <= collectRadius)
+        const float dx = o.pos.x - collectorPos.x;
+        const float dy = o.pos.y - collectorPos.y;
+        const float dist = std::sqrt(dx * dx + dy * dy);
+        // Extra bereik recht boven de collector: ores tegen de bovenrand van het
+        // veld blijven vaak net buiten de cirkel als het schip niet hoger kan.
+        const bool inDisk = dist <= collectRadius;
+        const bool inUpperBand =
+            dy <= 0.f && dy >= -collectRadius * 1.05f
+            && std::abs(dx) <= collectRadius * 1.12f;
+        if (inDisk || inUpperBand)
             o.collecting = true;
 
         if (o.collecting) {

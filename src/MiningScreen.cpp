@@ -97,6 +97,7 @@ void MiningScreen::update(float      dt,
                     state.critChance(),
                     state.critMult(),
                     state.splitShot(),
+                    state.bulletLifetimeSec(),
                     m_x, m_y, m_w, m_h,
                     m_asteroids,
                     m_bullets,
@@ -132,6 +133,7 @@ void MiningScreen::update(float      dt,
                      state.critChance(),
                      state.critMult(),
                      state.splitShot(),
+                     state.bulletLifetimeSec(),
                      m_asteroids,
                      m_bullets,
                      m_particles);
@@ -315,6 +317,7 @@ void MiningScreen::prepareNewRun() {
     clearAll();
     m_pendingKeyDrop = 0;
     m_player.init(m_x + m_w * 0.5f, m_y + m_h * 0.5f);
+    m_lastTurretCnt = -1;
 }
 
 bool MiningScreen::pullBossReturnToBase() {
@@ -331,6 +334,10 @@ bool MiningScreen::trySpawnKeyAsteroid(GameState& state) {
         1.f - state.levelOf(UpgradeID::ASTEROID_HP) * 0.1f);
     hpMult *= state.levelHpMult();
     return m_asteroids.trySpawnKey(m_x, m_y, m_w, m_h, hpMult);
+}
+
+bool MiningScreen::hasLivingBoss() const {
+    return m_asteroids.hasLivingBoss();
 }
 
 bool MiningScreen::trySpawnBoss(GameState& state) {

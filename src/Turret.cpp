@@ -13,6 +13,7 @@ void Turret::update(float            dt,
                      float            critChance,
                      float            critMult,
                      int              splitShot,
+                     float            bulletLifetimeSec,
                      AsteroidManager& asteroids,
                      BulletManager&   bullets,
                      ParticleSystem&  particles) {
@@ -54,7 +55,8 @@ void Turret::update(float            dt,
     };
 
     sf::Vector2f dir = normalize(target->pos - tip);
-    bullets.fire(tip, dir, finalDmg, isCrit, splitShot, particles);
+    bullets.fire(tip, dir, finalDmg, isCrit, splitShot, bulletLifetimeSec,
+                 particles);
     gSfx.play(Sfx::Shot);
 
     if (isCrit)
@@ -188,14 +190,14 @@ void TurretManager::update(float            dt,
                              float            critChance,
                              float            critMult,
                              int              splitShot,
+                             float            bulletLifetimeSec,
                              AsteroidManager& asteroids,
                              BulletManager&   bullets,
                              ParticleSystem&  particles) {
     for (auto& t : m_pool) {
         if (!t.active) continue;
-        t.update(dt, fireInterval, damage, critChance,
-                 critMult, splitShot,
-                 asteroids, bullets, particles);
+        t.update(dt, fireInterval, damage, critChance, critMult, splitShot,
+                 bulletLifetimeSec, asteroids, bullets, particles);
     }
 }
 

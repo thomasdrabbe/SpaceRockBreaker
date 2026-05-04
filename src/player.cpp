@@ -46,6 +46,7 @@ void Player::update(float            dt,
                      float            critChance,
                      float            critMult,
                      int              splitShot,
+                     float            bulletLifetimeSec,
                      float            panelLeft,
                      float            panelTop,
                      float            panelW,
@@ -82,13 +83,17 @@ void Player::update(float            dt,
         }
     }
 
-    // ── Grenzen (paneel in wereldcoördinaten; marge = tip + barrel + glow)
-    const float pad = std::max({
+    // ── Grenzen (paneel in wereldcoördinaten; zij/onder: tip + barrel + glow)
+    const float padSide = std::max({
         m_hitRadius * 1.55f + 8.f,
         m_muzzleDist + 8.f,
         m_hitRadius + 12.f });
-    pos.x = clamp(pos.x, panelLeft + pad, panelLeft + panelW - pad);
-    pos.y = clamp(pos.y, panelTop + pad, panelTop + panelH - pad);
+    // Boven minder strak: ores/key kunnen tegen de bovenrand liggen; speler moet
+    // daar nog bij kunnen (collect-ring volgt midden schip).
+    const float padTop =
+        std::max(m_hitRadius + 6.f, padSide * 0.52f);
+    pos.x = clamp(pos.x, panelLeft + padSide, panelLeft + panelW - padSide);
+    pos.y = clamp(pos.y, panelTop + padTop, panelTop + panelH - padSide);
 
     // ── Auto-aim ──────────────────────────────────────────
     Asteroid* target = asteroids.nearest(pos);
@@ -122,8 +127,8 @@ void Player::update(float            dt,
         };
         sf::Vector2f dir = normalize(target->pos - tip);
 
-        bullets.fire(tip, dir, finalDmg, isCrit,
-                     splitShot, particles);
+        bullets.fire(tip, dir, finalDmg, isCrit, splitShot, bulletLifetimeSec,
+                     particles);
         gSfx.play(Sfx::Shot);
 
         if (isCrit)

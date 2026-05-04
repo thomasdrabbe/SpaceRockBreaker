@@ -186,3 +186,28 @@ inline std::string resolveAssetPath(const std::string& rel) {
     }
     return rel;
 }
+
+// ─── Chest sprite sheet (assets/Animated Chests/Chests.png, 5×8 grid) ───
+inline constexpr unsigned CHEST_SHEET_COLS = 5;
+inline constexpr unsigned CHEST_SHEET_ROWS = 8;
+
+/// Houten variant: idle rij 0, open-animatie rij 1. Andere varianten: +2 per
+/// thema (ijzer 2–3, rood 4–5, sneeuw 6–7).
+[[nodiscard]] inline bool chestTexIsAnimatedSheet(sf::Vector2u texSize) {
+    return texSize.x >= CHEST_SHEET_COLS && texSize.y >= CHEST_SHEET_ROWS
+           && (texSize.x % CHEST_SHEET_COLS) == 0u
+           && (texSize.y % CHEST_SHEET_ROWS) == 0u;
+}
+
+[[nodiscard]] inline sf::Vector2u chestSheetFrameSize(sf::Vector2u texSize) {
+    return { texSize.x / CHEST_SHEET_COLS, texSize.y / CHEST_SHEET_ROWS };
+}
+
+[[nodiscard]] inline sf::IntRect chestSheetFrameRect(sf::Vector2u framePx,
+                                                     unsigned    col,
+                                                     unsigned    row) {
+    return sf::IntRect(
+        sf::Vector2i(static_cast<int>(col * framePx.x),
+                     static_cast<int>(row * framePx.y)),
+        sf::Vector2i(static_cast<int>(framePx.x), static_cast<int>(framePx.y)));
+}

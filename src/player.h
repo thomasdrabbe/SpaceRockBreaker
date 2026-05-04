@@ -28,6 +28,7 @@ public:
                 float            critChance,
                 float            critMult,
                 int              splitShot,
+                float            bulletLifetimeSec,
                 float            panelLeft,
                 float            panelTop,
                 float            panelW,

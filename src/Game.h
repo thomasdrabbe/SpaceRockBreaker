@@ -68,7 +68,9 @@ private:
                    sf::Color color = sf::Color(220, 230, 255));
 
     // ── Save slots (0 … SAVE_SLOT_COUNT-1) ────────────────
-    int m_saveSlot = 0;
+    int  m_saveSlot = 0;
+    /// True na "Doorgaan" / nieuw spel: mag naar schijf schrijven (geen auto-load bij start).
+    bool m_diskSessionActive = false;
     [[nodiscard]] std::string currentSavePath() const {
         return saveSlotPath(m_saveSlot);
     }

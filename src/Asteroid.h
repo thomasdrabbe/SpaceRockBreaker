@@ -114,6 +114,9 @@ public:
     int aliveCount() const { return m_alive; }
     void refreshAliveCount();
 
+    /// Actieve zone-boss op het veld (voor boss-muziek).
+    bool hasLivingBoss() const;
+
 private:
     std::array<Asteroid, MAX_ASTEROIDS> m_pool;
     int                                  m_alive = 0;

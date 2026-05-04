@@ -59,8 +59,14 @@ void KeyPickupManager::update(float            dt,
             continue;
         }
 
-        float dist = distance(k.pos, collectorPos);
-        if (dist <= collectRadius)
+        const float dx = k.pos.x - collectorPos.x;
+        const float dy = k.pos.y - collectorPos.y;
+        const float dist = std::sqrt(dx * dx + dy * dy);
+        const bool  inDisk = dist <= collectRadius;
+        const bool  inUpperBand =
+            dy <= 0.f && dy >= -collectRadius * 1.05f
+            && std::abs(dx) <= collectRadius * 1.12f;
+        if (inDisk || inUpperBand)
             k.collecting = true;
 
         if (k.collecting) {

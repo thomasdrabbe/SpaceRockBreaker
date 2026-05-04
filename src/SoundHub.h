@@ -1,9 +1,11 @@
 #pragma once
+#include <SFML/Audio/Music.hpp>
 #include <SFML/Audio/Sound.hpp>
 #include <SFML/Audio/SoundBuffer.hpp>
 #include <SFML/System/Clock.hpp>
 #include <array>
 #include <algorithm>
+#include <filesystem>
 #include <optional>
 #include <string>
 #include <vector>
@@ -20,15 +22,28 @@ enum class Sfx : int {
     PlinkoScore,
     ChestOpen,
     ChestLoot,
+    LevelUp,
     COUNT
 };
 
 class SoundHub {
 public:
     void init();
-    void setMuted(bool m) { m_muted = m; }
+    void setMuted(bool m);
     bool isMuted() const { return m_muted; }
     void play(Sfx id);
+
+    /// Loopt zolang `bossAlive` true (zone-boss op het veld).
+    void syncBossMusic(bool bossAlive);
+    /// Eén keer bij game over; stopt boss-muziek. Retourneert false als geen file.
+    bool playGameOverMusicOnce();
+    void stopGameOverMusic();
+
+    /// Hoofdmenu: `traploop` op repeat.
+    void syncMainMenuMusic(bool showMainMenu);
+
+    /// Mining-tab: Lightyear City-tracks (achtergrond, laag). Pauzeert tijdens boss.
+    void syncMiningAmbientMusic(bool miningTabActive, bool bossAlive);
 
 private:
     static constexpr int kPool = 12;
@@ -53,6 +68,21 @@ private:
     float     m_lastOre    = -1.f;
     float     m_lastExpl   = -1.f;
     float     m_lastPlinko = -1.f;
+
+    sf::Music m_bossMusic;
+    sf::Music m_gameOverMusic;
+    sf::Music m_menuMusic;
+    bool      m_bossMusicFileOk     = false;
+    bool      m_gameOverMusicFileOk = false;
+    bool      m_menuMusicFileOk     = false;
+
+    sf::Music                       m_miningMusic;
+    std::vector<std::filesystem::path> m_miningTrackPaths;
+    int                             m_miningTrackIndex      = 0;
+    bool                            m_miningSessionActive = false;
+    bool                            m_miningPausedForBoss   = false;
+
+    void applyMusicVolumes();
 
     bool tryLoad(int idx, const std::string& path);
     void loadShotVariants();

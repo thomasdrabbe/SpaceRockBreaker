@@ -4,7 +4,6 @@
 
 namespace {
     constexpr float BULLET_SPEED  = 620.f;
-    constexpr float BULLET_LIFE   = 2.8f;
     constexpr float SPLIT_SPREAD  = 0.18f;
 }
 
@@ -30,6 +29,7 @@ void BulletManager::fire(sf::Vector2f    origin,
                           float           damage,
                           bool            isCrit,
                           int             splitCount,
+                          float           lifetimeSec,
                           ParticleSystem& particles) {
     float baseAngle = std::atan2(targetDir.y, targetDir.x);
 
@@ -50,7 +50,7 @@ void BulletManager::fire(sf::Vector2f    origin,
         b->pos      = origin;
         b->vel      = dir * BULLET_SPEED;
         b->damage   = damage;
-        b->lifetime = BULLET_LIFE;
+        b->lifetime = std::max(0.05f, lifetimeSec);
         b->isCrit   = isCrit;
         b->alive    = true;
 

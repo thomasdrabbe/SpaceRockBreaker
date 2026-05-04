@@ -39,6 +39,7 @@ GameState::upgradeCatalog = {{
     { "Unlock Iridium",    "Spawn Iridium asteroids (1000x)",  4500000.0, 1.0, 1 },
     // Travel
     { "Warp Drive", "Hold Space to warp to next zone", 650.0, 1.0, 1 },
+    { "Bullet Range", "+8% bullet travel time / range", 88.0, 1.50, 0 },
 }};
 
 const std::array<PrestigeUpgradeDef,
@@ -57,7 +58,11 @@ GameState::chestCatalog = {{
       "Random pegs krijgen rarity bonus (+0.5x tot +8x); elk niveau +3 pegs",
       0 },
     { "Trough Boost",
-      "Elk niveau: alle valbak-multipliers x1.5 extra (stapelt)",
+      "Elk niveau: alle valbak-multipliers x1.32 extra (stapelt)",
+      0 },
+    { "Duplicator pegs",
+      "Pegs die bij een bal-raak een extra bal spawnen (zelfde ore); "
+      "meer niveaus = meer duplicator-pegs (rolls)",
       0 },
 }};
 
@@ -93,11 +98,16 @@ int GameState::chestPegUpgradeCount() const {
     return levelOfChest(ChestUpgradeID::PLINKO_PEG_SIZE) * 3;
 }
 
+int GameState::chestDuplicatorRollCount() const {
+    return levelOfChest(ChestUpgradeID::PLINKO_DUPLICATOR_PEG) * 3;
+}
+
 float GameState::chestPlinkoSlotMult() const {
     const int lv = levelOfChest(ChestUpgradeID::PLINKO_SLOT_MULT);
     if (lv <= 0)
         return 1.f;
-    return std::pow(1.5f, static_cast<float>(lv));
+    constexpr float kTroughPerLevel = 1.32f;
+    return std::pow(kTroughPerLevel, static_cast<float>(lv));
 }
 
 int GameState::levelOfChest(ChestUpgradeID id) const {
@@ -202,7 +212,7 @@ float GameState::fireRatePerSec() const {
 }
 
 int GameState::turretCount() const {
-    return + levelOf(UpgradeID::TURRET_COUNT);
+    return levelOf(UpgradeID::TURRET_COUNT);
 }
 
 float GameState::critChance() const {
@@ -215,6 +225,11 @@ float GameState::critMult() const {
 
 int GameState::splitShot() const {
     return 1 + levelOf(UpgradeID::SPLIT_SHOT);
+}
+
+float GameState::bulletLifetimeSec() const {
+    constexpr float base = 2.8f;
+    return base * (1.f + 0.08f * levelOf(UpgradeID::BULLET_RANGE));
 }
 
 float GameState::oreValueMult() const {
@@ -317,7 +332,13 @@ int GameState::levelOf(PrestigeUpgradeID id) const {
 
 double GameState::costOf(UpgradeID id) const {
     const auto& def = upgradeCatalog[static_cast<int>(id)];
-    return upgradeCost(def.baseCost, def.costMult, levelOf(id));
+    const int   lv  = levelOf(id);
+    if (id == UpgradeID::PLINKO_BALLS) {
+        if (lv < 20)
+            return 4.0 * std::pow(1.24, static_cast<double>(lv));
+        return upgradeCost(def.baseCost, def.costMult, std::max(0, lv - 14));
+    }
+    return upgradeCost(def.baseCost, def.costMult, lv);
 }
 double GameState::costOf(PrestigeUpgradeID id) const {
     const auto& def = prestigeCatalog[static_cast<int>(id)];
@@ -532,21 +553,39 @@ bool GameState::load(const std::string& path) {
     keys = 0;
     if (ver >= 6)
         f.read(reinterpret_cast<char*>(&keys), sizeof(keys));
-    f.read(reinterpret_cast<char*>(upgradeLevels.data()),
-           upgradeLevels.size() * sizeof(int));
+    if (ver < 13) {
+        constexpr int legacySlots =
+            static_cast<int>(UpgradeID::UPGRADE_COUNT) - 1;
+        f.read(reinterpret_cast<char*>(upgradeLevels.data()),
+               legacySlots * sizeof(int));
+        upgradeLevels[legacySlots] = 0;
+    } else {
+        f.read(reinterpret_cast<char*>(upgradeLevels.data()),
+               upgradeLevels.size() * sizeof(int));
+    }
     f.read(reinterpret_cast<char*>(prestigeLevels.data()),
            prestigeLevels.size() * sizeof(int));
     chestLevels.fill(0);
     if (ver >= 7) {
-        if (ver >= 10) {
+        if (ver >= 12) {
             f.read(reinterpret_cast<char*>(chestLevels.data()),
                    chestLevels.size() * sizeof(int));
+        } else if (ver >= 10) {
+            int c0 = 0, c1 = 0;
+            f.read(reinterpret_cast<char*>(&c0), sizeof(c0));
+            f.read(reinterpret_cast<char*>(&c1), sizeof(c1));
+            chestLevels[0] = c0;
+            chestLevels[1] = c1;
+            chestLevels[static_cast<int>(ChestUpgradeID::PLINKO_DUPLICATOR_PEG)] =
+                0;
         } else {
             std::array<int, 4> oldChest{};
             f.read(reinterpret_cast<char*>(oldChest.data()),
                    oldChest.size() * sizeof(int));
             chestLevels[0] = oldChest[0];
             chestLevels[1] = oldChest[1];
+            chestLevels[static_cast<int>(ChestUpgradeID::PLINKO_DUPLICATOR_PEG)] =
+                0;
         }
     }
     nextBossMilestone = 3;

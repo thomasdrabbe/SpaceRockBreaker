@@ -1,5 +1,7 @@
 #include "SoundHub.h"
+#include "Utils.h"
 #include <SFML/Audio/Listener.hpp>
+#include <filesystem>
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -10,8 +12,18 @@ SoundHub gSfx;
 
 namespace {
 
-/// Aantal schoten in `gun sound.mp3` (vaste volgorde, round-robin na 14).
-constexpr int kGunShotCount = 14;
+bool openMusicFromAsset(sf::Music& music, const char* relPath) {
+    const std::string p = resolveAssetPath(relPath);
+    if (music.openFromFile(std::filesystem::path(p)))
+        return true;
+    return music.openFromFile(
+        std::filesystem::path(resolveAssetPath(std::string("../") + relPath)));
+}
+
+/// Maximaal aantal losse `shot_XX.wav`-fallbacks om te proberen.
+constexpr int kGunShotWavFileMax = 14;
+/// Minimaal zoveel varianten om schoten uit `gun sound.mp3` te gebruiken.
+constexpr int kGunShotMinVariants  = 10;
 
 void fadeTailInterleaved(std::vector<std::int16_t>& d,
                          unsigned                   ch,
@@ -33,10 +45,25 @@ void fadeTailInterleaved(std::vector<std::int16_t>& d,
     }
 }
 
-/// Pieken zoals in je waveform: start boven hoge drempel, eind na korte “vallei”
-/// onder lagere drempel (scheidt 7+7 pieken). Alleen bij precies 14 regio’s OK.
-bool splitGunSoundFourteenPeaks(const sf::SoundBuffer&            src,
-                                std::vector<sf::SoundBuffer>& out) {
+[[nodiscard]] static int maxAbsSampleSoundBuffer(const sf::SoundBuffer& buf) {
+    const std::int16_t* s = buf.getSamples();
+    const std::uint64_t n = buf.getSampleCount();
+    int                  m = 0;
+    for (std::uint64_t i = 0; i < n; ++i) {
+        int v = static_cast<int>(s[i]);
+        if (v < 0)
+            v = -v;
+        if (v > m)
+            m = v;
+    }
+    return m;
+}
+
+/// Pieken in de waveform: `targetCount` regio’s (bv. 10 = 5 schoten + pauze + 5).
+/// Stille “schoten” (pauze als piek) worden afgewezen → volgende split-methode.
+bool splitGunSoundByPeaks(const sf::SoundBuffer&            src,
+                          std::vector<sf::SoundBuffer>& out,
+                          int                           targetCount) {
     out.clear();
     const std::int16_t* smp = src.getSamples();
     const std::uint64_t n   = src.getSampleCount();
@@ -44,6 +71,17 @@ bool splitGunSoundFourteenPeaks(const sf::SoundBuffer&            src,
     const unsigned      rate = src.getSampleRate();
     const std::vector<sf::SoundChannel> chMap = src.getChannelMap();
     if (!smp || ch < 1u || n < static_cast<std::uint64_t>(ch) * 256u)
+        return false;
+
+    int globalAbsMax = 0;
+    for (std::uint64_t i = 0; i < n; ++i) {
+        int v = static_cast<int>(smp[i]);
+        if (v < 0)
+            v = -v;
+        if (v > globalAbsMax)
+            globalAbsMax = v;
+    }
+    if (globalAbsMax < 8)
         return false;
 
     const std::uint64_t frames = n / static_cast<std::uint64_t>(ch);
@@ -123,7 +161,7 @@ bool splitGunSoundFourteenPeaks(const sf::SoundBuffer&            src,
                 std::max(thrEnd * 2.1f, std::max(380.f, mx * sm));
             for (unsigned hold : holds) {
                 auto r = detect(thrStart, thrEnd, hold);
-                if (r.size() == static_cast<size_t>(kGunShotCount)) {
+                if (r.size() == static_cast<size_t>(targetCount)) {
                     best  = std::move(r);
                     found = true;
                     break;
@@ -156,7 +194,19 @@ bool splitGunSoundFourteenPeaks(const sf::SoundBuffer&            src,
             return false;
         out.push_back(std::move(piece));
     }
-    return static_cast<int>(out.size()) == kGunShotCount;
+    if (static_cast<int>(out.size()) != targetCount) {
+        out.clear();
+        return false;
+    }
+    const int quietThr =
+        std::max(120, static_cast<int>(static_cast<float>(globalAbsMax) * 0.06f));
+    for (const auto& pb : out) {
+        if (maxAbsSampleSoundBuffer(pb) < quietThr) {
+            out.clear();
+            return false;
+        }
+    }
+    return true;
 }
 
 bool splitBufferIntoEqualSegments(const sf::SoundBuffer&            src,
@@ -209,6 +259,7 @@ const char* kRelPaths[static_cast<int>(Sfx::COUNT)] = {
     "assets/sounds/plinko_score.wav",
     "assets/sounds/chest_open.wav",
     "assets/sounds/chest_loot.wav",
+    "assets/sounds/levelup.mp3",
 };
 
 } // namespace
@@ -225,15 +276,18 @@ void SoundHub::loadShotVariants() {
     m_shotRing = 0;
 
     sf::SoundBuffer gun;
-    if (gun.loadFromFile("assets/sounds/gun sound.mp3")
-        || gun.loadFromFile("../assets/sounds/gun sound.mp3")) {
-        if (splitGunSoundFourteenPeaks(gun, m_shotVariants)
-            || splitBufferIntoEqualSegments(gun, m_shotVariants, kGunShotCount))
+    const std::string gunPath  = resolveAssetPath("assets/sounds/gun sound.mp3");
+    const std::string gunPath2 = resolveAssetPath("../assets/sounds/gun sound.mp3");
+    if (gun.loadFromFile(gunPath) || gun.loadFromFile(gunPath2)) {
+        if (splitGunSoundByPeaks(gun, m_shotVariants, 10)
+            || splitGunSoundByPeaks(gun, m_shotVariants, 14)
+            || splitBufferIntoEqualSegments(gun, m_shotVariants, 10)
+            || splitBufferIntoEqualSegments(gun, m_shotVariants, 14))
             return;
         m_shotVariants.clear();
     }
 
-    for (int i = 1; i <= kGunShotCount; ++i) {
+    for (int i = 1; i <= kGunShotWavFileMax; ++i) {
         char path[96];
         std::snprintf(path, sizeof path, "assets/sounds/shot_%02d.wav", i);
         sf::SoundBuffer b;
@@ -244,7 +298,7 @@ void SoundHub::loadShotVariants() {
         }
         m_shotVariants.push_back(std::move(b));
     }
-    if (static_cast<int>(m_shotVariants.size()) == kGunShotCount)
+    if (static_cast<int>(m_shotVariants.size()) >= kGunShotMinVariants)
         return;
 
     m_shotVariants.clear();
@@ -312,6 +366,14 @@ void SoundHub::init() {
             m_buf[lootI] = m_buf[static_cast<int>(Sfx::OreCollect)];
             m_ok[lootI]  = true;
         }
+        const int lvI = static_cast<int>(Sfx::LevelUp);
+        if (!m_ok[lvI] && m_ok[openI]) {
+            m_buf[lvI] = m_buf[openI];
+            m_ok[lvI]  = true;
+        } else if (!m_ok[lvI] && m_ok[static_cast<int>(Sfx::PlinkoScore)]) {
+            m_buf[lvI] = m_buf[static_cast<int>(Sfx::PlinkoScore)];
+            m_ok[lvI]  = true;
+        }
     }
 
     int fb = -1;
@@ -331,6 +393,169 @@ void SoundHub::init() {
     }
 
     m_ready = true;
+
+    m_bossMusicFileOk =
+        openMusicFromAsset(m_bossMusic, "assets/sounds/bossmusic.mp3")
+        || openMusicFromAsset(m_bossMusic, "assets/sounds/bossmusic.ogg");
+    m_gameOverMusicFileOk =
+        openMusicFromAsset(m_gameOverMusic, "assets/sounds/gameover.mp3")
+        || openMusicFromAsset(m_gameOverMusic, "assets/sounds/gameover.wav");
+    m_menuMusicFileOk =
+        openMusicFromAsset(m_menuMusic, "assets/sounds/traploop.mp3")
+        || openMusicFromAsset(m_menuMusic, "assets/sounds/traploop.ogg");
+
+    namespace fs = std::filesystem;
+    m_miningTrackPaths.clear();
+    for (int i = 1; i <= 9; ++i) {
+        char rel[112];
+        std::snprintf(rel, sizeof rel,
+                      "assets/sounds/Lightyear City (%d).ogg", i);
+        const std::string abs = resolveAssetPath(rel);
+        std::error_code ec;
+        if (fs::is_regular_file(fs::path(abs), ec))
+            m_miningTrackPaths.push_back(fs::path(abs));
+    }
+    if (!m_miningTrackPaths.empty())
+        m_miningTrackIndex = randInt(
+            0, static_cast<int>(m_miningTrackPaths.size()) - 1);
+
+    applyMusicVolumes();
+}
+
+void SoundHub::setMuted(bool m) {
+    m_muted = m;
+    applyMusicVolumes();
+}
+
+void SoundHub::applyMusicVolumes() {
+    const float g = m_muted ? 0.f : 1.f;
+    if (m_bossMusicFileOk)
+        m_bossMusic.setVolume(38.f * g);
+    if (m_gameOverMusicFileOk)
+        m_gameOverMusic.setVolume(std::min(88.f, m_masterVol * 0.95f) * g);
+    if (m_menuMusicFileOk)
+        m_menuMusic.setVolume(34.f * g);
+}
+
+void SoundHub::syncBossMusic(bool bossAlive) {
+    applyMusicVolumes();
+    if (!m_bossMusicFileOk)
+        return;
+    if (!bossAlive) {
+        m_bossMusic.stop();
+        return;
+    }
+    if (!m_ready)
+        return;
+    if (m_gameOverMusicFileOk
+        && m_gameOverMusic.getStatus() == sf::SoundSource::Status::Playing)
+        return;
+
+    m_bossMusic.setLooping(true);
+    m_bossMusic.setRelativeToListener(true);
+    if (m_bossMusic.getStatus() != sf::SoundSource::Status::Playing)
+        m_bossMusic.play();
+    m_bossMusic.setVolume(m_muted ? 0.f : 46.f);
+}
+
+bool SoundHub::playGameOverMusicOnce() {
+    if (m_bossMusicFileOk)
+        m_bossMusic.stop();
+    if (m_menuMusicFileOk)
+        m_menuMusic.stop();
+    m_miningMusic.stop();
+    m_miningSessionActive = false;
+    m_miningPausedForBoss = false;
+    if (!m_ready || !m_gameOverMusicFileOk)
+        return false;
+    m_gameOverMusic.stop();
+    m_gameOverMusic.setLooping(false);
+    m_gameOverMusic.setRelativeToListener(true);
+    applyMusicVolumes();
+    if (m_muted)
+        return false;
+    m_gameOverMusic.play();
+    return true;
+}
+
+void SoundHub::stopGameOverMusic() {
+    if (m_gameOverMusicFileOk)
+        m_gameOverMusic.stop();
+}
+
+void SoundHub::syncMiningAmbientMusic(bool miningTabActive, bool bossAlive) {
+    if (!m_ready || m_miningTrackPaths.empty()) {
+        m_miningMusic.stop();
+        m_miningSessionActive = false;
+        m_miningPausedForBoss = false;
+        return;
+    }
+
+    const float g = m_muted ? 0.f : 1.f;
+    constexpr float kMiningBgVol = 15.f;
+
+    if (!miningTabActive) {
+        m_miningMusic.stop();
+        m_miningSessionActive = false;
+        m_miningPausedForBoss = false;
+        if (!m_miningTrackPaths.empty())
+            m_miningTrackIndex = randInt(
+                0, static_cast<int>(m_miningTrackPaths.size()) - 1);
+        return;
+    }
+
+    if (bossAlive) {
+        if (m_miningMusic.getStatus() == sf::SoundSource::Status::Playing)
+            m_miningMusic.pause();
+        m_miningPausedForBoss = true;
+        return;
+    }
+
+    if (m_miningPausedForBoss) {
+        if (m_miningMusic.getStatus() == sf::SoundSource::Status::Paused)
+            m_miningMusic.play();
+        m_miningPausedForBoss = false;
+    }
+
+    m_miningMusic.setRelativeToListener(true);
+    m_miningMusic.setLooping(false);
+
+    const int n = static_cast<int>(m_miningTrackPaths.size());
+    if (m_miningMusic.getStatus() == sf::SoundSource::Status::Stopped) {
+        if (!m_miningSessionActive)
+            m_miningSessionActive = true;
+        else
+            m_miningTrackIndex = (m_miningTrackIndex + 1) % n;
+
+        if (!m_miningMusic.openFromFile(
+                m_miningTrackPaths[static_cast<size_t>(m_miningTrackIndex)]))
+            return;
+        m_miningMusic.setLooping(false);
+        m_miningMusic.setVolume(kMiningBgVol * g);
+        if (!m_muted)
+            m_miningMusic.play();
+    } else
+        m_miningMusic.setVolume(kMiningBgVol * g);
+}
+
+void SoundHub::syncMainMenuMusic(bool showMainMenu) {
+    applyMusicVolumes();
+    if (!m_menuMusicFileOk)
+        return;
+    if (!showMainMenu) {
+        m_menuMusic.stop();
+        return;
+    }
+    if (!m_ready)
+        return;
+    if (m_gameOverMusicFileOk
+        && m_gameOverMusic.getStatus() == sf::SoundSource::Status::Playing)
+        return;
+
+    m_menuMusic.setLooping(true);
+    m_menuMusic.setRelativeToListener(true);
+    if (m_menuMusic.getStatus() != sf::SoundSource::Status::Playing)
+        m_menuMusic.play();
 }
 
 void SoundHub::play(Sfx id) {
@@ -394,6 +619,8 @@ void SoundHub::play(Sfx id) {
         vol = std::min(100.f, m_masterVol * 1.08f);
     else if (id == Sfx::ChestLoot)
         vol = std::min(100.f, m_masterVol * 0.92f);
+    else if (id == Sfx::LevelUp)
+        vol = std::min(100.f, m_masterVol * 0.88f);
     ch->setVolume(vol);
     float pitch = 1.f;
     if (id == Sfx::UiClick)
@@ -404,6 +631,8 @@ void SoundHub::play(Sfx id) {
         pitch = 0.94f;
     else if (id == Sfx::ChestLoot)
         pitch = 1.05f;
+    else if (id == Sfx::LevelUp)
+        pitch = 1.f;
     ch->setPitch(pitch);
     ch->play();
 }

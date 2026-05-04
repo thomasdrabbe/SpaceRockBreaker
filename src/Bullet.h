@@ -30,6 +30,7 @@ public:
               float           damage,
               bool            isCrit,
               int             splitCount,
+              float           lifetimeSec,
               ParticleSystem& particles);
 
     void update(float dt, float ox, float oy, float areaW, float areaH);

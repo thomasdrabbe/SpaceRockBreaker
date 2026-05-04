@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <sstream>
 #include <iomanip>
+#include <vector>
 
 namespace pegc {
 
@@ -106,7 +107,9 @@ void PlinkoBoard::build(int   rows,
     const int newRows = clamp(rows, PLINKO_MIN_ROWS, PLINKO_MAX_ROWS);
     if (m_lastBuildRows >= 0 && newRows != m_lastBuildRows) {
         m_pegRarityByCell.clear();
-        m_syncedGoldenPegChestLevel = -1;
+        m_duplicatorCells.clear();
+        m_syncedGoldenPegChestLevel  = -1;
+        m_syncedDuplicatorChestLevel = -1;
     }
     m_rows = newRows;
 
@@ -152,6 +155,9 @@ void PlinkoBoard::buildPegs() {
             peg.pegRarity    = (it != m_pegRarityByCell.end())
                                    ? it->second
                                    : OreRarity::COMMON;
+            peg.duplicator =
+                peg.cellRow >= 0
+                && m_duplicatorCells.count({ peg.cellRow, peg.cellCol }) > 0;
             m_pegs.push_back(peg);
         }
     }
@@ -229,9 +235,10 @@ bool PlinkoBoard::dropBall(double oreValue, float dropX) {
     b->pos      = { x, m_boardY + 5.f };
     b->vel      = { randFloat(-30.f, 30.f),
                     randFloat(DROP_SPEED_MIN, DROP_SPEED_MAX) };
-    b->oreValue = oreValue;
-    b->alive    = true;
-    b->scored   = false;
+    b->oreValue   = oreValue;
+    b->alive      = true;
+    b->scored     = false;
+    b->forkDepth  = 0;
     gSfx.play(Sfx::PlinkoDrop);
     return true;
 }
@@ -258,6 +265,16 @@ void PlinkoBoard::updateAuto(float dt, double& oreStock, float autoInterval,
 void PlinkoBoard::resolvePegCollision(PlinkoBall& ball,
                                        double&     creditsOut,
                                        float       creditMult) {
+    constexpr int kMaxFork = 4;
+    struct DupSpawn {
+        double       ore{};
+        sf::Vector2f pos{};
+        sf::Vector2f vel{};
+        int          fork = 0;
+    };
+    std::vector<DupSpawn> dupSpawns;
+    dupSpawns.reserve(4);
+
     for (auto& peg : m_pegs) {
         sf::Vector2f diff = ball.pos - peg.pos;
         float        dist = length(diff);
@@ -274,6 +291,18 @@ void PlinkoBoard::resolvePegCollision(PlinkoBall& ball,
 
             peg.hitFlash = 0.12f;
 
+            if (peg.duplicator && ball.forkDepth < kMaxFork) {
+                DupSpawn s;
+                s.ore  = ball.oreValue;
+                s.fork = ball.forkDepth + 1;
+                s.pos  = ball.pos
+                      + sf::Vector2f(randFloat(-5.f, 5.f), randFloat(-4.f, 4.f));
+                s.vel =
+                    ball.vel
+                    + sf::Vector2f(randFloat(-55.f, 55.f), randFloat(-35.f, 35.f));
+                dupSpawns.push_back(s);
+            }
+
             const int ri = static_cast<int>(peg.pegRarity);
             if (peg.pegRarity > OreRarity::COMMON && ri >= 0
                 && ri < static_cast<int>(OreRarity::RARITY_COUNT)) {
@@ -286,6 +315,19 @@ void PlinkoBoard::resolvePegCollision(PlinkoBall& ball,
                 pushPegCreditPopup(peg.pos, gain);
             }
         }
+    }
+
+    for (const DupSpawn& s : dupSpawns) {
+        PlinkoBall* c = claimBall();
+        if (!c)
+            break;
+        c->pos      = s.pos;
+        c->vel      = s.vel;
+        c->oreValue = s.ore;
+        c->radius   = PLINKO_BALL_RADIUS;
+        c->alive    = true;
+        c->scored   = false;
+        c->forkDepth = s.fork;
     }
 }
 
@@ -447,6 +489,20 @@ void PlinkoBoard::draw(sf::RenderTarget& target,
             std::min(255, base.b + 50), 90));
         pegShape.setOutlineThickness(1.f);
         target.draw(pegShape);
+
+        if (peg.duplicator) {
+            float ringR = m_pegDrawRadius + std::round(3.5f * m_scale);
+            pegShape.setRadius(ringR);
+            pegShape.setOrigin({ ringR, ringR });
+            pegShape.setPosition(peg.pos);
+            pegShape.setFillColor(sf::Color::Transparent);
+            pegShape.setOutlineColor(sf::Color(60, 230, 255,
+                static_cast<uint8_t>(140 + 115 * ft)));
+            pegShape.setOutlineThickness(std::max(1.5f, 2.f * m_scale));
+            target.draw(pegShape);
+            pegShape.setRadius(m_pegDrawRadius);
+            pegShape.setOrigin({ m_pegDrawRadius, m_pegDrawRadius });
+        }
     }
 
     // ── Bonus-peg credit floaters ─────────────────────────
@@ -562,11 +618,15 @@ void PlinkoBoard::draw(sf::RenderTarget& target,
 
 void PlinkoBoard::resetGoldenPegRarityState() {
     m_pegRarityByCell.clear();
-    m_syncedGoldenPegChestLevel = -1;
-    m_lastBuildRows             = -1;
+    m_duplicatorCells.clear();
+    m_syncedGoldenPegChestLevel  = -1;
+    m_syncedDuplicatorChestLevel = -1;
+    m_lastBuildRows              = -1;
     m_pegCreditPopups.clear();
-    for (auto& p : m_pegs)
-        p.pegRarity = OreRarity::COMMON;
+    for (auto& p : m_pegs) {
+        p.pegRarity   = OreRarity::COMMON;
+        p.duplicator  = false;
+    }
 }
 
 void PlinkoBoard::applyPegRarityRolls(int rollCount) {
@@ -616,5 +676,54 @@ void PlinkoBoard::syncGoldenPegChestRarities(int goldenPegChestLevel) {
         m_syncedGoldenPegChestLevel = -1;
         applyPegRarityRolls(targetRolls);
         m_syncedGoldenPegChestLevel = goldenPegChestLevel;
+    }
+}
+
+void PlinkoBoard::applyDuplicatorRolls(int rollCount) {
+    if (m_pegs.empty() || rollCount <= 0)
+        return;
+
+    const int nPegs = static_cast<int>(m_pegs.size());
+    for (int i = 0; i < rollCount; ++i) {
+        for (int t = 0; t < 16; ++t) {
+            Peg& peg = m_pegs[randInt(0, nPegs - 1)];
+            if (peg.cellRow < 0)
+                continue;
+            const auto key = std::make_pair(peg.cellRow, peg.cellCol);
+            if (m_duplicatorCells.insert(key).second) {
+                peg.duplicator = true;
+                break;
+            }
+        }
+    }
+}
+
+void PlinkoBoard::syncDuplicatorPegChestRarities(int duplicatorChestLevel) {
+    if (duplicatorChestLevel < 0)
+        duplicatorChestLevel = 0;
+    const int targetRolls = duplicatorChestLevel * 3;
+
+    if (m_pegs.empty()) {
+        m_syncedDuplicatorChestLevel = duplicatorChestLevel;
+        return;
+    }
+
+    if (m_syncedDuplicatorChestLevel < 0) {
+        applyDuplicatorRolls(targetRolls);
+        m_syncedDuplicatorChestLevel = duplicatorChestLevel;
+        return;
+    }
+
+    if (duplicatorChestLevel > m_syncedDuplicatorChestLevel) {
+        const int d = duplicatorChestLevel - m_syncedDuplicatorChestLevel;
+        applyDuplicatorRolls(d * 3);
+        m_syncedDuplicatorChestLevel = duplicatorChestLevel;
+    } else if (duplicatorChestLevel < m_syncedDuplicatorChestLevel) {
+        m_duplicatorCells.clear();
+        for (auto& p : m_pegs)
+            p.duplicator = false;
+        m_syncedDuplicatorChestLevel = -1;
+        applyDuplicatorRolls(targetRolls);
+        m_syncedDuplicatorChestLevel = duplicatorChestLevel;
     }
 }

@@ -65,6 +65,8 @@ public:
     /// Boss verslagen maar nog loot op het veld — mining moet door simuleren.
     bool bossReturnPending() const { return m_pendingBossReturnToBase; }
 
+    bool hasLivingBoss() const;
+
     /// Meteor-timer + shower-queue starten. Wordt vanuit Game aangeroepen.
     void tickMeteorShower(float dt, GameState& state, float asteroidHpMult);
     /// Alleen meteoren bewegen (Game roept dit aan bij gepauzeerde mining-tab).

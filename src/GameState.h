@@ -127,6 +127,8 @@ public:
     float critChance()        const;
     float critMult()          const;
     int   splitShot()         const;
+    /// Basis 2.8s; stijgt met Bullet Range-upgrade (kogels vliegen verder).
+    float bulletLifetimeSec() const;
 
     float oreValueMult()      const;
     float autoCollectRadius() const;
@@ -148,7 +150,9 @@ public:
     // ── Chest (Plinko pegs / combat / mining) ────────────
     /// Golden Pegs: aantal peg-upgrade rolls (= level × 3).
     int   chestPegUpgradeCount() const;
-    /// 1.0 zonder Trough Boost; elk niveau ×1.5 extra (1.5^level op valbak-mults).
+    /// Duplicator pegs: rolls zoals golden pegs (level x 3).
+    int   chestDuplicatorRollCount() const;
+    /// 1.0 zonder Trough Boost; elk niveau ×1.32 extra (stapelt op valbak-mults).
     float chestPlinkoSlotMult() const;
 
     int   levelOfChest(ChestUpgradeID id) const;

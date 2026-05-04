@@ -43,6 +43,9 @@ private:
 
     uint64_t m_layoutFp = 0;
 
+    /// Voor mini-chest idle-bob / langzame frame-cycle op spritesheet.
+    float m_chestAnimT = 0.f;
+
     [[nodiscard]] uint64_t layoutFingerprint(const GameState& state) const;
     void                     rebuildLayout(const GameState& state);
 
