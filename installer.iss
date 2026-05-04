@@ -37,11 +37,11 @@ Source: "{#SourceDir}\{#AppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 ; SFML en andere DLLs
 Source: "{#SourceDir}\*.dll"; DestDir: "{app}"; Flags: ignoreversion
 
-; Assets (font, etc.)
+; Assets inclusief font, icon en geluiden
 Source: "{#SourceDir}\assets\*"; DestDir: "{app}\assets"; \
     Flags: ignoreversion recursesubdirs createallsubdirs
 
-; Icon apart kopiëren
+; Icon apart zeker stellen
 Source: "assets\icon.ico"; DestDir: "{app}\assets"; Flags: ignoreversion
 
 [Icons]
@@ -50,7 +50,7 @@ Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExeName}"; \
     IconFilename: "{app}\assets\icon.ico"
 Name: "{group}\{#AppName} verwijderen"; Filename: "{uninstallexe}"
 
-; Bureaublad
+; Bureaublad (optioneel, vinkje in installer)
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; \
     IconFilename: "{app}\assets\icon.ico"; Tasks: desktopicon
 

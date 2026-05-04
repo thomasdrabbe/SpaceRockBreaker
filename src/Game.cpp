@@ -1232,15 +1232,16 @@ void Game::drawMainMenu() const {
             btn.setOutlineThickness(2.f);
             m_window.draw(btn);
 
-            const float midY = by + L.btnH * 0.5f;
-            sf::Text    labMeas(m_font);
+            const float        midY = by + L.btnH * 0.5f;
+            const float        cxBtn = bx + L.btnW * 0.5f;
+            sf::Text           labMeas(m_font);
             labMeas.setString(diffBtns[d].label);
             labMeas.setCharacterSize(L.fBtn);
             labMeas.setStyle(sf::Text::Bold);
-            const float lw = labMeas.getLocalBounds().size.x;
+            const sf::FloatRect lb = labMeas.getLocalBounds();
             drawText(diffBtns[d].label,
-                     bx + (L.btnW - lw) * 0.5f,
-                     midY - static_cast<float>(L.fBtn) * 0.5f,
+                     cxBtn - (lb.position.x + lb.size.x * 0.5f),
+                     midY - (lb.position.y + lb.size.y * 0.5f),
                      L.fBtn,
                      diffBtns[d].col,
                      true);
@@ -1255,16 +1256,17 @@ void Game::drawMainMenu() const {
         backBtn.setOutlineThickness(2.f);
         m_window.draw(backBtn);
         {
-            const char* backLab = "Terug";
-            sf::Text    lm(m_font);
+            const char*         backLab = "Terug";
+            sf::Text            lm(m_font);
             lm.setString(backLab);
             lm.setCharacterSize(L.fBtn);
             lm.setStyle(sf::Text::Bold);
-            const float lw    = lm.getLocalBounds().size.x;
-            const float midYB = byBack + L.btnH * 0.5f;
+            const sf::FloatRect lbB = lm.getLocalBounds();
+            const float         midYB = byBack + L.btnH * 0.5f;
+            const float         cxBack = L.slotX0 + L.btnW * 0.5f;
             drawText(backLab,
-                     L.slotX0 + (L.btnW - lw) * 0.5f,
-                     midYB - static_cast<float>(L.fBtn) * 0.5f,
+                     cxBack - (lbB.position.x + lbB.size.x * 0.5f),
+                     midYB - (lbB.position.y + lbB.size.y * 0.5f),
                      L.fBtn,
                      sf::Color(180, 185, 210),
                      true);
@@ -1339,14 +1341,15 @@ void Game::drawMainMenu() const {
                      sf::Color(110, 200, 140),
                      true);
         } else {
-            sf::Text labMeas(m_font);
+            sf::Text            labMeas(m_font);
             labMeas.setString(btns[i].label);
             labMeas.setCharacterSize(L.fBtn);
             labMeas.setStyle(sf::Text::Bold);
-            const float lw = labMeas.getLocalBounds().size.x;
+            const sf::FloatRect lb = labMeas.getLocalBounds();
+            const float         cxBtn = bx + L.btnW * 0.5f;
             drawText(btns[i].label,
-                     bx + (L.btnW - lw) * 0.5f,
-                     midY - static_cast<float>(L.fBtn) * 0.5f,
+                     cxBtn - (lb.position.x + lb.size.x * 0.5f),
+                     midY - (lb.position.y + lb.size.y * 0.5f),
                      L.fBtn, btns[i].color, true);
         }
     }
