@@ -275,53 +275,40 @@ int main() {
     const fs::path dir     = exeDir();
     const fs::path gameExe = dir / "SpaceRockBreaker.exe";
 
-    const std::string localVer = readLocalVersion(dir);
-
+    std::string localVer  = readLocalVersion(dir);
     std::string remoteVer;
+    std::string infoLine  = "Controleren op updates...";
+    bool        canUpdate = false;
+
     const std::wstring cacheBust = L"?ts=" + std::to_wstring(GetTickCount64());
     try {
         const std::wstring versionPath =
             LR"(/thomasdrabbe/SpaceRockBreaker/main/version.txt)" + cacheBust;
-        remoteVer = httpGetText(
-            L"raw.githubusercontent.com",
-            versionPath,
-            true);
+        remoteVer = httpGetText(L"raw.githubusercontent.com", versionPath, true);
     } catch (...) {
         remoteVer.clear();
     }
 
     if (remoteVer.empty()) {
-        logLine("Remote version check failed; starting game.");
-        if (fs::exists(gameExe))
-            startGame(gameExe);
-        return 0;
-    }
-
-    const auto locT = semverTuple(localVer);
-    const auto remT = semverTuple(remoteVer);
-    if (!semverParsed(locT) || !semverParsed(remT)) {
-        if (remoteVer == localVer) {
-            if (fs::exists(gameExe))
-                startGame(gameExe);
-            return 0;
-        }
+        infoLine = "Geen update-info beschikbaar. Je kunt wel starten.";
     } else {
-        const int cmp = compareSemver(locT, remT);
-
-        /// Auto-increment lokale semver kan hoger zijn dan GitHub tijdens development;
-        /// dan geen oneindige forced updates.
-        if (cmp >= 0) {
-            if (cmp == 1)
-                logLine("Local semver newer than remote; skip update.");
-            if (fs::exists(gameExe))
-                startGame(gameExe);
-            return 0;
+        const auto locT = semverTuple(localVer);
+        const auto remT = semverTuple(remoteVer);
+        if (!semverParsed(locT) || !semverParsed(remT)) {
+            canUpdate = (remoteVer != localVer);
+        } else {
+            canUpdate = compareSemver(locT, remT) < 0;
         }
+
+        if (canUpdate)
+            infoLine = "Update beschikbaar: v" + remoteVer;
+        else
+            infoLine = "Je gebruikt de nieuwste versie.";
     }
 
     sf::RenderWindow window(
-        sf::VideoMode(sf::Vector2u{ 400u, 150u }),
-        sf::String{ L"Space Rock Breaker — Update" },
+        sf::VideoMode(sf::Vector2u{ 520u, 230u }),
+        sf::String{ L"Space Rock Breaker — Launcher" },
         sf::Style::Titlebar | sf::Style::Close);
     window.setFramerateLimit(60);
 
@@ -331,138 +318,206 @@ int main() {
 
     std::atomic<std::uint64_t> downloaded{ 0 };
     std::atomic<std::uint64_t> total{ 0 };
-    std::atomic<int>           status{ 0 };
-    const fs::path             zipPath =
+    std::atomic<int>           status{ 0 }; // 0=running/idle, 1=ok, <0 fail
+
+    const fs::path zipPath =
         fs::temp_directory_path()
         / ("SpaceRockBreaker_update_" + std::to_string(GetCurrentProcessId())
            + ".zip");
 
-    std::thread worker([&]() {
-        bool ok = false;
+    std::thread worker;
+    bool        workerRunning = false;
+    bool        workerJoined  = true;
 
-        // 1) Normale distributie via GitHub Releases (aanbevolen).
-        ok = winHttpDownload(
-            L"github.com",
-            LR"(/thomasdrabbe/SpaceRockBreaker/releases/latest/download/SpaceRockBreaker.zip)",
-            INTERNET_DEFAULT_HTTPS_PORT, true, zipPath, &downloaded, &total);
+    const sf::FloatRect startBtnR({ 20.f, 175.f }, { 150.f, 36.f });
+    const sf::FloatRect updateBtnR({ 185.f, 175.f }, { 150.f, 36.f });
+    const sf::FloatRect closeBtnR({ 350.f, 175.f }, { 150.f, 36.f });
 
-        // 2) Fallback: direct bestand in repository root.
-        if (!ok) {
-            downloaded.store(0);
-            total.store(0);
-            ok = winHttpDownload(
-                L"raw.githubusercontent.com",
-                LR"(/thomasdrabbe/SpaceRockBreaker/main/SpaceRockBreaker.zip?ts=)"
-                    + std::to_wstring(GetTickCount64()),
-                INTERNET_DEFAULT_HTTPS_PORT, true, zipPath, &downloaded, &total);
-            if (ok)
-                logLine("Updater fallback gebruikt: raw main/SpaceRockBreaker.zip");
-        }
-
-        // 3) Fallback: zip in installer_output map in de repo.
-        if (!ok) {
-            downloaded.store(0);
-            total.store(0);
-            ok = winHttpDownload(
-                L"raw.githubusercontent.com",
-                LR"(/thomasdrabbe/SpaceRockBreaker/main/installer_output/SpaceRockBreaker.zip?ts=)"
-                    + std::to_wstring(GetTickCount64()),
-                INTERNET_DEFAULT_HTTPS_PORT, true, zipPath, &downloaded, &total);
-            if (ok)
-                logLine("Updater fallback gebruikt: raw installer_output/SpaceRockBreaker.zip");
-        }
-
-        if (!ok) {
-            status.store(-1);
+    auto beginUpdate = [&]() {
+        if (workerRunning || !canUpdate)
             return;
-        }
-        if (!runExpandArchive(zipPath, dir)) {
-            status.store(-2);
+        downloaded.store(0);
+        total.store(0);
+        status.store(0);
+        workerRunning = true;
+        workerJoined  = false;
+        infoLine      = "Update downloaden...";
+
+        worker = std::thread([&]() {
+            bool ok = false;
+
+            // 1) Normale distributie via GitHub Releases.
+            ok = winHttpDownload(
+                L"github.com",
+                LR"(/thomasdrabbe/SpaceRockBreaker/releases/latest/download/SpaceRockBreaker.zip)",
+                INTERNET_DEFAULT_HTTPS_PORT, true, zipPath, &downloaded, &total);
+
+            // 2) Fallback: direct bestand in repository root.
+            if (!ok) {
+                downloaded.store(0);
+                total.store(0);
+                ok = winHttpDownload(
+                    L"raw.githubusercontent.com",
+                    LR"(/thomasdrabbe/SpaceRockBreaker/main/SpaceRockBreaker.zip?ts=)"
+                        + std::to_wstring(GetTickCount64()),
+                    INTERNET_DEFAULT_HTTPS_PORT, true, zipPath, &downloaded, &total);
+                if (ok)
+                    logLine("Updater fallback gebruikt: raw main/SpaceRockBreaker.zip");
+            }
+
+            // 3) Fallback: zip in installer_output map in de repo.
+            if (!ok) {
+                downloaded.store(0);
+                total.store(0);
+                ok = winHttpDownload(
+                    L"raw.githubusercontent.com",
+                    LR"(/thomasdrabbe/SpaceRockBreaker/main/installer_output/SpaceRockBreaker.zip?ts=)"
+                        + std::to_wstring(GetTickCount64()),
+                    INTERNET_DEFAULT_HTTPS_PORT, true, zipPath, &downloaded, &total);
+                if (ok)
+                    logLine("Updater fallback gebruikt: raw installer_output/SpaceRockBreaker.zip");
+            }
+
+            if (!ok) {
+                status.store(-1);
+                return;
+            }
+            if (!runExpandArchive(zipPath, dir)) {
+                status.store(-2);
+                fs::remove(zipPath);
+                return;
+            }
             fs::remove(zipPath);
-            return;
-        }
-        fs::remove(zipPath);
-        std::ofstream verOut(dir / "version.txt");
-        verOut << remoteVer << '\n';
-        if (!fs::exists(gameExe))
-            status.store(-3);
-        else
-            status.store(1);
-    });
+            std::ofstream verOut(dir / "version.txt");
+            verOut << remoteVer << '\n';
+            if (!fs::exists(gameExe))
+                status.store(-3);
+            else
+                status.store(1);
+        });
+    };
 
-    sf::Clock clock;
-    bool        workerJoined = false;
+    auto drawButton = [&](const sf::FloatRect& r,
+                          const std::string& label,
+                          bool enabled) {
+        sf::RectangleShape b(sf::Vector2f{ r.size.x, r.size.y });
+        b.setPosition(r.position);
+        b.setFillColor(enabled ? sf::Color(65, 95, 150) : sf::Color(50, 52, 58));
+        b.setOutlineColor(sf::Color(120, 135, 170));
+        b.setOutlineThickness(1.f);
+        window.draw(b);
+
+        sf::Text t(font);
+        t.setCharacterSize(14);
+        t.setString(label);
+        t.setFillColor(enabled ? sf::Color(240, 245, 255)
+                               : sf::Color(150, 160, 175));
+        t.setPosition({ r.position.x + 12.f, r.position.y + 8.f });
+        window.draw(t);
+    };
+
     while (window.isOpen()) {
         while (const std::optional ev = window.pollEvent()) {
             if (ev->is<sf::Event::Closed>()) {
-                if (!workerJoined && worker.joinable()) {
+                if (workerRunning && worker.joinable()) {
                     worker.detach();
-                    workerJoined = true;
+                    workerJoined  = true;
+                    workerRunning = false;
                 }
                 window.close();
+            } else if (const auto* mp = ev->getIf<sf::Event::MouseButtonPressed>()) {
+                if (mp->button != sf::Mouse::Button::Left)
+                    continue;
+                const sf::Vector2f m = window.mapPixelToCoords({ mp->position.x, mp->position.y });
+
+                if (startBtnR.contains(m) && !workerRunning) {
+                    if (fs::exists(gameExe)) {
+                        startGame(gameExe);
+                        return 0;
+                    }
+                    infoLine = "SpaceRockBreaker.exe niet gevonden in installatiemap.";
+                } else if (updateBtnR.contains(m) && canUpdate && !workerRunning) {
+                    beginUpdate();
+                } else if (closeBtnR.contains(m) && !workerRunning) {
+                    window.close();
+                }
             }
         }
 
-        const int st = status.load();
-        if (!workerJoined && st != 0) {
-            worker.join();
-            workerJoined = true;
-            if (st == 1 && fs::exists(gameExe)) {
-                startGame(gameExe);
-                return 0;
+        if (workerRunning) {
+            const int st = status.load();
+            if (st != 0 && !workerJoined) {
+                worker.join();
+                workerJoined  = true;
+                workerRunning = false;
+                if (st == 1) {
+                    localVer  = remoteVer;
+                    canUpdate = false;
+                    infoLine  = "Update klaar. Klik op Start Game.";
+                } else if (st == -1) {
+                    infoLine = "Download mislukt (release/zip niet gevonden).";
+                } else if (st == -2) {
+                    infoLine = "Uitpakken mislukt.";
+                } else if (st == -3) {
+                    infoLine = "Gamebestand niet gevonden na update.";
+                }
             }
-            if (st == -1 || st == -2)
-                logLine("Update failed (download or extract).");
         }
 
         window.clear(sf::Color(20, 22, 34));
 
-        std::string line =
-            "Update beschikbaar: v" + remoteVer + " — Bezig met downloaden...";
-        if (workerJoined) {
-            if (st == -1)
-                line = "Download mislukt (geen release/zip gevonden). Sluit dit venster.";
-            else if (st == -2)
-                line = "Uitpakken mislukt. Sluit dit venster.";
-            else if (st == -3)
-                line = "SpaceRockBreaker.exe niet gevonden na update.";
+        sf::Text title(font);
+        title.setCharacterSize(18);
+        title.setString("Space Rock Breaker Launcher");
+        title.setFillColor(sf::Color(235, 240, 255));
+        title.setPosition({ 20.f, 16.f });
+        window.draw(title);
+
+        sf::Text versions(font);
+        versions.setCharacterSize(13);
+        versions.setString(
+            "Geinstalleerd: v" + localVer
+            + (remoteVer.empty() ? "" : ("   Online: v" + remoteVer)));
+        versions.setFillColor(sf::Color(185, 196, 220));
+        versions.setPosition({ 20.f, 48.f });
+        window.draw(versions);
+
+        sf::Text msg(font);
+        msg.setCharacterSize(14);
+        msg.setString(infoLine);
+        msg.setFillColor(sf::Color(220, 228, 248));
+        msg.setPosition({ 20.f, 76.f });
+        window.draw(msg);
+
+        const std::uint64_t t = total.load();
+        const std::uint64_t d = downloaded.load();
+        float p = 0.f;
+        if (workerRunning && t > 0) {
+            p = std::min(
+                1.f, static_cast<float>(
+                         static_cast<double>(d) / static_cast<double>(t)));
         }
 
-        sf::Text txt(font);
-        txt.setCharacterSize(14);
-        txt.setString(line);
-        txt.setFillColor(sf::Color(230, 235, 255));
-        txt.setPosition({ 12.f, 18.f });
-        window.draw(txt);
-
-        const std::uint64_t t  = total.load();
-        const std::uint64_t d  = downloaded.load();
-        float               p0 = (t > 0)
-            ? std::min(1.f,
-                       static_cast<float>(static_cast<double>(d)
-                                          / static_cast<double>(t)))
-            : 0.f;
-        if (st == 0 && t == 0)
-            p0 = std::min(1.f, clock.getElapsedTime().asSeconds() / 8.f);
-
-        sf::RectangleShape track(sf::Vector2f{ 360.f, 18.f });
-        track.setPosition({ 20.f, 95.f });
+        sf::RectangleShape track(sf::Vector2f{ 480.f, 16.f });
+        track.setPosition({ 20.f, 125.f });
         track.setFillColor(sf::Color(40, 44, 70));
         track.setOutlineColor(sf::Color(90, 100, 150));
         track.setOutlineThickness(1.f);
         window.draw(track);
 
-        sf::RectangleShape fill(sf::Vector2f{ 356.f * p0, 14.f });
-        fill.setPosition({ 22.f, 97.f });
+        sf::RectangleShape fill(sf::Vector2f{ 476.f * p, 12.f });
+        fill.setPosition({ 22.f, 127.f });
         fill.setFillColor(sf::Color(80, 180, 255));
         window.draw(fill);
+
+        drawButton(startBtnR, "Start Game", !workerRunning);
+        drawButton(updateBtnR, "Update", canUpdate && !workerRunning);
+        drawButton(closeBtnR, "Afsluiten", !workerRunning);
 
         window.display();
     }
 
     if (!workerJoined && worker.joinable())
         worker.join();
-    if (fs::exists(gameExe))
-        startGame(gameExe);
     return 0;
 }
