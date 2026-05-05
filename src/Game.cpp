@@ -24,6 +24,33 @@ void migrateLegacySaveIfNeeded() {
     out << in.rdbuf();
 }
 
+std::string readRuntimeVersionTag() {
+    auto firstLineTrimmed = [](const std::string& p) -> std::string {
+        std::ifstream in(p);
+        if (!in)
+            return {};
+        std::string line;
+        if (!std::getline(in, line))
+            return {};
+        while (!line.empty()
+               && (line.back() == '\r' || line.back() == '\n'
+                   || line.back() == ' ' || line.back() == '\t'))
+            line.pop_back();
+        return line;
+    };
+
+    const std::string appDir = applicationDirectory();
+    if (!appDir.empty()) {
+        const std::string fromApp = firstLineTrimmed(appDir + "/version.txt");
+        if (!fromApp.empty())
+            return fromApp;
+    }
+    const std::string fromCwd = firstLineTrimmed("version.txt");
+    if (!fromCwd.empty())
+        return fromCwd;
+    return "unknown";
+}
+
 void drawPanelCoin(sf::RenderTarget& rw, float cx, float cy, float r) {
     sf::CircleShape rim(r);
     rim.setOrigin({ r, r });
@@ -1299,6 +1326,8 @@ Game::MainMenuLayout Game::computeMainMenuLayout() const {
 }
 
 void Game::drawMainMenu() const {
+    static const std::string kRuntimeVersion = readRuntimeVersionTag();
+
     sf::RectangleShape bg(sf::Vector2f{ m_scrW, m_scrH });
     bg.setFillColor(sf::Color(6, 8, 18));
     m_window.draw(bg);
@@ -1310,6 +1339,12 @@ void Game::drawMainMenu() const {
              L.titleX,
              L.titleY,
              L.fTitle, sf::Color(80, 160, 255), true);
+    drawText("Versie: " + kRuntimeVersion,
+             std::round(20.f * m_scale),
+             std::round(14.f * m_scale),
+             std::max(12u, static_cast<unsigned>(std::round(14.f * m_scale))),
+             sf::Color(150, 165, 200),
+             true);
 
     for (int s = 0; s < SAVE_SLOT_COUNT; s++) {
         float bx = L.slotX0 + static_cast<float>(s) * (L.slotW + L.slotGap);

@@ -555,11 +555,24 @@ int main() {
         versions.setPosition({ 20.f, 108.f });
         window.draw(versions);
 
+        sf::Text available(font);
+        available.setCharacterSize(24);
+        if (remoteVer.empty())
+            available.setString("Beschikbare update: onbekend");
+        else if (canUpdate)
+            available.setString("Beschikbare update: v" + remoteVer);
+        else
+            available.setString("Beschikbare update: geen");
+        available.setFillColor(canUpdate ? sf::Color(120, 220, 150)
+                                         : sf::Color(160, 170, 190));
+        available.setPosition({ 20.f, 146.f });
+        window.draw(available);
+
         sf::Text msg(font);
         msg.setCharacterSize(30);
         msg.setString(infoLine);
         msg.setFillColor(sf::Color(220, 228, 248));
-        msg.setPosition({ 20.f, 172.f });
+        msg.setPosition({ 20.f, 196.f });
         window.draw(msg);
 
         const std::uint64_t t = total.load();
