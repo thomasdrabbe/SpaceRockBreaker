@@ -369,15 +369,13 @@ int main() {
 
     std::string localVer  = readLocalVersion(dir);
     std::string remoteVer;
-    std::string infoLine  = "Controleren op updates...";
+    std::string infoLine  = "Klaar. Klik op Update om te controleren.";
     bool        canUpdate = false;
-    bool        onlineOk  = false;
 
     auto refreshRemote = [&]() {
         localVer = readLocalVersion(dir);
         remoteVer.clear();
         canUpdate = false;
-        onlineOk  = false;
 
         try {
             remoteVer = fetchRemoteVersionText();
@@ -386,11 +384,9 @@ int main() {
         }
 
         if (remoteVer.empty()) {
-            infoLine = "Geen online verbinding met updateserver. We proberen automatisch opnieuw.";
-            logLine("Version check failed on all endpoints.");
+            infoLine = "Versiecheck niet beschikbaar. Je kunt wel updaten.";
             return;
         }
-        onlineOk = true;
 
         const auto locT = semverTuple(localVer);
         const auto remT = semverTuple(remoteVer);
@@ -539,12 +535,7 @@ int main() {
                     }
                     infoLine = "SpaceRockBreaker.exe niet gevonden in installatiemap.";
                 } else if (updateBtnR.contains(m) && !workerRunning) {
-                    if (!onlineOk) {
-                        infoLine = "Versiecheck offline; updatepakket wordt toch geprobeerd...";
-                    } else if (!canUpdate) {
-                        infoLine = "Je game is al up-to-date.";
-                        continue;
-                    }
+                    infoLine = "Updatepakket downloaden...";
                     beginUpdate();
                 } else if (closeBtnR.contains(m) && !workerRunning) {
                     window.close();
@@ -575,9 +566,8 @@ int main() {
                 }
             }
         } else {
-            // Achtergrond-hercheck: als verbinding tijdelijk wegvalt hoeft de
-            // gebruiker niet handmatig te herstarten.
-            if (!onlineOk && autoRefreshClock.getElapsedTime().asSeconds() >= 8.f) {
+            // Achtergrond-hercheck om versie-informatie actueel te houden.
+            if (autoRefreshClock.getElapsedTime().asSeconds() >= 8.f) {
                 refreshRemote();
                 autoRefreshClock.restart();
             }
@@ -601,32 +591,22 @@ int main() {
         versions.setPosition({ 20.f, 108.f });
         window.draw(versions);
 
-        sf::Text conn(font);
-        conn.setCharacterSize(22);
-        conn.setString(std::string("Verbinding: ") + (onlineOk ? "online" : "offline"));
-        conn.setFillColor(onlineOk ? sf::Color(120, 220, 150)
-                                   : sf::Color(255, 140, 120));
-        conn.setPosition({ 20.f, 144.f });
-        window.draw(conn);
-
         sf::Text available(font);
         available.setCharacterSize(24);
-        if (remoteVer.empty())
-            available.setString("Beschikbare update: v" + localVer + " (offline)");
-        else if (canUpdate)
+        if (!remoteVer.empty() && canUpdate)
             available.setString("Beschikbare update: v" + remoteVer);
         else
             available.setString("Beschikbare update: v" + localVer);
         available.setFillColor(canUpdate ? sf::Color(120, 220, 150)
                                          : sf::Color(160, 170, 190));
-        available.setPosition({ 20.f, 174.f });
+        available.setPosition({ 20.f, 146.f });
         window.draw(available);
 
         sf::Text msg(font);
         msg.setCharacterSize(30);
         msg.setString(infoLine);
         msg.setFillColor(sf::Color(220, 228, 248));
-        msg.setPosition({ 20.f, 228.f });
+        msg.setPosition({ 20.f, 196.f });
         window.draw(msg);
 
         const std::uint64_t t = total.load();
