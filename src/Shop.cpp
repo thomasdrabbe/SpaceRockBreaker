@@ -67,7 +67,62 @@ uint64_t doubleBits64(double d) {
 // ═════════════════════════════════════════════════════════════
 //  Constructor / init
 // ═════════════════════════════════════════════════════════════
-Shop::Shop() {}
+Shop::Shop() {
+    m_categoryVisible.fill(false);
+}
+
+void Shop::setCategoryVisible(ShopCategory cat, bool visible) {
+    m_categoryVisible[static_cast<int>(cat)] = visible;
+    ensureActiveCategoryVisible();
+}
+
+bool Shop::isCategoryVisible(ShopCategory cat) const {
+    return m_categoryVisible[static_cast<int>(cat)];
+}
+
+void Shop::setMiningShowsWarpOnly(bool warpOnly) {
+    m_miningShowsWarpOnly = warpOnly;
+}
+
+void Shop::resetProgressiveShopState() {
+    m_categoryVisible.fill(false);
+    m_miningShowsWarpOnly = true;
+    m_activeCategory      = ShopCategory::MINING;
+    m_scroll              = 0.f;
+    m_layoutFp            = 0;
+}
+
+int Shop::visibleCategoryCount() const {
+    int n = 0;
+    for (bool v : m_categoryVisible)
+        if (v) ++n;
+    return n;
+}
+
+ShopCategory Shop::categoryFromTabIndex(int visibleTabIdx) const {
+    int seen = 0;
+    for (int i = 0; i < static_cast<int>(ShopCategory::CATEGORY_COUNT); ++i) {
+        if (!m_categoryVisible[static_cast<std::size_t>(i)])
+            continue;
+        if (seen == visibleTabIdx)
+            return static_cast<ShopCategory>(i);
+        ++seen;
+    }
+    return ShopCategory::MINING;
+}
+
+void Shop::ensureActiveCategoryVisible() {
+    if (visibleCategoryCount() == 0)
+        return;
+    if (m_categoryVisible[static_cast<int>(m_activeCategory)])
+        return;
+    for (int i = 0; i < static_cast<int>(ShopCategory::CATEGORY_COUNT); ++i) {
+        if (m_categoryVisible[static_cast<std::size_t>(i)]) {
+            m_activeCategory = static_cast<ShopCategory>(i);
+            return;
+        }
+    }
+}
 
 void Shop::init(sf::Font& font,
                 float panelX, float panelY,
@@ -94,8 +149,8 @@ void Shop::init(sf::Font& font,
 //  tabBounds
 // ═════════════════════════════════════════════════════════════
 sf::FloatRect Shop::tabBounds(int idx) const {
-    int   count = static_cast<int>(ShopCategory::CATEGORY_COUNT);
-    float tabW  = (m_w - m_scrollBarW) / static_cast<float>(count);
+    const int count = std::max(1, visibleCategoryCount());
+    float     tabW  = (m_w - m_scrollBarW) / static_cast<float>(count);
     return sf::FloatRect(
         { m_x + idx * tabW, m_y },
         { tabW, m_tabH });
@@ -113,6 +168,9 @@ uint64_t Shop::layoutFingerprint(const GameState& state) const {
 
     mix(static_cast<uint64_t>(static_cast<int>(m_activeCategory)));
     mix(doubleBits64(static_cast<double>(m_scroll)));
+    for (bool vis : m_categoryVisible)
+        mix(static_cast<uint64_t>(vis ? 1u : 0u));
+    mix(static_cast<uint64_t>(m_miningShowsWarpOnly ? 1u : 0u));
 
     mix(floatBits64(m_x));
     mix(floatBits64(m_y));
@@ -131,8 +189,15 @@ uint64_t Shop::layoutFingerprint(const GameState& state) const {
 void Shop::buildCards(const GameState& state) {
     m_cards.clear();
 
-    int catIdx = static_cast<int>(m_activeCategory);
-    const auto& ids = CATEGORIES[catIdx].ids;
+    if (!m_categoryVisible[static_cast<int>(m_activeCategory)]) {
+        ensureActiveCategoryVisible();
+        if (!m_categoryVisible[static_cast<int>(m_activeCategory)])
+            return;
+    }
+
+    std::vector<UpgradeID> ids = CATEGORIES[static_cast<int>(m_activeCategory)].ids;
+    if (m_activeCategory == ShopCategory::MINING && m_miningShowsWarpOnly)
+        ids = { UpgradeID::WARP_DRIVE };
 
     float cardW = m_w - m_scrollBarW - m_cardMargin * 2.f;
     float y     = m_y + m_tabH + m_cardMargin - m_scroll;
@@ -165,9 +230,10 @@ bool Shop::handleEvent(const sf::Event& event, GameState& state,
         if (e->button == sf::Mouse::Button::Left) {
             sf::Vector2f mp = mapPixelToUi(window, sf::Vector2i(e->position));
 
-            for (int i = 0; i < static_cast<int>(ShopCategory::CATEGORY_COUNT); i++) {
+            const int visTabs = visibleCategoryCount();
+            for (int i = 0; i < visTabs; i++) {
                 if (tabBounds(i).contains(mp)) {
-                    m_activeCategory = static_cast<ShopCategory>(i);
+                    m_activeCategory = categoryFromTabIndex(i);
                     m_scroll         = 0.f;
                     buildCards(state);
                     return false;
@@ -210,9 +276,10 @@ void Shop::scrollBy(float delta) {
 // ═════════════════════════════════════════════════════════════
 //  draw
 // ═════════════════════════════════════════════════════════════
-void Shop::draw(sf::RenderTarget& target, const GameState& state) const {
-    drawBackground(target);
-    drawCategoryTabs(target, state);
+void Shop::draw(sf::RenderTarget& target, const GameState& state,
+                bool seeThroughMiningBackdrop) const {
+    drawBackground(target, seeThroughMiningBackdrop);
+    drawCategoryTabs(target, state, seeThroughMiningBackdrop);
 
     // Viewport clipping — gebruik werkelijke target-grootte
     auto  tSize = target.getSize();
@@ -233,20 +300,23 @@ void Shop::draw(sf::RenderTarget& target, const GameState& state) const {
     target.setView(cardView);
 
     for (const auto& card : m_cards)
-        drawCard(target, card, state);
+        drawCard(target, card, state, seeThroughMiningBackdrop);
 
     target.setView(oldView);
-    drawScrollBar(target);
+    drawScrollBar(target, seeThroughMiningBackdrop);
 }
 
 // ─────────────────────────────────────────────────────────────
 //  drawBackground
 // ─────────────────────────────────────────────────────────────
-void Shop::drawBackground(sf::RenderTarget& target) const {
+void Shop::drawBackground(sf::RenderTarget& target,
+                          bool               seeThroughMiningBackdrop) const {
     sf::RectangleShape bg(sf::Vector2f{ m_w, m_h });
     bg.setPosition({ m_x, m_y });
-    bg.setFillColor(sf::Color(12, 14, 28, 245));
-    bg.setOutlineColor(sf::Color(50, 60, 100, 180));
+    bg.setFillColor(
+        hubBackdropTint(sf::Color(12, 14, 28, 245), seeThroughMiningBackdrop));
+    bg.setOutlineColor(hubBackdropTint(sf::Color(50, 60, 100, 180),
+                                      seeThroughMiningBackdrop));
     bg.setOutlineThickness(1.f);
     target.draw(bg);
 }
@@ -255,24 +325,32 @@ void Shop::drawBackground(sf::RenderTarget& target) const {
 //  drawCategoryTabs
 // ─────────────────────────────────────────────────────────────
 void Shop::drawCategoryTabs(sf::RenderTarget& target,
-                              const GameState& /*state*/) const {
-    int      count   = static_cast<int>(ShopCategory::CATEGORY_COUNT);
+                            const GameState& /*state*/,
+                            bool               seeThroughMiningBackdrop) const {
+    const bool st      = seeThroughMiningBackdrop;
+    const int visTabs = visibleCategoryCount();
+    if (visTabs <= 0)
+        return;
     unsigned tabFont = static_cast<unsigned>(std::round(14.f * m_scale));
 
-    for (int i = 0; i < count; i++) {
-        auto  bounds = tabBounds(i);
-        bool  active = (m_activeCategory == static_cast<ShopCategory>(i));
-        auto& accent = CAT_COLORS[i];
+    for (int i = 0; i < visTabs; i++) {
+        const ShopCategory cat   = categoryFromTabIndex(i);
+        const int          ci    = static_cast<int>(cat);
+        auto               bounds = tabBounds(i);
+        bool               active = (m_activeCategory == cat);
+        auto&              accent = CAT_COLORS[ci];
 
         sf::RectangleShape bg(sf::Vector2f{
             bounds.size.x, bounds.size.y });
         bg.setPosition(bounds.position);
-        bg.setFillColor(active
-            ? sf::Color(accent.r/5, accent.g/5, accent.b/5, 255)
-            : sf::Color(16, 18, 32, 255));
-        bg.setOutlineColor(active
-            ? sf::Color(accent.r, accent.g, accent.b, 200)
-            : sf::Color(40, 48, 80, 150));
+        bg.setFillColor(hubBackdropTint(
+            active ? sf::Color(accent.r / 5, accent.g / 5, accent.b / 5, 255)
+                   : sf::Color(16, 18, 32, 255),
+            st));
+        bg.setOutlineColor(hubBackdropTint(
+            active ? sf::Color(accent.r, accent.g, accent.b, 200)
+                   : sf::Color(40, 48, 80, 150),
+            st));
         bg.setOutlineThickness(1.f);
         target.draw(bg);
 
@@ -288,7 +366,7 @@ void Shop::drawCategoryTabs(sf::RenderTarget& target,
 
         sf::Text lbl(*m_font);
         lbl.setCharacterSize(tabFont);
-        lbl.setString(CATEGORIES[i].label);
+        lbl.setString(CATEGORIES[ci].label);
         lbl.setFillColor(active ? accent : sf::Color(130, 140, 170));
         if (active) lbl.setStyle(sf::Text::Bold);
         lbl.setPosition({
@@ -302,7 +380,7 @@ void Shop::drawCategoryTabs(sf::RenderTarget& target,
     // Scheidingslijn onder tabs
     sf::RectangleShape sep(sf::Vector2f{ m_w, 1.f });
     sep.setPosition({ m_x, m_y + m_tabH });
-    sep.setFillColor(sf::Color(50, 60, 100, 200));
+    sep.setFillColor(hubBackdropTint(sf::Color(50, 60, 100, 200), st));
     target.draw(sep);
 }
 
@@ -311,9 +389,11 @@ void Shop::drawCategoryTabs(sf::RenderTarget& target,
 // ─────────────────────────────────────────────────────────────
 void Shop::drawCard(sf::RenderTarget&  target,
                      const UpgradeCard& card,
-                     const GameState&   state) const {
-    int catIdx  = static_cast<int>(m_activeCategory);
-    auto& accent = CAT_COLORS[catIdx];
+                     const GameState&   state,
+                     bool               seeThroughMiningBackdrop) const {
+    const int catIdx = static_cast<int>(m_activeCategory);
+    auto&     accent = CAT_COLORS[catIdx];
+    const bool st    = seeThroughMiningBackdrop;
 
     bool hov = card.hovered;
     bool aff = card.affordable;
@@ -322,13 +402,15 @@ void Shop::drawCard(sf::RenderTarget&  target,
     sf::RectangleShape bg(sf::Vector2f{
         card.bounds.size.x, card.bounds.size.y });
     bg.setPosition(card.bounds.position);
-    bg.setFillColor(hov && aff
-        ? sf::Color(accent.r/6, accent.g/6, accent.b/6, 240)
-        : sf::Color(18, 20, 36, 230));
-    bg.setOutlineColor(aff
-        ? sf::Color(accent.r, accent.g, accent.b,
-                    hov ? 220 : 120)
-        : sf::Color(40, 44, 70, 100));
+    bg.setFillColor(hubBackdropTint(
+        hov && aff ? sf::Color(accent.r / 5, accent.g / 5, accent.b / 5, 240)
+                   : sf::Color(18, 20, 36, 230),
+        st));
+    bg.setOutlineColor(hubBackdropTint(
+        aff ? sf::Color(accent.r, accent.g, accent.b,
+                        static_cast<std::uint8_t>(hov ? 220 : 120))
+            : sf::Color(40, 44, 70, 100),
+        st));
     bg.setOutlineThickness(hov && aff ? 2.f : 1.f);
     target.draw(bg);
 
@@ -412,7 +494,8 @@ void Shop::drawCard(sf::RenderTarget&  target,
 // ─────────────────────────────────────────────────────────────
 //  drawScrollBar
 // ─────────────────────────────────────────────────────────────
-void Shop::drawScrollBar(sf::RenderTarget& target) const {
+void Shop::drawScrollBar(sf::RenderTarget& target,
+                         bool               seeThroughMiningBackdrop) const {
     if (m_maxScroll <= 0.f) return;
 
     float visibleH = m_h - m_tabH;
@@ -424,12 +507,14 @@ void Shop::drawScrollBar(sf::RenderTarget& target) const {
 
     sf::RectangleShape track(sf::Vector2f{ m_scrollBarW, visibleH });
     track.setPosition({ barX, m_y + m_tabH });
-    track.setFillColor(sf::Color(20, 24, 44));
+    track.setFillColor(
+        hubBackdropTint(sf::Color(20, 24, 44, 255), seeThroughMiningBackdrop));
     target.draw(track);
 
     sf::RectangleShape bar(sf::Vector2f{ m_scrollBarW - 2.f, barH });
     bar.setPosition({ barX + 1.f, barY });
-    bar.setFillColor(sf::Color(80, 90, 140, 200));
+    bar.setFillColor(hubBackdropTint(sf::Color(80, 90, 140, 200),
+                                      seeThroughMiningBackdrop));
     target.draw(bar);
 }
 
@@ -481,7 +566,7 @@ std::string Shop::formatEffect(UpgradeID id,
         case UpgradeID::AUTO_PLINKO:
             ss << (lv > 0 ? "Actief" : "Inactief"); break;
         case UpgradeID::WARP_DRIVE:
-            ss << (state.levelOf(id) > 0 ? "Unlocked" : "Locked"); break;
+            ss << "Charge: " << state.warpDurationSec() << "s"; break;
         case UpgradeID::UNLOCK_BRONZE:
         case UpgradeID::UNLOCK_SILVER:
         case UpgradeID::UNLOCK_GOLD:

@@ -8,6 +8,8 @@
 #include "Plinko.h"
 #include "Shop.h"
 #include "ChestScreen.h"
+#include "NotificationSystem.h"
+#include "UnlockSystem.h"
 
 // ─────────────────────────────────────────────────────────────
 //  Notification
@@ -29,6 +31,8 @@ public:
     Game();
     void run();
 
+    void setTabVisible(Tab t, bool visible);
+    bool isTabVisible(Tab t) const;
 
 private:
     // ── Window ────────────────────────────────────────────
@@ -48,6 +52,12 @@ private:
     Tab       m_activeTab = Tab::MINING;
     bool      m_paused    = false;
     RunMode   m_runMode   = RunMode::BASE;
+
+    std::array<bool, TAB_COUNT> m_tabVisible{};
+    float                       m_hitFlashTimer = 0.f;
+
+    NotificationSystem m_notifications;
+    UnlockSystem       m_unlockSystem;
 
     // ── Assets (gedeeld met mining UI) ────────────────────
     sf::Texture m_keyTex;
@@ -156,16 +166,25 @@ private:
                     bool                 shift);
 
     // ── Tab bar ───────────────────────────────────────────
-    sf::FloatRect tabRect(int idx) const;
+    sf::FloatRect tabRect(int visibleIdx) const;
     void          drawTabBar()     const;
-    void          drawActiveTab()  const;
+    void          drawForegroundTab() const;
+    int           visibleTabCount() const;
+    Tab           tabFromVisibleSlot(int slot) const;
+    void          clampActiveTabToVisibility();
+    void          resetNewGameUi();
+
+    [[nodiscard]] bool hubMiningBackdropTransparent() const {
+        return m_activeTab != Tab::MINING
+            && m_state.difficulty != Difficulty::Easy;
+    }
 
     // ── Side panel ────────────────────────────────────────
     void drawSidePanel() const;
     // DROP (Plinko) + Terug naar basis onder resources-blok
 
     // ── Plinko tab ────────────────────────────────────────
-    void drawPlinkoTab()             const;
+    void drawPlinkoTab(bool seeThroughMiningBackdrop) const;
     void handlePlinkoClick(sf::Vector2f pos);
     void rebuildPlinko();
 

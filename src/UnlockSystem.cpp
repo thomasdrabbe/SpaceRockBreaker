@@ -1,0 +1,151 @@
+#include "UnlockSystem.h"
+#include "GameState.h"
+#include "NotificationSystem.h"
+#include "Game.h"
+#include "Shop.h"
+#include "MiningScreen.h"
+
+namespace {
+
+constexpr int kPhaseCount = 9;
+
+void applyPhaseVisibility(int                    phase,
+                          GameState&             state,
+                          Game&                  game,
+                          Shop&                  shop,
+                          MiningScreen& /*mining*/) {
+    switch (phase) {
+        case 1:
+            game.setTabVisible(Tab::PLINKO, true);
+            break;
+        case 2:
+            game.setTabVisible(Tab::SHOP, true);
+            shop.setCategoryVisible(ShopCategory::WEAPONS, false);
+            shop.setCategoryVisible(ShopCategory::MINING, true);
+            shop.setCategoryVisible(ShopCategory::PLINKO, false);
+            shop.setCategoryVisible(ShopCategory::ECONOMY, false);
+            shop.setCategoryVisible(ShopCategory::ORE_TIERS, false);
+            shop.setMiningShowsWarpOnly(true);
+            break;
+        case 3:
+            shop.setCategoryVisible(ShopCategory::WEAPONS, true);
+            break;
+        case 4:
+            shop.setMiningShowsWarpOnly(false);
+            shop.setCategoryVisible(ShopCategory::MINING, true);
+            break;
+        case 5:
+            break;
+        case 6:
+            game.setTabVisible(Tab::CHESTS, true);
+            state.keyAsteroidsEnabled = true;
+            break;
+        case 7:
+            shop.setCategoryVisible(ShopCategory::PLINKO, true);
+            shop.setCategoryVisible(ShopCategory::ECONOMY, true);
+            shop.setCategoryVisible(ShopCategory::ORE_TIERS, true);
+            break;
+        case 8:
+            game.setTabVisible(Tab::PRESTIGE, true);
+            break;
+        default:
+            break;
+    }
+}
+
+} // namespace
+
+void UnlockSystem::update(GameState&           state,
+                          NotificationSystem&  notifications,
+                          Game&                game,
+                          Shop&                shop,
+                          MiningScreen&        mining) {
+    for (int p = 1; p < kPhaseCount; ++p) {
+        if (state.unlockPhaseDone[static_cast<std::size_t>(p)])
+            applyPhaseVisibility(p, state, game, shop, mining);
+    }
+
+    auto markDone = [&](int p) {
+        state.unlockPhaseDone[static_cast<std::size_t>(p)] = true;
+        applyPhaseVisibility(p, state, game, shop, mining);
+    };
+
+    if (!state.unlockPhaseDone[1] && state.totalOre >= 5.0) {
+        if (state.upgradeLevels[static_cast<int>(UpgradeID::PLINKO_BALLS)] == 0)
+            state.upgradeLevels[static_cast<int>(UpgradeID::PLINKO_BALLS)] = 15;
+        notifications.push(
+            "\xF0\x9F\x8E\xB2 Plinko unlocked! Je eerste 15 balls zijn gratis!",
+            sf::Color(255, 230, 120),
+            4.f,
+            -1);
+        markDone(1);
+    }
+
+    if (!state.unlockPhaseDone[2] && state.totalOre >= 25.0) {
+        notifications.push(
+            "\xF0\x9F\x9A\x80 Shop unlocked! Koop Warp Drive om naar de volgende "
+            "zone te gaan.",
+            sf::Color(120, 200, 255),
+            4.f,
+            -1);
+        markDone(2);
+    }
+
+    if (!state.unlockPhaseDone[3] && state.currentLevel >= 2) {
+        notifications.push(
+            "\xE2\x9A\x94\xEF\xB8\x8F Zone 2 bereikt! Weapons upgrades beschikbaar.",
+            sf::Color(255, 180, 140),
+            4.f,
+            -1);
+        markDone(3);
+    }
+
+    if (!state.unlockPhaseDone[4] && state.credits >= 50.0) {
+        notifications.push(
+            "\xE2\x9B\x8F\xEF\xB8\x8F Mining upgrades beschikbaar!",
+            sf::Color(160, 220, 255),
+            4.f,
+            -1);
+        markDone(4);
+    }
+
+    if (!state.unlockPhaseDone[5] && state.credits >= 100.0) {
+        notifications.push(
+            "\xF0\x9F\xA4\x96 Auto Plinko beschikbaar! Koop het in de shop om "
+            "tegelijk te minen \xC3\xA9n Plinko te spelen.",
+            sf::Color(255, 200, 120),
+            4.f,
+            static_cast<int>(Tab::SHOP));
+        markDone(5);
+    }
+
+    if (!state.unlockPhaseDone[6] && state.currentLevel >= 3) {
+        notifications.push(
+            "\xF0\x9F\x97\x9D\xEF\xB8\x8F Chests unlocked! Schiet Key Asteroids neer "
+            "voor sleutels.",
+            sf::Color(255, 220, 160),
+            4.f,
+            -1);
+        markDone(6);
+    }
+
+    if (!state.unlockPhaseDone[7] && state.currentLevel >= 3) {
+        notifications.push(
+            "\xF0\x9F\x8E\xB0 Plinko, Economy en Ore Tier upgrades beschikbaar!",
+            sf::Color(220, 180, 255),
+            4.f,
+            -1);
+        markDone(7);
+    }
+
+    if (!state.unlockPhaseDone[8] && state.currentLevel >= 5) {
+        notifications.push(
+            "\xE2\x9C\xA8 Prestige beschikbaar! Reset voor permanente crystal bonussen.",
+            sf::Color(200, 160, 255),
+            4.f,
+            -1);
+        markDone(8);
+    }
+
+    mining.setKeyAsteroidsEnabled(state.keyAsteroidsEnabled);
+}

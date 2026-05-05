@@ -82,7 +82,8 @@ public:
                 ParticleSystem& particles);
 
     void draw(sf::RenderTarget& target,
-              sf::Font&         font) const;
+              sf::Font&         font,
+              bool              seeThroughMiningBackdrop = false) const;
 
     /// Wis persistente peg-rarity (na load ander slot / nieuw spel).
     void resetGoldenPegRarityState();

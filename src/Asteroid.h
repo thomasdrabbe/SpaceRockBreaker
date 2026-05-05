@@ -81,6 +81,8 @@ public:
     void maintainField(int targetCount,
                        float ox, float oy, float areaW, float areaH,
                        float hpMult, OreTier maxTier);
+    void setKeyAsteroidsEnabled(bool enabled) { m_keyAsteroidsEnabled = enabled; }
+
     bool trySpawnKey(float ox, float oy, float areaW, float areaH,
                      float hpMult);
     bool trySpawnBoss(float ox, float oy, float areaW, float areaH,
@@ -120,6 +122,8 @@ public:
 private:
     std::array<Asteroid, MAX_ASTEROIDS> m_pool;
     int                                  m_alive = 0;
+
+    bool m_keyAsteroidsEnabled = false;
 
     bool          m_meteorQueueActive   = false;
     int           m_meteorQueueTotal    = 0;

@@ -2,10 +2,12 @@
 ; Plaats dit bestand in: C:\Users\thomas.drabbe\Documents\SpaceRockBreaker\
 
 #define AppName      "Space Rock Breaker"
-#define AppVersion   "4.20"
+#define AppVersion   "1.0.1"
 #define AppPublisher "Chef Survival"
-#define AppExeName   "SpaceRockBreaker.exe"
+#define AppExeName   "SpaceRockLauncher.exe"
+#define GameExeName  "SpaceRockBreaker.exe"
 #define SourceDir    "build\Release"
+#define LauncherDir  "build\launcher\Release"
 
 [Setup]
 AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
@@ -31,8 +33,10 @@ Name: "desktopicon"; Description: "Maak een snelkoppeling op het bureaublad"; \
     GroupDescription: "Extra snelkoppelingen:"; Flags: unchecked
 
 [Files]
-; Executable
-Source: "{#SourceDir}\{#AppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+; Launcher + game
+Source: "{#LauncherDir}\{#AppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\{#GameExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "version.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 ; SFML en andere DLLs
 Source: "{#SourceDir}\*.dll"; DestDir: "{app}"; Flags: ignoreversion

@@ -38,7 +38,7 @@ GameState::upgradeCatalog = {{
     { "Unlock Titanium",   "Spawn Titanium asteroids (380x)",  1350000.0, 1.0, 1 },
     { "Unlock Iridium",    "Spawn Iridium asteroids (1000x)",  4500000.0, 1.0, 1 },
     // Travel
-    { "Warp Drive", "Hold Space to warp to next zone", 650.0, 1.0, 1 },
+    { "Warp Drive", "Hold Space to warp to next zone (sneller per level)", 30.0, 1.0, 5 },
     { "Bullet Range", "+8% bullet travel time / range", 88.0, 1.50, 0 },
 }};
 
@@ -360,6 +360,13 @@ bool GameState::warpDriveUnlocked() const {
     return levelOf(UpgradeID::WARP_DRIVE) > 0;
 }
 
+float GameState::warpDurationSec() const {
+    const int lv = levelOf(UpgradeID::WARP_DRIVE);
+    constexpr float durations[] = { 16.f, 13.f, 10.f, 8.f, 6.f, 3.f };
+    const int       idx         = std::clamp(lv, 0, 5);
+    return durations[idx];
+}
+
 bool GameState::canWarp() const {
     return warpDriveUnlocked() && oreThisLevel >= oreWarpRequirement();
 }
@@ -421,6 +428,8 @@ void GameState::doPrestige() {
     const Difficulty   savedDiff = difficulty;
     const int          savedKeys = keys;
     const auto         savedChest = chestLevels;
+    const auto         savedUnlock = unlockPhaseDone;
+    const bool         savedKeyAst = keyAsteroidsEnabled;
 
     crystals += crystalsOnPrestige();
     prestigeCount++;
@@ -434,11 +443,13 @@ void GameState::doPrestige() {
     std::sort(ranked.begin(), ranked.end(), std::greater<>());
 
     reset();
-    difficulty     = savedDiff;
-    keys           = savedKeys;
-    chestLevels    = savedChest;
-    prestigeLevels = savedPrestige;
-    lives          = maxLives();
+    difficulty          = savedDiff;
+    keys                = savedKeys;
+    chestLevels         = savedChest;
+    prestigeLevels      = savedPrestige;
+    unlockPhaseDone     = savedUnlock;
+    keyAsteroidsEnabled = savedKeyAst;
+    lives               = maxLives();
 
     for (int i = 0; i < keep &&
          i < static_cast<int>(UpgradeID::UPGRADE_COUNT); i++) {
@@ -464,6 +475,29 @@ void GameState::reset() {
     chestLevels.fill(0);
     nextBossMilestone = 3;
     bossCrystalPopup  = 0.0;
+    unlockPhaseDone.fill(false);
+    keyAsteroidsEnabled = false;
+}
+
+void GameState::migrateUnlockProgressFromLegacyState() {
+    unlockPhaseDone.fill(false);
+    if (totalOre >= 5.0)
+        unlockPhaseDone[1] = true;
+    if (totalOre >= 25.0)
+        unlockPhaseDone[2] = true;
+    if (currentLevel >= 2)
+        unlockPhaseDone[3] = true;
+    if (credits >= 50.0)
+        unlockPhaseDone[4] = true;
+    if (credits >= 100.0)
+        unlockPhaseDone[5] = true;
+    if (currentLevel >= 3) {
+        unlockPhaseDone[6] = true;
+        unlockPhaseDone[7] = true;
+    }
+    if (currentLevel >= 5)
+        unlockPhaseDone[8] = true;
+    keyAsteroidsEnabled = (currentLevel >= 3);
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -495,6 +529,12 @@ bool GameState::save(const std::string& path) const {
             sizeof(nextBossMilestone));
     const uint8_t diffByte = static_cast<uint8_t>(difficulty);
     f.write(reinterpret_cast<const char*>(&diffByte), sizeof(diffByte));
+    for (bool b : unlockPhaseDone) {
+        const uint8_t byte = b ? 1u : 0u;
+        f.write(reinterpret_cast<const char*>(&byte), sizeof(byte));
+    }
+    const uint8_t keyAst = keyAsteroidsEnabled ? 1u : 0u;
+    f.write(reinterpret_cast<const char*>(&keyAst), sizeof(keyAst));
     return f.good();
 }
 
@@ -599,6 +639,19 @@ bool GameState::load(const std::string& path) {
         if (db <= static_cast<uint8_t>(Difficulty::Hard))
             difficulty = static_cast<Difficulty>(db);
     }
+    unlockPhaseDone.fill(false);
+    keyAsteroidsEnabled = false;
+    if (ver >= 14) {
+        for (std::size_t i = 0; i < unlockPhaseDone.size(); ++i) {
+            uint8_t byte = 0;
+            f.read(reinterpret_cast<char*>(&byte), sizeof(byte));
+            unlockPhaseDone[i] = (byte != 0);
+        }
+        uint8_t keyAst = 0;
+        f.read(reinterpret_cast<char*>(&keyAst), sizeof(keyAst));
+        keyAsteroidsEnabled = (keyAst != 0);
+    } else
+        migrateUnlockProgressFromLegacyState();
     if (lives > maxLives())
         lives = maxLives();
     return f.good();

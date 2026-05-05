@@ -117,7 +117,7 @@ constexpr float TAB_BAR_H    = 46.f;
 // ─── Save ─────────────────────────────────────────────────────
 const std::string SAVE_FILE = "srb_save.bin"; // legacy (wordt naar slot 0 gemigreerd)
 constexpr int     SAVE_SLOT_COUNT = 3;
-constexpr int     SAVE_VERSION    = 13;
+constexpr int     SAVE_VERSION    = 14;
 
 // ─── Nieuwe spel-moeilijkheid ─────────────────────────────────
 enum class Difficulty {
@@ -137,9 +137,7 @@ enum class RunMode { BASE, RUNNING };
 constexpr float KEY_ASTEROID_SPAWN_DELAY_SEC = 30.f;
 
 // ─── Warp hold (mining): star streak + witte flits ──────────
-/// Tijd tot de warp-balk vol is. Warp-geluid (eigen kanaal) mag langer zijn, o.a. ~1 s
-/// na een volle balk nog doorlopen zonder door andere sfx te worden gestopt.
-constexpr float WARP_CHARGE_DURATION_SEC = 15.f;
+/// Warp-laadduur: `GameState::warpDurationSec()` (afhankelijk van Warp Drive-level).
 constexpr float WARP_FLASH_DURATION_SEC  = 0.44f;
 /// Ster-streak tijdens warp: we = warpCharge^POW; totale factor × SCALE.
 constexpr float WARP_STAR_STREAK_POW       = 2.35f;

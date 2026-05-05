@@ -164,6 +164,9 @@ Game::Game()
     migrateLegacySaveIfNeeded();
     gSfx.init();
 
+    m_tabVisible.fill(false);
+    m_tabVisible[static_cast<int>(Tab::MINING)] = true;
+
     m_saveSlot           = 0;
     m_diskSessionActive  = false;
 
@@ -336,6 +339,8 @@ void Game::update(float dt) {
         m_chestLootSfxPending = false;
     if (m_warpFlashRemain > 0.f)
         m_warpFlashRemain = std::max(0.f, m_warpFlashRemain - dt);
+    if (!m_showMainMenu && !m_paused && m_hitFlashTimer > 0.f)
+        m_hitFlashTimer = std::max(0.f, m_hitFlashTimer - dt);
 
     const bool bossLiveForAudio = !m_showMainMenu
                                   && m_runMode == RunMode::RUNNING
@@ -357,6 +362,13 @@ void Game::update(float dt) {
     if (m_showMainMenu) {
         updateNotifs(dt);
         return;
+    }
+
+    if (!m_paused) {
+        m_unlockSystem.update(m_state, m_notifications, *this, m_shop,
+                              m_mining);
+        m_notifications.update(dt);
+        clampActiveTabToVisibility();
     }
 
     double creditsEarned = 0.0;
@@ -408,6 +420,10 @@ void Game::update(float dt) {
                     pushNotif("GAME OVER - terug naar zone 1",
                               sf::Color(255, 60, 60));
                 } else {
+                    if (m_activeTab != Tab::MINING
+                        && m_state.difficulty != Difficulty::Easy) {
+                        m_hitFlashTimer = 0.4f;
+                    }
                     pushNotif("Leven verloren!  " +
                               std::to_string(m_state.lives) + " over",
                               sf::Color(255, 120, 60));
@@ -463,10 +479,11 @@ void Game::update(float dt) {
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Space)) {
                 // Eén keer SFX per vasthoud (loslaten reset; los van m_warpCharge≈0 float).
                 if (m_warpSfxArmed) {
-                    gSfx.play(Sfx::Warp);
+                    const float pitch = 16.f / m_state.warpDurationSec();
+                    gSfx.play(Sfx::Warp, pitch);
                     m_warpSfxArmed = false;
                 }
-                m_warpCharge += dt / WARP_CHARGE_DURATION_SEC;
+                m_warpCharge += dt / m_state.warpDurationSec();
                 if (m_warpCharge >= 1.f) {
                     m_warpCharge = 0.f;
                     m_state.doWarp();
@@ -731,12 +748,32 @@ void Game::render() {
     }
 
     drawTabBar();
-    drawActiveTab();
+
+    m_mining.draw(m_window, m_state, m_warpCharge, m_warpFlashRemain,
+                   m_animClock.getElapsedTime().asSeconds());
+
+    const bool dimOtherTabs =
+        m_activeTab != Tab::MINING
+        && m_state.difficulty != Difficulty::Easy;
+    if (dimOtherTabs) {
+        float a = 200.f;
+        if (m_hitFlashTimer > 0.f)
+            a = 60.f + (140.f * (1.f - m_hitFlashTimer / 0.4f));
+        sf::RectangleShape dim(sf::Vector2f{ m_cntW, m_cntH });
+        dim.setPosition({ m_cntX, m_cntY });
+        dim.setFillColor(sf::Color(
+            0, 0, 0, static_cast<std::uint8_t>(std::clamp(a, 0.f, 255.f))));
+        m_window.draw(dim);
+    }
+
+    drawForegroundTab();
+
     if (m_activeTab == Tab::MINING && m_runMode == RunMode::RUNNING)
         drawLives();
     drawSidePanel();
     drawSidePanelAuxButtons();
     drawNotifs();
+    m_notifications.draw(m_window, m_font, m_sideW + 18.f, m_tabH + 12.f);
     if (m_chestOverlayAnim > 0.f)
         drawChestOpenOverlay();
     if (m_chestLootPopupActive && m_chestLootPopupRemain > 0.f)
@@ -787,10 +824,13 @@ void Game::onMouseClick(sf::Vector2f pos, sf::Mouse::Button btn) {
         handleMainMenuClick(pos);
         return;
     }
-    for (int i = 0; i < TAB_COUNT; i++) {
-        if (tabRect(i).contains(pos)) {
+    const int vTabs = visibleTabCount();
+    for (int v = 0; v < vTabs; v++) {
+        if (tabRect(v).contains(pos)) {
             gSfx.play(Sfx::UiClick);
-            m_activeTab       = static_cast<Tab>(i);
+            Tab t             = tabFromVisibleSlot(v);
+            m_activeTab       = t;
+            m_notifications.clearBadge(static_cast<int>(t));
             m_prestigeConfirm = false;
             return;
         }
@@ -866,11 +906,36 @@ void Game::onKeyPress(sf::Keyboard::Key key, bool ctrl, bool shift) {
     }
 
     switch (key) {
-        case K::Num1: m_activeTab = Tab::MINING;   break;
-        case K::Num2: m_activeTab = Tab::PLINKO;   break;
-        case K::Num3: m_activeTab = Tab::SHOP;     break;
-        case K::Num4: m_activeTab = Tab::CHESTS;  break;
-        case K::Num5: m_activeTab = Tab::PRESTIGE; break;
+        case K::Num1:
+            if (isTabVisible(Tab::MINING)) {
+                m_activeTab = Tab::MINING;
+                m_notifications.clearBadge(static_cast<int>(Tab::MINING));
+            }
+            break;
+        case K::Num2:
+            if (isTabVisible(Tab::PLINKO)) {
+                m_activeTab = Tab::PLINKO;
+                m_notifications.clearBadge(static_cast<int>(Tab::PLINKO));
+            }
+            break;
+        case K::Num3:
+            if (isTabVisible(Tab::SHOP)) {
+                m_activeTab = Tab::SHOP;
+                m_notifications.clearBadge(static_cast<int>(Tab::SHOP));
+            }
+            break;
+        case K::Num4:
+            if (isTabVisible(Tab::CHESTS)) {
+                m_activeTab = Tab::CHESTS;
+                m_notifications.clearBadge(static_cast<int>(Tab::CHESTS));
+            }
+            break;
+        case K::Num5:
+            if (isTabVisible(Tab::PRESTIGE)) {
+                m_activeTab = Tab::PRESTIGE;
+                m_notifications.clearBadge(static_cast<int>(Tab::PRESTIGE));
+            }
+            break;
 
         case K::Space:
             if (m_activeTab == Tab::PLINKO) {
@@ -913,16 +978,69 @@ void Game::onKeyPress(sf::Keyboard::Key key, bool ctrl, bool shift) {
 // ═════════════════════════════════════════════════════════════
 //  Tab bar
 // ═════════════════════════════════════════════════════════════
-sf::FloatRect Game::tabRect(int idx) const {
-    float tabW = (m_scrW - m_sideW) / static_cast<float>(TAB_COUNT);
-    return sf::FloatRect({ idx * tabW, 0.f }, { tabW, m_tabH });
+int Game::visibleTabCount() const {
+    int n = 0;
+    for (bool v : m_tabVisible)
+        if (v) ++n;
+    return n;
+}
+
+Tab Game::tabFromVisibleSlot(int slot) const {
+    int seen = 0;
+    for (int i = 0; i < TAB_COUNT; ++i) {
+        if (!m_tabVisible[static_cast<std::size_t>(i)])
+            continue;
+        if (seen == slot)
+            return static_cast<Tab>(i);
+        ++seen;
+    }
+    return Tab::MINING;
+}
+
+sf::FloatRect Game::tabRect(int visibleIdx) const {
+    const int n = std::max(1, visibleTabCount());
+    float     tabW = (m_scrW - m_sideW) / static_cast<float>(n);
+    return sf::FloatRect({ static_cast<float>(visibleIdx) * tabW, 0.f },
+                         { tabW, m_tabH });
+}
+
+void Game::setTabVisible(Tab t, bool visible) {
+    m_tabVisible[static_cast<int>(t)] = visible;
+    clampActiveTabToVisibility();
+}
+
+bool Game::isTabVisible(Tab t) const {
+    return m_tabVisible[static_cast<int>(t)];
+}
+
+void Game::clampActiveTabToVisibility() {
+    if (isTabVisible(m_activeTab))
+        return;
+    m_activeTab = Tab::MINING;
+    if (!isTabVisible(m_activeTab)) {
+        for (int i = 0; i < TAB_COUNT; ++i) {
+            if (m_tabVisible[static_cast<std::size_t>(i)]) {
+                m_activeTab = static_cast<Tab>(i);
+                return;
+            }
+        }
+    }
+}
+
+void Game::resetNewGameUi() {
+    m_tabVisible.fill(false);
+    m_tabVisible[static_cast<int>(Tab::MINING)] = true;
+    m_shop.resetProgressiveShopState();
+    m_activeTab       = Tab::MINING;
+    m_hitFlashTimer   = 0.f;
+    m_prestigeConfirm = false;
 }
 
 void Game::drawTabBar() const {
-    const char* labels[TAB_COUNT] = {
+    static const char* labels[TAB_COUNT] = {
         "1  Basis", "2  Plinko", "3  Shop", "4  Chests", "5  Prestige"
     };
-    const sf::Color accents[TAB_COUNT] = {
+    static const sf::Color accents[TAB_COUNT] = {
         sf::Color( 80, 160, 255),
         sf::Color(160, 100, 255),
         sf::Color(255, 200,  60),
@@ -932,10 +1050,13 @@ void Game::drawTabBar() const {
 
     unsigned tabFontSize = static_cast<unsigned>(std::round(15.f * m_scale));
 
-    for (int i = 0; i < TAB_COUNT; i++) {
-        auto  rect   = tabRect(i);
-        bool  active = (m_activeTab == static_cast<Tab>(i));
-        auto& accent = accents[i];
+    const int vTabs = visibleTabCount();
+    for (int v = 0; v < vTabs; v++) {
+        const Tab        t      = tabFromVisibleSlot(v);
+        const int        ti     = static_cast<int>(t);
+        auto             rect   = tabRect(v);
+        const bool       active = (m_activeTab == t);
+        const sf::Color& accent = accents[ti];
 
         sf::RectangleShape bg(sf::Vector2f{ rect.size.x, rect.size.y });
         bg.setPosition(rect.position);
@@ -956,12 +1077,25 @@ void Game::drawTabBar() const {
             m_window.draw(bar);
         }
 
-        drawText(labels[i],
+        drawText(labels[ti],
                  rect.position.x + 14.f,
                  rect.position.y + m_tabH * 0.5f - tabFontSize * 0.5f,
                  tabFontSize,
                  active ? accent : sf::Color(130, 140, 170),
                  active);
+
+        if (m_notifications.hasBadgeFor(ti)) {
+            const float br = 7.f;
+            sf::CircleShape badge(br);
+            badge.setOrigin({ br, br });
+            badge.setPosition({
+                rect.position.x + rect.size.x - 12.f,
+                rect.position.y + 10.f });
+            badge.setFillColor(sf::Color(235, 55, 55));
+            badge.setOutlineColor(sf::Color(80, 20, 20, 200));
+            badge.setOutlineThickness(1.f);
+            m_window.draw(badge);
+        }
     }
 
     sf::RectangleShape sep(sf::Vector2f{ m_scrW, 1.f });
@@ -971,22 +1105,19 @@ void Game::drawTabBar() const {
 }
 
 // ═════════════════════════════════════════════════════════════
-//  drawActiveTab
+//  drawForegroundTab  (mining zit al als achtergrond)
 // ═════════════════════════════════════════════════════════════
-void Game::drawActiveTab() const {
+void Game::drawForegroundTab() const {
+    const bool st = hubMiningBackdropTransparent();
     switch (m_activeTab) {
         case Tab::MINING:
             if (m_runMode == RunMode::BASE)
                 drawMiningBasePanel();
-            else
-                m_mining.draw(m_window, m_state, m_warpCharge,
-                               m_warpFlashRemain,
-                               m_animClock.getElapsedTime().asSeconds());
             break;
-        case Tab::PLINKO:   drawPlinkoTab();                   break;
-        case Tab::SHOP:     m_shop.draw(m_window, m_state);    break;
-        case Tab::CHESTS:   m_chest.draw(m_window, m_state);  break;
-        case Tab::PRESTIGE: drawPrestigeScreen();              break;
+        case Tab::PLINKO:   drawPlinkoTab(st); break;
+        case Tab::SHOP:     m_shop.draw(m_window, m_state, st); break;
+        case Tab::CHESTS:   m_chest.draw(m_window, m_state, st); break;
+        case Tab::PRESTIGE: drawPrestigeScreen();            break;
     }
 }
 
@@ -1392,13 +1523,15 @@ void Game::rebuildPlinko() {
         m_state.levelOfChest(ChestUpgradeID::PLINKO_DUPLICATOR_PEG));
 }
 
-void Game::drawPlinkoTab() const {
+void Game::drawPlinkoTab(bool seeThroughMiningBackdrop) const {
     sf::RectangleShape bg(sf::Vector2f{ m_cntW, m_cntH });
     bg.setPosition({ m_cntX, m_cntY });
-    bg.setFillColor(sf::Color(6, 8, 18));
+    bg.setFillColor(
+        hubBackdropTint(sf::Color(6, 8, 18, 255), seeThroughMiningBackdrop));
     m_window.draw(bg);
 
-    m_plinko.draw(m_window, const_cast<sf::Font&>(m_font));
+    m_plinko.draw(m_window, const_cast<sf::Font&>(m_font),
+                  seeThroughMiningBackdrop);
 
     unsigned fs = static_cast<unsigned>(std::round(14.f * m_scale));
     std::ostringstream os, bs;
@@ -1448,6 +1581,7 @@ void Game::handleMainMenuClick(sf::Vector2f pos) {
                 continue;
             gSfx.play(Sfx::UiClick);
             m_state.reset();
+            resetNewGameUi();
             gSfx.stopGameOverMusic();
             m_state.difficulty =
                 static_cast<Difficulty>(static_cast<int>(Difficulty::Easy) + d);
@@ -1496,6 +1630,9 @@ void Game::handleMainMenuClick(sf::Vector2f pos) {
                     m_runMode             = RunMode::BASE;
                     m_diskSessionActive   = true;
                     m_showMainMenu        = false;
+                    m_unlockSystem.update(m_state, m_notifications, *this,
+                                          m_shop, m_mining);
+                    clampActiveTabToVisibility();
                 } else {
                     pushNotif("Geen save in dit slot.",
                               sf::Color(255, 100, 80));
@@ -1531,9 +1668,12 @@ void Game::handlePlinkoClick(sf::Vector2f pos) {
 //  Prestige screen
 // ═════════════════════════════════════════════════════════════
 void Game::drawPrestigeScreen() const {
+    const bool st = hubMiningBackdropTransparent();
+
     sf::RectangleShape bg(sf::Vector2f{ m_cntW, m_cntH });
     bg.setPosition({ m_cntX, m_cntY });
-    bg.setFillColor(sf::Color(6, 8, 20));
+    bg.setFillColor(
+        hubBackdropTint(sf::Color(6, 8, 20, 255), st));
     m_window.draw(bg);
 
     unsigned fTitle  = static_cast<unsigned>(std::round(24.f * m_scale));
@@ -1562,7 +1702,7 @@ void Game::drawPrestigeScreen() const {
     auto divLine = [&]() {
         sf::RectangleShape d(sf::Vector2f{ m_cntW - 80.f, 1.f });
         d.setPosition({ m_cntX + 40.f, ty });
-        d.setFillColor(sf::Color(60, 40, 90));
+        d.setFillColor(hubBackdropTint(sf::Color(60, 40, 90, 255), st));
         m_window.draw(d);
         ty += 14.f;
     };
@@ -1602,10 +1742,13 @@ void Game::drawPrestigeScreen() const {
 
         sf::RectangleShape card(sf::Vector2f{ cardW, cardH });
         card.setPosition({ cardX, ty });
-        card.setFillColor(can ? sf::Color(30, 18, 55, 230)
-                              : sf::Color(18, 16, 30, 200));
-        card.setOutlineColor(can ? sf::Color(160, 100, 255, 180)
-                                 : sf::Color(50, 40, 75, 110));
+        card.setFillColor(hubBackdropTint(
+            can ? sf::Color(30, 18, 55, 230) : sf::Color(18, 16, 30, 200),
+            st));
+        card.setOutlineColor(hubBackdropTint(
+            can ? sf::Color(160, 100, 255, 180)
+                : sf::Color(50, 40, 75, 110),
+            st));
         card.setOutlineThickness(1.f);
         m_window.draw(card);
 
@@ -1639,10 +1782,14 @@ void Game::drawPrestigeScreen() const {
 
     sf::RectangleShape pb(sf::Vector2f{ pbW, pbH });
     pb.setPosition({ pbX, pbY });
-    pb.setFillColor(m_prestigeConfirm ? sf::Color(120, 20, 200, 240)
-                                      : sf::Color(50, 20, 90, 220));
-    pb.setOutlineColor(m_prestigeConfirm ? sf::Color(220, 100, 255)
-                                         : sf::Color(140, 80, 220, 180));
+    pb.setFillColor(hubBackdropTint(
+        m_prestigeConfirm ? sf::Color(120, 20, 200, 240)
+                          : sf::Color(50, 20, 90, 220),
+        st));
+    pb.setOutlineColor(hubBackdropTint(
+        m_prestigeConfirm ? sf::Color(220, 100, 255, 255)
+                          : sf::Color(140, 80, 220, 180),
+        st));
     pb.setOutlineThickness(2.f);
     m_window.draw(pb);
 

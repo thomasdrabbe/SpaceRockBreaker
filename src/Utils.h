@@ -1,5 +1,6 @@
 #pragma once
 #include <cmath>
+#include <algorithm>
 #include <random>
 #include <string>
 #include <sstream>
@@ -15,7 +16,18 @@
 #include <SFML/Graphics/Rect.hpp>
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/Graphics/View.hpp>
+#include <SFML/Graphics/Color.hpp>
 
+// ─────────────────────────────────────────────────────────────
+//  Hub UI (Mining zichtbaar onder dim-overlay Medium/Hard)
+// ─────────────────────────────────────────────────────────────
+inline sf::Color hubBackdropTint(sf::Color c, bool seeThroughMining) {
+    if (!seeThroughMining)
+        return c;
+    const unsigned na =
+        std::clamp(static_cast<unsigned>(c.a) * 120u / 255u, 55u, 185u);
+    return sf::Color(c.r, c.g, c.b, static_cast<std::uint8_t>(na));
+}
 
 // ─────────────────────────────────────────────────────────────
 //  Random number generator
@@ -142,8 +154,8 @@ inline sf::Vector2f mapPixelToUi(const sf::RenderWindow& w, sf::Vector2i px) {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  Asset paden — altijd eerst naast de .exe (Release/Debug),
-//  daarna cwd / ../ (ontwikkelen vanuit IDE).
+//  Asset paden — eerst naast .exe dan twee niveaus omhoog (cmake build/Release),
+//  dan cwd / ../ / ../../ voor IDE-run vanuit ander werkpad.
 // ─────────────────────────────────────────────────────────────
 inline std::string applicationDirectory() {
 #if defined(_WIN32)
@@ -165,25 +177,40 @@ inline std::string applicationDirectory() {
 
 inline std::string resolveAssetPath(const std::string& rel) {
     namespace fs = std::filesystem;
-    auto isFile = [](const std::string& p) {
+    auto isFile = [](const fs::path& p) {
         std::error_code ec;
-        return fs::is_regular_file(fs::path(p), ec);
+        return fs::is_regular_file(p, ec);
     };
-    if (isFile(rel))
+    const fs::path relP(rel);
+    if (relP.is_absolute())
         return rel;
-    if (isFile("../" + rel))
-        return "../" + rel;
-    if (isFile("../../" + rel))
-        return "../../" + rel;
-    const std::string app = applicationDirectory();
-    if (!app.empty()) {
-        const std::string p1 = app + "/" + rel;
-        if (isFile(p1))
-            return p1;
-        const std::string p2 = app + "/../" + rel;
-        if (isFile(p2))
-            return p2;
+
+    const std::string appStr = applicationDirectory();
+    if (!appStr.empty()) {
+        const fs::path app(appStr);
+
+        /// Naast SpaceRockBreaker.exe (installatie + CMake kopie naar build/Release)
+        const fs::path nextToExe = app / relP;
+        if (isFile(nextToExe))
+            return nextToExe.string();
+
+        /// Ontwikkeling: exe in build/Release, assets in projektroot/assets
+        /// (niet een enkele ../ — dat werd op installatie foutief `Program Files (x86)\assets\…`)
+        const fs::path twoUp = app.parent_path().parent_path() / relP;
+        if (isFile(twoUp))
+            return twoUp.string();
     }
+
+    if (isFile(relP))
+        return rel;
+    if (isFile(fs::path("..") / relP))
+        return (fs::path("..") / relP).string();
+    if (isFile(fs::path("..") / ".." / relP))
+        return (fs::path("..") / ".." / relP).string();
+
+    /// Laat SFML nog één poging naast exe doen ook als het bestand ontbreekt (duidelijke foutpad)
+    if (!appStr.empty())
+        return (fs::path(appStr) / relP).string();
     return rel;
 }
 

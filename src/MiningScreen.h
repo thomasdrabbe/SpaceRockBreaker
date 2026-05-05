@@ -52,6 +52,9 @@ public:
               float            animTime) const;
 
     bool trySpawnKeyAsteroid(GameState& state);
+    void setKeyAsteroidsEnabled(bool enabled) {
+        m_asteroids.setKeyAsteroidsEnabled(enabled);
+    }
     bool trySpawnBoss(GameState& state);
     int  pullPendingKeyDrop();
 

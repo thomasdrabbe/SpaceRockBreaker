@@ -21,7 +21,8 @@ public:
                      ChestUpgradeID*   outPurchased = nullptr);
     void update(float dt, sf::Vector2f mousePos, const GameState& state,
                 bool chestOverlayPlaying);
-    void draw(sf::RenderTarget& target, const GameState& state) const;
+    void draw(sf::RenderTarget& target, const GameState& state,
+              bool               seeThroughMiningBackdrop = false) const;
     void scrollBy(float delta);
 
 private:

@@ -31,7 +31,7 @@ public:
     void init();
     void setMuted(bool m);
     bool isMuted() const { return m_muted; }
-    void play(Sfx id);
+    void play(Sfx id, float warpPitch = 1.f);
 
     /// Loopt zolang `bossAlive` true (zone-boss op het veld).
     void syncBossMusic(bool bossAlive);

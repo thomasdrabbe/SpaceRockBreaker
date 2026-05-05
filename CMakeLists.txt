@@ -27,6 +27,8 @@ set(SOURCES
     src/Player.cpp
     src/Game.cpp
     src/SoundHub.cpp
+    src/NotificationSystem.cpp
+    src/UnlockSystem.cpp
 )
 
 set(HEADERS
@@ -46,6 +48,8 @@ set(HEADERS
     src/Player.h
     src/Game.h
     src/SoundHub.h
+    src/NotificationSystem.h
+    src/UnlockSystem.h
 )
 
 # ─── Windows icoon in .exe inbakken ───────────────────────────
@@ -93,3 +97,5 @@ add_custom_command(TARGET SpaceRockBreaker POST_BUILD
         "${CMAKE_SOURCE_DIR}/assets"
         "$<TARGET_FILE_DIR:SpaceRockBreaker>/assets"
 )
+
+add_subdirectory(launcher)

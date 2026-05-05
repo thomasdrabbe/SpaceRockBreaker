@@ -45,6 +45,7 @@ public:
     bool warpDriveUnlocked() const;
     bool canWarp()           const;   // warpDrive + oreThisLevel >= 10
     void doWarp();                    // level++ + reset
+    float warpDurationSec() const;
     // ── Currencies ────────────────────────────────────────
     double credits       = 0.0;
     double ore           = 0.0;
@@ -53,6 +54,10 @@ public:
     double totalOre      = 0.0;
     int    prestigeCount = 0;
     int    keys          = 0;   // sleutels (blijven bij game over; voor chests)
+
+    /// Progressieve unlocks (index 1…8 gebruikt; 0 ongebruikt).
+    std::array<bool, 9> unlockPhaseDone{};
+    bool                keyAsteroidsEnabled = false;
 
     Difficulty difficulty = Difficulty::Medium;
 
@@ -179,6 +184,8 @@ public:
                              int&         outZone,
                              double&      outCredits);
     void reset();
+
+    void migrateUnlockProgressFromLegacyState();
 
 private:
     float _crystalDamageBonus()  const;

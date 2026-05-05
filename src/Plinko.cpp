@@ -457,12 +457,16 @@ void PlinkoBoard::updatePegCreditPopups(float dt) {
 //  draw
 // ═════════════════════════════════════════════════════════════
 void PlinkoBoard::draw(sf::RenderTarget& target,
-                        sf::Font&         font) const {
+                        sf::Font&         font,
+                        bool              seeThroughMiningBackdrop) const {
+    const bool st = seeThroughMiningBackdrop;
     // ── Board background ──────────────────────────────────
     sf::RectangleShape bg(sf::Vector2f{ m_boardW, m_boardH });
     bg.setPosition({ m_boardX, m_boardY });
-    bg.setFillColor(sf::Color(10, 12, 25, 220));
-    bg.setOutlineColor(sf::Color(60, 80, 140, 180));
+    bg.setFillColor(
+        hubBackdropTint(sf::Color(10, 12, 25, 220), st));
+    bg.setOutlineColor(
+        hubBackdropTint(sf::Color(60, 80, 140, 180), st));
     bg.setOutlineThickness(2.f);
     target.draw(bg);
 
@@ -484,9 +488,12 @@ void PlinkoBoard::draw(sf::RenderTarget& target,
         pegShape.setFillColor(
             sf::Color(brighten(base.r, ft), brighten(base.g, ft),
                       brighten(base.b, ft)));
-        pegShape.setOutlineColor(sf::Color(
-            std::min(255, base.r + 40), std::min(255, base.g + 40),
-            std::min(255, base.b + 50), 90));
+        pegShape.setOutlineColor(hubBackdropTint(
+            sf::Color(static_cast<uint8_t>(std::min(255, base.r + 40)),
+                      static_cast<uint8_t>(std::min(255, base.g + 40)),
+                      static_cast<uint8_t>(std::min(255, base.b + 50)),
+                      90),
+            st));
         pegShape.setOutlineThickness(1.f);
         target.draw(pegShape);
 
@@ -496,8 +503,10 @@ void PlinkoBoard::draw(sf::RenderTarget& target,
             pegShape.setOrigin({ ringR, ringR });
             pegShape.setPosition(peg.pos);
             pegShape.setFillColor(sf::Color::Transparent);
-            pegShape.setOutlineColor(sf::Color(60, 230, 255,
-                static_cast<uint8_t>(140 + 115 * ft)));
+            pegShape.setOutlineColor(hubBackdropTint(
+                sf::Color(60, 230, 255,
+                    static_cast<uint8_t>(140 + 115 * ft)),
+                st));
             pegShape.setOutlineThickness(std::max(1.5f, 2.f * m_scale));
             target.draw(pegShape);
             pegShape.setRadius(m_pegDrawRadius);
@@ -541,16 +550,19 @@ void PlinkoBoard::draw(sf::RenderTarget& target,
             sf::Vector2f{ slot.width - 2.f, SLOT_HEIGHT });
         bucket.setPosition({
             slot.pos.x + 1.f, slot.pos.y });
-        bucket.setFillColor(sf::Color(
-            static_cast<uint8_t>(
-                slot.color.r * 0.4f + flash * slot.color.r * 0.6f),
-            static_cast<uint8_t>(
-                slot.color.g * 0.4f + flash * slot.color.g * 0.6f),
-            static_cast<uint8_t>(
-                slot.color.b * 0.4f + flash * slot.color.b * 0.6f),
-            alpha));
-        bucket.setOutlineColor(sf::Color(
-            slot.color.r, slot.color.g, slot.color.b, 180));
+        bucket.setFillColor(hubBackdropTint(
+            sf::Color(static_cast<uint8_t>(
+                          slot.color.r * 0.4f + flash * slot.color.r * 0.6f),
+                      static_cast<uint8_t>(
+                          slot.color.g * 0.4f + flash * slot.color.g * 0.6f),
+                      static_cast<uint8_t>(
+                          slot.color.b * 0.4f + flash * slot.color.b * 0.6f),
+                      alpha),
+            st));
+        bucket.setOutlineColor(
+            hubBackdropTint(sf::Color(slot.color.r, slot.color.g,
+                                      slot.color.b, 180),
+                            st));
         bucket.setOutlineThickness(1.f);
         target.draw(bucket);
 

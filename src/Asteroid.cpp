@@ -839,6 +839,8 @@ void AsteroidManager::draw(sf::RenderTarget& target,
 
 bool AsteroidManager::trySpawnKey(float ox, float oy, float areaW,
                                    float areaH, float hpMult) {
+    if (!m_keyAsteroidsEnabled)
+        return false;
     for (const auto& a : m_pool)
         if (a.alive && a.isKeyAsteroid)
             return false;

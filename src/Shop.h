@@ -1,5 +1,6 @@
 #pragma once
 #include <SFML/Graphics.hpp>
+#include <array>
 #include <cstdint>
 #include <vector>
 #include <string>
@@ -34,8 +35,15 @@ public:
     bool handleEvent(const sf::Event& event, GameState& state,
                      const sf::RenderWindow& window);
     void update(sf::Vector2f mousePos, const GameState& state);
-    void draw(sf::RenderTarget& target, const GameState& state) const;
+    void draw(sf::RenderTarget& target, const GameState& state,
+              bool seeThroughMiningBackdrop = false) const;
     void scrollBy(float delta);
+
+    void setCategoryVisible(ShopCategory cat, bool visible);
+    bool isCategoryVisible(ShopCategory cat) const;
+    void setMiningShowsWarpOnly(bool warpOnly);
+    bool miningShowsWarpOnly() const { return m_miningShowsWarpOnly; }
+    void resetProgressiveShopState();
 
 private:
     sf::Font* m_font  = nullptr;
@@ -54,18 +62,30 @@ private:
     float m_cardPad   = 10.f;
     float m_scrollBarW= 8.f;
 
-    ShopCategory             m_activeCategory = ShopCategory::WEAPONS;
+    ShopCategory             m_activeCategory = ShopCategory::MINING;
     std::vector<UpgradeCard> m_cards;
+
+    std::array<bool, static_cast<int>(ShopCategory::CATEGORY_COUNT)>
+        m_categoryVisible{};
+    bool m_miningShowsWarpOnly = true;
 
     uint64_t m_layoutFp = 0;
 
     [[nodiscard]] uint64_t layoutFingerprint(const GameState& state) const;
 
+    void        ensureActiveCategoryVisible();
+    int         visibleCategoryCount() const;
+    ShopCategory categoryFromTabIndex(int visibleTabIdx) const;
+
     void buildCards(const GameState& state);
-    void drawBackground(sf::RenderTarget& target) const;
-    void drawCategoryTabs(sf::RenderTarget& target, const GameState& state) const;
-    void drawCard(sf::RenderTarget& target, const UpgradeCard& card, const GameState& state) const;
-    void drawScrollBar(sf::RenderTarget& target) const;
+    void drawBackground(sf::RenderTarget& target,
+                        bool               seeThroughMiningBackdrop) const;
+    void drawCategoryTabs(sf::RenderTarget& target, const GameState& state,
+                          bool               seeThroughMiningBackdrop) const;
+    void drawCard(sf::RenderTarget& target, const UpgradeCard& card,
+                  const GameState& state, bool seeThroughMiningBackdrop) const;
+    void drawScrollBar(sf::RenderTarget& target,
+                       bool               seeThroughMiningBackdrop) const;
 
     std::string   formatEffect(UpgradeID id, const GameState& state) const;
     sf::FloatRect tabBounds(int idx) const;

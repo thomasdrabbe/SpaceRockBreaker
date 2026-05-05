@@ -12,12 +12,20 @@ SoundHub gSfx;
 
 namespace {
 
+std::filesystem::path resolvedFilePathIfExists(const std::string& relOrAbs) {
+    namespace fs = std::filesystem;
+    const fs::path p(resolveAssetPath(relOrAbs));
+    std::error_code ec;
+    if (fs::is_regular_file(p, ec))
+        return p;
+    return {};
+}
+
 bool openMusicFromAsset(sf::Music& music, const char* relPath) {
-    const std::string p = resolveAssetPath(relPath);
-    if (music.openFromFile(std::filesystem::path(p)))
-        return true;
-    return music.openFromFile(
-        std::filesystem::path(resolveAssetPath(std::string("../") + relPath)));
+    const auto p = resolvedFilePathIfExists(relPath);
+    if (p.empty())
+        return false;
+    return music.openFromFile(p);
 }
 
 /// Maximaal aantal losse `shot_XX.wav`-fallbacks om te proberen.
@@ -252,7 +260,8 @@ const char* kRelPaths[static_cast<int>(Sfx::COUNT)] = {
     "assets/sounds/explosion.wav",
     "assets/sounds/ore.wav",
     "assets/sounds/ui.wav",
-    "assets/sounds/warp.wav",
+    /// Geen `warp.wav`/`warp.m4a` in release; SFML ondersteunt m4a niet.
+    "assets/sounds/freesound_community-warp-speed-6255.mp3",
     "assets/sounds/gameover.wav",
     "assets/sounds/boss.wav",
     "assets/sounds/plinko_drop.wav",
@@ -264,10 +273,15 @@ const char* kRelPaths[static_cast<int>(Sfx::COUNT)] = {
 
 } // namespace
 
-bool SoundHub::tryLoad(int idx, const std::string& path) {
+bool SoundHub::tryLoad(int idx, const std::string& relOrAbs) {
     if (idx < 0 || idx >= static_cast<int>(Sfx::COUNT))
         return false;
-    m_ok[idx] = m_buf[idx].loadFromFile(path);
+    const auto p = resolvedFilePathIfExists(relOrAbs);
+    if (p.empty()) {
+        m_ok[idx] = false;
+        return false;
+    }
+    m_ok[idx] = m_buf[idx].loadFromFile(p);
     return m_ok[idx];
 }
 
@@ -276,9 +290,8 @@ void SoundHub::loadShotVariants() {
     m_shotRing = 0;
 
     sf::SoundBuffer gun;
-    const std::string gunPath  = resolveAssetPath("assets/sounds/gun sound.mp3");
-    const std::string gunPath2 = resolveAssetPath("../assets/sounds/gun sound.mp3");
-    if (gun.loadFromFile(gunPath) || gun.loadFromFile(gunPath2)) {
+    const std::string gunPath = resolveAssetPath("assets/sounds/gun sound.mp3");
+    if (gun.loadFromFile(std::filesystem::path(gunPath))) {
         if (splitGunSoundByPeaks(gun, m_shotVariants, 10)
             || splitGunSoundByPeaks(gun, m_shotVariants, 14)
             || splitBufferIntoEqualSegments(gun, m_shotVariants, 10)
@@ -288,14 +301,14 @@ void SoundHub::loadShotVariants() {
     }
 
     for (int i = 1; i <= kGunShotWavFileMax; ++i) {
-        char path[96];
-        std::snprintf(path, sizeof path, "assets/sounds/shot_%02d.wav", i);
+        char rel[96];
+        std::snprintf(rel, sizeof rel, "assets/sounds/shot_%02d.wav", i);
+        const auto p = resolvedFilePathIfExists(rel);
+        if (p.empty())
+            continue;
         sf::SoundBuffer b;
-        if (!b.loadFromFile(path)) {
-            const std::string alt = std::string("../") + path;
-            if (!b.loadFromFile(alt))
-                continue;
-        }
+        if (!b.loadFromFile(p))
+            continue;
         m_shotVariants.push_back(std::move(b));
     }
     if (static_cast<int>(m_shotVariants.size()) >= kGunShotMinVariants)
@@ -313,26 +326,22 @@ void SoundHub::init() {
 
     for (int i = 0; i < static_cast<int>(Sfx::COUNT); ++i) {
         m_ok[i] = false;
-        if (!tryLoad(i, kRelPaths[i]))
-            (void)tryLoad(i, std::string("../") + kRelPaths[i]);
+        (void)tryLoad(i, kRelPaths[i]);
     }
 
-    // Warp: opnieuw proberen (tryLoad kan mislukt zijn); geen strikte m4a-duurcheck.
+    /// Fallbacks voor modded/custom-bestanden naast primaire MP3 in `kRelPaths`.
     {
         const int wi = static_cast<int>(Sfx::Warp);
-        auto loadPath = [&](const char* rel) -> bool {
-            return m_buf[wi].loadFromFile(rel)
-                || m_buf[wi].loadFromFile(std::string("../") + rel);
+        auto loadResolved = [&](const char* rel) -> bool {
+            const auto p = resolvedFilePathIfExists(rel);
+            if (p.empty())
+                return false;
+            return m_buf[wi].loadFromFile(p);
         };
         if (!m_ok[wi])
-            m_ok[wi] = loadPath("assets/sounds/warp.m4a");
+            m_ok[wi] = loadResolved("assets/sounds/warp.wav");
         if (!m_ok[wi])
-            m_ok[wi] = loadPath("assets/sounds/warp.wav");
-        if (!m_ok[wi])
-            m_ok[wi] = loadPath("assets/sounds/warp.ogg");
-        if (!m_ok[wi])
-            m_ok[wi] = loadPath(
-                "assets/sounds/freesound_community-warp-speed-6255.mp3");
+            m_ok[wi] = loadResolved("assets/sounds/warp.ogg");
         const int ex = static_cast<int>(Sfx::Explosion);
         if (!m_ok[wi] && m_ok[ex]) {
             m_buf[wi] = m_buf[ex];
@@ -558,7 +567,7 @@ void SoundHub::syncMainMenuMusic(bool showMainMenu) {
         m_menuMusic.play();
 }
 
-void SoundHub::play(Sfx id) {
+void SoundHub::play(Sfx id, float warpPitch) {
     if (!m_ready || m_muted)
         return;
     const int i = static_cast<int>(id);
@@ -571,7 +580,7 @@ void SoundHub::play(Sfx id) {
         m_warpSound->setBuffer(m_buf[i]);
         const float vol = std::min(100.f, m_masterVol * 1.4f);
         m_warpSound->setVolume(vol);
-        m_warpSound->setPitch(1.f);
+        m_warpSound->setPitch(std::max(0.25f, warpPitch));
         m_warpSound->play();
         return;
     }

@@ -193,11 +193,16 @@ std::string ChestScreen::formatEffect(ChestUpgradeID id,
 }
 
 void ChestScreen::draw(sf::RenderTarget& target,
-                       const GameState& state) const {
+                       const GameState& state,
+                       bool               seeThroughMiningBackdrop) const {
+    const bool st = seeThroughMiningBackdrop;
+
     sf::RectangleShape panel(sf::Vector2f{ m_w, m_h });
     panel.setPosition({ m_x, m_y });
-    panel.setFillColor(sf::Color(10, 12, 22, 245));
-    panel.setOutlineColor(sf::Color(90, 70, 40, 160));
+    panel.setFillColor(
+        hubBackdropTint(sf::Color(10, 12, 22, 245), st));
+    panel.setOutlineColor(
+        hubBackdropTint(sf::Color(90, 70, 40, 160), st));
     panel.setOutlineThickness(1.f);
     target.draw(panel);
 
@@ -227,7 +232,7 @@ void ChestScreen::draw(sf::RenderTarget& target,
 
     sf::RectangleShape sep(sf::Vector2f{ m_w - m_cardMargin * 2.f, 1.f });
     sep.setPosition({ m_x + m_cardMargin, m_y + headerH - 6.f });
-    sep.setFillColor(sf::Color(80, 65, 40, 200));
+    sep.setFillColor(hubBackdropTint(sf::Color(80, 65, 40, 200), st));
     target.draw(sep);
 
     float ty = m_y + headerH + m_cardMargin;
@@ -317,11 +322,14 @@ void ChestScreen::draw(sf::RenderTarget& target,
     const bool canLoot = canOpenOneChest(state) && !m_overlayPlaying;
     sf::RectangleShape btn(sf::Vector2f{ m_lootBtn.size.x, m_lootBtn.size.y });
     btn.setPosition(m_lootBtn.position);
-    btn.setFillColor(canLoot && m_lootHovered
-                         ? sf::Color(70, 55, 30, 250)
-                         : sf::Color(35, 30, 22, 245));
-    btn.setOutlineColor(canLoot ? sf::Color(255, 200, 90, 230)
-                                : sf::Color(70, 65, 55, 120));
+    btn.setFillColor(hubBackdropTint(
+        canLoot && m_lootHovered ? sf::Color(70, 55, 30, 250)
+                                 : sf::Color(35, 30, 22, 245),
+        st));
+    btn.setOutlineColor(hubBackdropTint(
+        canLoot ? sf::Color(255, 200, 90, 230)
+                : sf::Color(70, 65, 55, 120),
+        st));
     btn.setOutlineThickness(canLoot && m_lootHovered ? 2.5f : 1.5f);
     target.draw(btn);
 
