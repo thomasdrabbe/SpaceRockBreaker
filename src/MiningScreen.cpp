@@ -346,6 +346,10 @@ bool MiningScreen::trySpawnBoss(GameState& state) {
     float hpMult = std::max(0.1f,
         1.f - state.levelOf(UpgradeID::ASTEROID_HP) * 0.1f);
     hpMult *= state.levelHpMult();
+    if (state.nextBossMilestone == 3) {
+        // Eerste boss bewust toegankelijker maken.
+        hpMult *= 0.5f;
+    }
     return m_asteroids.trySpawnBoss(m_x, m_y, m_w, m_h, hpMult,
                                     state.maxOreTier());
 }
