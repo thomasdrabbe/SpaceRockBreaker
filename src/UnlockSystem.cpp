@@ -60,8 +60,8 @@ void UnlockSystem::update(GameState&           state,
                           Game&                game,
                           Shop&                shop,
                           MiningScreen&        mining) {
-    const bool firstBossDue =
-        (state.nextBossMilestone == 3 && state.currentLevel >= 3);
+    const bool firstBossIncoming =
+        (state.nextBossMilestone == 3 && state.currentLevel >= 2);
 
     for (int p = 1; p < kPhaseCount; ++p) {
         if (state.unlockPhaseDone[static_cast<std::size_t>(p)])
@@ -85,7 +85,7 @@ void UnlockSystem::update(GameState&           state,
     }
 
     if (!state.unlockPhaseDone[2]
-        && (state.totalOre >= 25.0 || firstBossDue)) {
+        && (state.totalOre >= 25.0 || firstBossIncoming)) {
         notifications.push(
             "\xF0\x9F\x9A\x80 Shop unlocked! Koop Warp Drive om naar de volgende "
             "zone te gaan.",
@@ -96,7 +96,7 @@ void UnlockSystem::update(GameState&           state,
     }
 
     if (!state.unlockPhaseDone[3]
-        && (state.currentLevel >= 2 || firstBossDue)) {
+        && (state.currentLevel >= 2 || firstBossIncoming)) {
         notifications.push(
             "\xE2\x9A\x94\xEF\xB8\x8F Zone 2 bereikt! Weapons upgrades beschikbaar.",
             sf::Color(255, 180, 140),
