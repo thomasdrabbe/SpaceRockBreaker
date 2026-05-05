@@ -388,6 +388,7 @@ static bool launchDetachedCmd(const std::wstring& cmdLine,
 static bool scheduleApplyAndStart(const fs::path& installDir,
                                   const fs::path& stageDir,
                                   const fs::path& startExe,
+                                  const std::string& expectedVersion,
                                   DWORD           launcherPid) {
     const fs::path script =
         fs::temp_directory_path()
@@ -402,6 +403,8 @@ static bool scheduleApplyAndStart(const fs::path& installDir,
     out << "set \"SRC=" << stageDir.string() << "\"\r\n";
     out << "set \"DST=" << installDir.string() << "\"\r\n";
     out << "set \"START_EXE=" << startExe.string() << "\"\r\n";
+    out << "set \"EXPECTED_VER=" << expectedVersion << "\"\r\n";
+    out << "set \"UPDLOG=%DST%\\launcher_update.log\"\r\n";
     out << "set \"LPID=" << launcherPid << "\"\r\n";
     out << ":waitlauncher\r\n";
     out << "tasklist /FI \"PID eq %LPID%\" | find \"%LPID%\" >nul\r\n";
@@ -409,7 +412,28 @@ static bool scheduleApplyAndStart(const fs::path& installDir,
     out << "  timeout /t 1 /nobreak >nul\r\n";
     out << "  goto waitlauncher\r\n";
     out << ")\r\n";
-    out << "robocopy \"%SRC%\" \"%DST%\" /E /IS /IT /R:2 /W:1 /NFL /NDL /NJH /NJS /NP >nul\r\n";
+    out << "echo [update] applying package > \"%UPDLOG%\"\r\n";
+    out << "robocopy \"%SRC%\" \"%DST%\" /E /IS /IT /R:2 /W:1 /NFL /NDL /NP >> \"%UPDLOG%\" 2>&1\r\n";
+    out << "set \"RBCODE=%ERRORLEVEL%\"\r\n";
+    out << "if %RBCODE% GEQ 8 (\r\n";
+    out << "  echo [update] robocopy failed with code %RBCODE% >> \"%UPDLOG%\"\r\n";
+    out << "  start \"\" \"%DST%\\SpaceRockLauncher.exe\"\r\n";
+    out << "  del \"%~f0\" >nul 2>&1\r\n";
+    out << "  exit /b 1\r\n";
+    out << ")\r\n";
+    out << "set \"NEW_VER=\"\r\n";
+    out << "for /f \"usebackq delims=\" %%V in (\"%DST%\\version.txt\") do (\r\n";
+    out << "  set \"NEW_VER=%%V\"\r\n";
+    out << "  goto gotver\r\n";
+    out << ")\r\n";
+    out << ":gotver\r\n";
+    out << "if not \"%EXPECTED_VER%\"==\"%NEW_VER%\" (\r\n";
+    out << "  echo [update] version check failed expected=%EXPECTED_VER% actual=%NEW_VER% >> \"%UPDLOG%\"\r\n";
+    out << "  start \"\" \"%DST%\\SpaceRockLauncher.exe\"\r\n";
+    out << "  del \"%~f0\" >nul 2>&1\r\n";
+    out << "  exit /b 1\r\n";
+    out << ")\r\n";
+    out << "echo [update] success version=%NEW_VER% >> \"%UPDLOG%\"\r\n";
     out << "start \"\" \"%START_EXE%\"\r\n";
     out << "rmdir /S /Q \"%SRC%\" >nul 2>&1\r\n";
     out << "del \"%~f0\" >nul 2>&1\r\n";
@@ -488,6 +512,7 @@ int main() {
     bool        workerRunning = true;
     bool        workerJoined  = false;
     fs::path    stagedDir;
+    std::string stagedPackageVer;
 
     worker = std::thread([&]() {
         bool ok = false;
@@ -556,6 +581,7 @@ int main() {
         }
 
         stagedDir = stage;
+        stagedPackageVer = packageVer;
         fs::remove(zipPath);
         status.store(2);
     });
@@ -580,7 +606,8 @@ int main() {
                 workerRunning = false;
                 if (st == 2) {
                     if (!scheduleApplyAndStart(
-                            dir, stagedDir, gameExe, GetCurrentProcessId())) {
+                            dir, stagedDir, gameExe, stagedPackageVer,
+                            GetCurrentProcessId())) {
                         startGame(gameExe);
                         return 0;
                     }
