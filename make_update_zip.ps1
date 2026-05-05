@@ -78,6 +78,11 @@ if (-not (Test-Path -LiteralPath $zipOutDir -PathType Container)) {
 Copy-Item -LiteralPath $zipRoot -Destination $zipOut -Force
 
 $currentVersion = (Get-Content -LiteralPath $versionFile -Raw).Trim()
+$zipRootVersioned = Join-Path $repoRoot ("SpaceRockBreaker_{0}.zip" -f $currentVersion)
+$zipOutVersioned  = Join-Path $zipOutDir ("SpaceRockBreaker_{0}.zip" -f $currentVersion)
+Copy-Item -LiteralPath $zipRoot -Destination $zipRootVersioned -Force
+Copy-Item -LiteralPath $zipRoot -Destination $zipOutVersioned -Force
+
 $zipA = Get-Item -LiteralPath $zipRoot
 $zipB = Get-Item -LiteralPath $zipOut
 

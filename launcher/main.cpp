@@ -120,6 +120,18 @@ static void logLine(const std::string& msg) {
     out << msg << '\n';
 }
 
+static std::string narrowAscii(const std::wstring& ws) {
+    std::string s;
+    s.reserve(ws.size());
+    for (wchar_t c : ws) {
+        if (c >= 0 && c <= 127)
+            s.push_back(static_cast<char>(c));
+        else
+            s.push_back('?');
+    }
+    return s;
+}
+
 static bool runPowerShellScript(const std::wstring& script) {
     const fs::path scriptFile =
         fs::temp_directory_path()
@@ -573,34 +585,40 @@ int main() {
         downloaded.store(0);
         total.store(0);
 
-        const std::wstring zipUrlA =
-            L"https://raw.githubusercontent.com/thomasdrabbe/SpaceRockBreaker/main/installer_output/SpaceRockBreaker.zip?ts="
-            + std::to_wstring(GetTickCount64());
-        const std::wstring zipPathA =
+        std::vector<std::wstring> candidates;
+        if (!remoteVer.empty()) {
+            candidates.push_back(
+                L"/thomasdrabbe/SpaceRockBreaker/main/installer_output/SpaceRockBreaker_"
+                + std::wstring(remoteVer.begin(), remoteVer.end())
+                + L".zip?ts=" + std::to_wstring(GetTickCount64()));
+            candidates.push_back(
+                L"/thomasdrabbe/SpaceRockBreaker/main/SpaceRockBreaker_"
+                + std::wstring(remoteVer.begin(), remoteVer.end())
+                + L".zip?ts=" + std::to_wstring(GetTickCount64()));
+        }
+        candidates.push_back(
             LR"(/thomasdrabbe/SpaceRockBreaker/main/installer_output/SpaceRockBreaker.zip?ts=)"
-            + std::to_wstring(GetTickCount64());
-        ok = winHttpDownload(
-            L"raw.githubusercontent.com",
-            zipPathA,
-            INTERNET_DEFAULT_HTTPS_PORT, true, zipPath, &downloaded, &total);
-        if (!ok)
-            ok = psDownloadToFile(zipUrlA, zipPath);
+            + std::to_wstring(GetTickCount64()));
+        candidates.push_back(
+            LR"(/thomasdrabbe/SpaceRockBreaker/main/SpaceRockBreaker.zip?ts=)"
+            + std::to_wstring(GetTickCount64()));
 
-        if (!ok) {
+        for (const auto& p : candidates) {
             downloaded.store(0);
             total.store(0);
-            const std::wstring zipUrlB =
-                L"https://raw.githubusercontent.com/thomasdrabbe/SpaceRockBreaker/main/SpaceRockBreaker.zip?ts="
-                + std::to_wstring(GetTickCount64());
-            const std::wstring zipPathB =
-                LR"(/thomasdrabbe/SpaceRockBreaker/main/SpaceRockBreaker.zip?ts=)"
-                + std::to_wstring(GetTickCount64());
             ok = winHttpDownload(
                 L"raw.githubusercontent.com",
-                zipPathB,
+                p,
                 INTERNET_DEFAULT_HTTPS_PORT, true, zipPath, &downloaded, &total);
-            if (!ok)
-                ok = psDownloadToFile(zipUrlB, zipPath);
+            if (!ok) {
+                const std::wstring url =
+                    L"https://raw.githubusercontent.com" + p;
+                ok = psDownloadToFile(url, zipPath);
+            }
+            if (ok) {
+                logLine("Updater gebruikte: " + narrowAscii(p));
+                break;
+            }
         }
 
         if (!ok) {
@@ -682,8 +700,14 @@ int main() {
                         }
                         return 0;
                     }
-                    fs::remove_all(stagedDir);
-                    startGame(gameExe);
+                    // Ensure launcher binary itself is also refreshed after this process exits.
+                    if (!scheduleApplyAndStart(
+                            dir, stagedDir, gameExe, stagedPackageVer,
+                            GetCurrentProcessId())) {
+                        fs::remove_all(stagedDir);
+                        startGame(gameExe);
+                        return 0;
+                    }
                     return 0;
                 } else {
                     logLine("Update check fell back to start game.");
