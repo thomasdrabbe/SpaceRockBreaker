@@ -120,24 +120,22 @@ static void logLine(const std::string& msg) {
     out << msg << '\n';
 }
 
-static std::wstring psQuote(const std::wstring& s) {
-    std::wstring out;
-    out.reserve(s.size() + 8);
-    out.push_back(L'\'');
-    for (wchar_t c : s) {
-        if (c == L'\'')
-            out += L"''";
-        else
-            out.push_back(c);
-    }
-    out.push_back(L'\'');
-    return out;
-}
-
 static bool runPowerShellScript(const std::wstring& script) {
+    const fs::path scriptFile =
+        fs::temp_directory_path()
+        / ("srb_ps_" + std::to_string(GetCurrentProcessId())
+           + "_" + std::to_string(GetTickCount64()) + ".ps1");
+    {
+        std::wofstream out(scriptFile);
+        if (!out)
+            return false;
+        out << script;
+    }
+
     std::wstring cmd =
-        L"powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ";
-    cmd += psQuote(script);
+        L"powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"";
+    cmd += scriptFile.wstring();
+    cmd += L"\"";
 
     STARTUPINFOW si{};
     si.cb = sizeof(si);
@@ -152,18 +150,33 @@ static bool runPowerShellScript(const std::wstring& script) {
     GetExitCodeProcess(pi.hProcess, &code);
     CloseHandle(pi.hThread);
     CloseHandle(pi.hProcess);
+    std::error_code ec;
+    fs::remove(scriptFile, ec);
     return code == 0;
 }
 
 static bool psDownloadToFile(const std::wstring& url, const fs::path& destFile) {
+    auto quoteSingle = [](const std::wstring& s) {
+        std::wstring out;
+        out.reserve(s.size() + 8);
+        out.push_back(L'\'');
+        for (wchar_t c : s) {
+            if (c == L'\'')
+                out += L"''";
+            else
+                out.push_back(c);
+        }
+        out.push_back(L'\'');
+        return out;
+    };
     const std::wstring dst = destFile.wstring();
     std::wstring script =
         L"$ErrorActionPreference='Stop'; "
         L"$ProgressPreference='SilentlyContinue'; "
         L"Invoke-WebRequest -UseBasicParsing -Uri ";
-    script += psQuote(url);
+    script += quoteSingle(url);
     script += L" -OutFile ";
-    script += psQuote(dst);
+    script += quoteSingle(dst);
     script += L";";
     return runPowerShellScript(script);
 }
