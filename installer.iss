@@ -7,7 +7,7 @@
 ; - Handmatig Inno-compilen? Zorg dat deze string gelijk blijft aan version.txt.
 
 #define AppName      "Space Rock Breaker"
-#define AppVersion   "1.0.11"
+#define AppVersion   "1.0.12"
 #define AppPublisher "Chef Survival"
 #define AppExeName   "SpaceRockLauncher.exe"
 #define GameExeName  "SpaceRockBreaker.exe"
@@ -20,6 +20,11 @@ AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
 AppPublisher={#AppPublisher}
+PrivilegesRequired=admin
+PrivilegesRequiredOverridesAllowed=dialog
+CloseApplications=yes
+RestartApplications=no
+UninstallRestartComputer=false
 
 ; x64 build (CMake preset / vcpkg x64-windows)
 ArchitecturesAllowed=x64compatible
