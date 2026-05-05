@@ -1,7 +1,15 @@
 cmake_minimum_required(VERSION 3.16)
 
-add_executable(SpaceRockLauncher
+set(LAUNCHER_SOURCES
     main.cpp
+)
+
+if(WIN32)
+    list(APPEND LAUNCHER_SOURCES "${CMAKE_SOURCE_DIR}/assets/icon.rc")
+endif()
+
+add_executable(SpaceRockLauncher
+    ${LAUNCHER_SOURCES}
 )
 
 set_target_properties(SpaceRockLauncher PROPERTIES

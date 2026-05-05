@@ -355,11 +355,13 @@ int main() {
     std::string remoteVer;
     std::string infoLine  = "Controleren op updates...";
     bool        canUpdate = false;
+    bool        onlineOk  = false;
 
     auto refreshRemote = [&]() {
         localVer = readLocalVersion(dir);
         remoteVer.clear();
         canUpdate = false;
+        onlineOk  = false;
 
         try {
             remoteVer = fetchRemoteVersionText();
@@ -368,10 +370,11 @@ int main() {
         }
 
         if (remoteVer.empty()) {
-            infoLine = "Versiecheck mislukt. Update werkt mogelijk nog wel.";
+            infoLine = "Geen online verbinding met updateserver.";
             logLine("Version check failed on all endpoints.");
             return;
         }
+        onlineOk = true;
 
         const auto locT = semverTuple(localVer);
         const auto remT = semverTuple(remoteVer);
@@ -384,7 +387,7 @@ int main() {
         if (canUpdate)
             infoLine = "Update beschikbaar: v" + remoteVer;
         else
-            infoLine = "Je gebruikt de nieuwste versie.";
+            infoLine = "Je game is up-to-date.";
     };
 
     refreshRemote();
@@ -519,9 +522,13 @@ int main() {
                     }
                     infoLine = "SpaceRockBreaker.exe niet gevonden in installatiemap.";
                 } else if (updateBtnR.contains(m) && !workerRunning) {
+                    if (!onlineOk) {
+                        infoLine = "Offline: update niet beschikbaar.";
+                        continue;
+                    }
                     if (!canUpdate) {
-                        infoLine = "Geen nieuwere versie gezien. We proberen toch updatepakket...";
-                        refreshRemote();
+                        infoLine = "Je game is al up-to-date.";
+                        continue;
                     }
                     beginUpdate();
                 } else if (closeBtnR.contains(m) && !workerRunning) {
@@ -545,7 +552,7 @@ int main() {
                     }
                     return 0;
                 } else if (st == -1) {
-                    infoLine = "Download mislukt (release/zip niet gevonden).";
+                    infoLine = "Download mislukt.";
                 } else if (st == -2) {
                     infoLine = "Uitpakken naar staging mislukt.";
                 } else if (st == -3) {
@@ -572,6 +579,14 @@ int main() {
         versions.setPosition({ 20.f, 108.f });
         window.draw(versions);
 
+        sf::Text conn(font);
+        conn.setCharacterSize(22);
+        conn.setString(std::string("Verbinding: ") + (onlineOk ? "online" : "offline"));
+        conn.setFillColor(onlineOk ? sf::Color(120, 220, 150)
+                                   : sf::Color(255, 140, 120));
+        conn.setPosition({ 20.f, 144.f });
+        window.draw(conn);
+
         sf::Text available(font);
         available.setCharacterSize(24);
         if (remoteVer.empty())
@@ -579,17 +594,17 @@ int main() {
         else if (canUpdate)
             available.setString("Beschikbare update: v" + remoteVer);
         else
-            available.setString("Beschikbare update: geen");
+            available.setString("Beschikbare update: v" + localVer);
         available.setFillColor(canUpdate ? sf::Color(120, 220, 150)
                                          : sf::Color(160, 170, 190));
-        available.setPosition({ 20.f, 146.f });
+        available.setPosition({ 20.f, 174.f });
         window.draw(available);
 
         sf::Text msg(font);
         msg.setCharacterSize(30);
         msg.setString(infoLine);
         msg.setFillColor(sf::Color(220, 228, 248));
-        msg.setPosition({ 20.f, 196.f });
+        msg.setPosition({ 20.f, 228.f });
         window.draw(msg);
 
         const std::uint64_t t = total.load();
@@ -614,7 +629,7 @@ int main() {
         window.draw(fill);
 
         drawButton(startBtnR, "Start Game", !workerRunning);
-        drawButton(updateBtnR, "Update", !workerRunning);
+        drawButton(updateBtnR, "Update", !workerRunning && onlineOk && canUpdate);
         drawButton(closeBtnR, "Afsluiten", !workerRunning);
 
         window.display();
