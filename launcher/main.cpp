@@ -5,11 +5,13 @@
 #include <atomic>
 #include <algorithm>
 #include <cstdio>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <string>
 #include <thread>
+#include <tuple>
 #include <vector>
 
 #pragma comment(lib, "winhttp.lib")
@@ -42,6 +44,70 @@ static std::string readLocalVersion(const fs::path& dir) {
     if (!std::getline(in, line))
         return "0.0.0";
     return trim(line);
+}
+
+static std::tuple<int, int, int> semverTuple(const std::string& raw) {
+    std::string s = trim(raw);
+    const auto cut = std::min({ s.find(' '), s.find('\t'),
+                                s.find('+'), s.find('-') });
+    if (cut != std::string::npos)
+        s.resize(cut);
+
+    int major = -1;
+    int minor = -1;
+    int patch = -1;
+
+    auto readInt = [&](const std::string& t, size_t i0,
+                       size_t& outEnd) -> int {
+        if (i0 >= t.size() || !std::isdigit(static_cast<unsigned char>(t[i0])))
+            return -1;
+        size_t i = i0;
+        int    v = 0;
+        for (; i < t.size(); ++i) {
+            const unsigned char c =
+                static_cast<unsigned char>(t[i]);
+            if (!std::isdigit(c))
+                break;
+            v = v * 10 + static_cast<int>(c - '0');
+            if (v > 1'000'000)
+                return -1;
+        }
+        outEnd = i;
+        return v;
+    };
+
+    size_t i       = 0;
+    major          = readInt(s, i, i);
+    if (major < 0 || i >= s.size() || s[i++] != '.')
+        return { -1, -1, -1 };
+    minor        = readInt(s, i, i);
+    if (minor < 0 || i >= s.size() || s[i++] != '.')
+        return { -1, -1, -1 };
+    patch       = readInt(s, i, i);
+    if (patch < 0)
+        return { -1, -1, -1 };
+    if (i != s.size())
+        return { -1, -1, -1 };
+
+    return { major, minor, patch };
+}
+
+static bool semverParsed(const std::tuple<int, int, int>& t) {
+    return std::get<0>(t) >= 0;
+}
+
+static int compareSemver(const std::tuple<int, int, int>& a,
+                         const std::tuple<int, int, int>& b) {
+    if (!semverParsed(a) || !semverParsed(b))
+        return 0;
+
+    auto ta = std::tie(std::get<0>(a), std::get<1>(a), std::get<2>(a));
+    auto tb = std::tie(std::get<0>(b), std::get<1>(b), std::get<2>(b));
+    if (ta < tb)
+        return -1;
+    if (ta > tb)
+        return 1;
+    return 0;
 }
 
 static void logLine(const std::string& msg) {
@@ -228,10 +294,26 @@ int main() {
         return 0;
     }
 
-    if (remoteVer == localVer) {
-        if (fs::exists(gameExe))
-            startGame(gameExe);
-        return 0;
+    const auto locT = semverTuple(localVer);
+    const auto remT = semverTuple(remoteVer);
+    if (!semverParsed(locT) || !semverParsed(remT)) {
+        if (remoteVer == localVer) {
+            if (fs::exists(gameExe))
+                startGame(gameExe);
+            return 0;
+        }
+    } else {
+        const int cmp = compareSemver(locT, remT);
+
+        /// Auto-increment lokale semver kan hoger zijn dan GitHub tijdens development;
+        /// dan geen oneindige forced updates.
+        if (cmp >= 0) {
+            if (cmp == 1)
+                logLine("Local semver newer than remote; skip update.");
+            if (fs::exists(gameExe))
+                startGame(gameExe);
+            return 0;
+        }
     }
 
     sf::RenderWindow window(

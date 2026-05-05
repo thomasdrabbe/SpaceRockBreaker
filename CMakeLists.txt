@@ -6,6 +6,8 @@ project(SpaceRockBreaker LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+option(SRB_AUTO_BUMP_VERSION_ON_BUILD "Bij build: version.txt-patch + Inno AppVersion automatisch verhogen" ON)
+
 # ─── SFML ─────────────────────────────────────────────────────
 find_package(SFML COMPONENTS Graphics Window System Audio REQUIRED)
 find_package(ImGui-SFML CONFIG REQUIRED)
@@ -99,3 +101,16 @@ add_custom_command(TARGET SpaceRockBreaker POST_BUILD
 )
 
 add_subdirectory(launcher)
+
+if(SRB_AUTO_BUMP_VERSION_ON_BUILD)
+    add_custom_target(srb_bump_app_version ALL
+        COMMAND ${CMAKE_COMMAND}
+            "-DSRB_SOURCE_DIR=${CMAKE_SOURCE_DIR}"
+            -P "${CMAKE_SOURCE_DIR}/cmake/bump_app_version.cmake"
+        COMMENT "Auto-bump semver in version.txt + installer.iss (SRB_AUTO_BUMP_VERSION_ON_BUILD)"
+    )
+
+    foreach(_tgt IN ITEMS SpaceRockBreaker SpaceRockLauncher)
+        add_dependencies(${_tgt} srb_bump_app_version)
+    endforeach()
+endif()

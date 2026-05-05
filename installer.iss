@@ -1,8 +1,13 @@
 ; Space Rock Breaker — Inno Setup script
-; Plaats dit bestand in: C:\Users\thomas.drabbe\Documents\SpaceRockBreaker\
+; Project root: elk pad hieronder is relatief t.o.v. deze .iss naast CMakeLists.txt
+;
+; Versie (#define AppVersion):
+; - Wordt automatisch gesynchroniseerd met version.txt tijdens CMake build
+;   (zie cmake/bump_app_version.cmake, optie SRB_AUTO_BUMP_VERSION_ON_BUILD).
+; - Handmatig Inno-compilen? Zorg dat deze string gelijk blijft aan version.txt.
 
 #define AppName      "Space Rock Breaker"
-#define AppVersion   "1.0.1"
+#define AppVersion   "1.0.5"
 #define AppPublisher "Chef Survival"
 #define AppExeName   "SpaceRockLauncher.exe"
 #define GameExeName  "SpaceRockBreaker.exe"
@@ -13,16 +18,32 @@
 AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
 AppName={#AppName}
 AppVersion={#AppVersion}
+AppVerName={#AppName} {#AppVersion}
 AppPublisher={#AppPublisher}
+
+; x64 build (CMake preset / vcpkg x64-windows)
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64
+
 DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
+DisableProgramGroupPage=no
+AllowNetworkDrive=no
+
 OutputDir=installer_output
-OutputBaseFilename=SpaceRockBreakerSetup
+OutputBaseFilename=SpaceRockBreakerSetup_{#AppVersion}
+
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+
 UninstallDisplayIcon={app}\assets\icon.ico
 SetupIconFile=assets\icon.ico
+
+; Windows-installer uninstall-weergave
+VersionInfoCompany={#AppPublisher}
+VersionInfoProductName={#AppName}
+VersionInfoVersion={#AppVersion}.0
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -41,20 +62,19 @@ Source: "version.txt"; DestDir: "{app}"; Flags: ignoreversion
 ; SFML en andere DLLs
 Source: "{#SourceDir}\*.dll"; DestDir: "{app}"; Flags: ignoreversion
 
-; Assets inclusief font, icon en geluiden
+; Assets inclusief font, icon en geluiden (build kopie naast exe)
 Source: "{#SourceDir}\assets\*"; DestDir: "{app}\assets"; \
     Flags: ignoreversion recursesubdirs createallsubdirs
 
-; Icon apart zeker stellen
-Source: "assets\icon.ico"; DestDir: "{app}\assets"; Flags: ignoreversion
+; Icoon uit repo als dat in build\Release\assets nog ontbreekt
+Source: "assets\icon.ico"; DestDir: "{app}\assets"; \
+    Flags: ignoreversion skipifsourcedoesntexist
 
 [Icons]
-; Startmenu
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExeName}"; \
     IconFilename: "{app}\assets\icon.ico"
 Name: "{group}\{#AppName} verwijderen"; Filename: "{uninstallexe}"
 
-; Bureaublad (optioneel, vinkje in installer)
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; \
     IconFilename: "{app}\assets\icon.ico"; Tasks: desktopicon
 
