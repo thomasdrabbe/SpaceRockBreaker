@@ -253,10 +253,38 @@ int main() {
            + ".zip");
 
     std::thread worker([&]() {
-        const bool ok = winHttpDownload(
+        bool ok = false;
+
+        // 1) Normale distributie via GitHub Releases (aanbevolen).
+        ok = winHttpDownload(
             L"github.com",
             LR"(/thomasdrabbe/SpaceRockBreaker/releases/latest/download/SpaceRockBreaker.zip)",
             INTERNET_DEFAULT_HTTPS_PORT, true, zipPath, &downloaded, &total);
+
+        // 2) Fallback: direct bestand in repository root.
+        if (!ok) {
+            downloaded.store(0);
+            total.store(0);
+            ok = winHttpDownload(
+                L"raw.githubusercontent.com",
+                LR"(/thomasdrabbe/SpaceRockBreaker/main/SpaceRockBreaker.zip)",
+                INTERNET_DEFAULT_HTTPS_PORT, true, zipPath, &downloaded, &total);
+            if (ok)
+                logLine("Updater fallback gebruikt: raw main/SpaceRockBreaker.zip");
+        }
+
+        // 3) Fallback: zip in installer_output map in de repo.
+        if (!ok) {
+            downloaded.store(0);
+            total.store(0);
+            ok = winHttpDownload(
+                L"raw.githubusercontent.com",
+                LR"(/thomasdrabbe/SpaceRockBreaker/main/installer_output/SpaceRockBreaker.zip)",
+                INTERNET_DEFAULT_HTTPS_PORT, true, zipPath, &downloaded, &total);
+            if (ok)
+                logLine("Updater fallback gebruikt: raw installer_output/SpaceRockBreaker.zip");
+        }
+
         if (!ok) {
             status.store(-1);
             return;
@@ -306,7 +334,7 @@ int main() {
             "Update beschikbaar: v" + remoteVer + " — Bezig met downloaden...";
         if (workerJoined) {
             if (st == -1)
-                line = "Download mislukt. Sluit dit venster.";
+                line = "Download mislukt (geen release/zip gevonden). Sluit dit venster.";
             else if (st == -2)
                 line = "Uitpakken mislukt. Sluit dit venster.";
             else if (st == -3)
