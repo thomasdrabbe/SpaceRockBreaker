@@ -280,18 +280,26 @@ int main() {
     std::string infoLine  = "Controleren op updates...";
     bool        canUpdate = false;
 
-    const std::wstring cacheBust = L"?ts=" + std::to_wstring(GetTickCount64());
-    try {
-        const std::wstring versionPath =
-            LR"(/thomasdrabbe/SpaceRockBreaker/main/version.txt)" + cacheBust;
-        remoteVer = httpGetText(L"raw.githubusercontent.com", versionPath, true);
-    } catch (...) {
+    auto refreshRemote = [&]() {
+        localVer = readLocalVersion(dir);
         remoteVer.clear();
-    }
+        canUpdate = false;
 
-    if (remoteVer.empty()) {
-        infoLine = "Geen update-info beschikbaar. Je kunt wel starten.";
-    } else {
+        const std::wstring cacheBust = L"?ts=" + std::to_wstring(GetTickCount64());
+        try {
+            const std::wstring versionPath =
+                LR"(/thomasdrabbe/SpaceRockBreaker/main/version.txt)" + cacheBust;
+            remoteVer = httpGetText(
+                L"raw.githubusercontent.com", versionPath, true);
+        } catch (...) {
+            remoteVer.clear();
+        }
+
+        if (remoteVer.empty()) {
+            infoLine = "Geen update-info beschikbaar. Je kunt wel starten.";
+            return;
+        }
+
         const auto locT = semverTuple(localVer);
         const auto remT = semverTuple(remoteVer);
         if (!semverParsed(locT) || !semverParsed(remT)) {
@@ -304,7 +312,9 @@ int main() {
             infoLine = "Update beschikbaar: v" + remoteVer;
         else
             infoLine = "Je gebruikt de nieuwste versie.";
-    }
+    };
+
+    refreshRemote();
 
     sf::RenderWindow window(
         sf::VideoMode(sf::Vector2u{ 520u, 230u }),
@@ -329,9 +339,10 @@ int main() {
     bool        workerRunning = false;
     bool        workerJoined  = true;
 
-    const sf::FloatRect startBtnR({ 20.f, 175.f }, { 150.f, 36.f });
-    const sf::FloatRect updateBtnR({ 185.f, 175.f }, { 150.f, 36.f });
-    const sf::FloatRect closeBtnR({ 350.f, 175.f }, { 150.f, 36.f });
+    const sf::FloatRect startBtnR({ 20.f, 175.f }, { 120.f, 36.f });
+    const sf::FloatRect refreshBtnR({ 150.f, 175.f }, { 120.f, 36.f });
+    const sf::FloatRect updateBtnR({ 280.f, 175.f }, { 110.f, 36.f });
+    const sf::FloatRect closeBtnR({ 400.f, 175.f }, { 100.f, 36.f });
 
     auto beginUpdate = [&]() {
         if (workerRunning || !canUpdate)
@@ -436,7 +447,17 @@ int main() {
                         return 0;
                     }
                     infoLine = "SpaceRockBreaker.exe niet gevonden in installatiemap.";
-                } else if (updateBtnR.contains(m) && canUpdate && !workerRunning) {
+                } else if (refreshBtnR.contains(m) && !workerRunning) {
+                    infoLine = "Opnieuw controleren...";
+                    refreshRemote();
+                } else if (updateBtnR.contains(m) && !workerRunning) {
+                    if (!canUpdate) {
+                        infoLine = "Nog geen update gevonden. Hercontrole...";
+                        refreshRemote();
+                        if (!canUpdate)
+                            infoLine = "Geen nieuwere versie beschikbaar.";
+                        continue;
+                    }
                     beginUpdate();
                 } else if (closeBtnR.contains(m) && !workerRunning) {
                     window.close();
@@ -511,7 +532,8 @@ int main() {
         window.draw(fill);
 
         drawButton(startBtnR, "Start Game", !workerRunning);
-        drawButton(updateBtnR, "Update", canUpdate && !workerRunning);
+        drawButton(refreshBtnR, "Hercheck", !workerRunning);
+        drawButton(updateBtnR, "Update", !workerRunning);
         drawButton(closeBtnR, "Afsluiten", !workerRunning);
 
         window.display();
