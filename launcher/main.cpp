@@ -366,7 +366,7 @@ int main() {
     refreshRemote();
 
     sf::RenderWindow window(
-        sf::VideoMode(sf::Vector2u{ 760u, 360u }),
+        sf::VideoMode(sf::Vector2u{ 980u, 560u }),
         sf::String{ L"Space Rock Breaker — Launcher" },
         sf::Style::Titlebar | sf::Style::Close);
     window.setFramerateLimit(60);
@@ -389,10 +389,9 @@ int main() {
     bool        workerJoined  = true;
     fs::path    stagedDir;
 
-    const sf::FloatRect startBtnR({ 20.f, 290.f }, { 170.f, 50.f });
-    const sf::FloatRect refreshBtnR({ 205.f, 290.f }, { 170.f, 50.f });
-    const sf::FloatRect updateBtnR({ 390.f, 290.f }, { 170.f, 50.f });
-    const sf::FloatRect closeBtnR({ 575.f, 290.f }, { 170.f, 50.f });
+    const sf::FloatRect startBtnR({ 20.f, 480.f }, { 300.f, 60.f });
+    const sf::FloatRect updateBtnR({ 340.f, 480.f }, { 300.f, 60.f });
+    const sf::FloatRect closeBtnR({ 660.f, 480.f }, { 300.f, 60.f });
 
     auto beginUpdate = [&]() {
         if (workerRunning)
@@ -502,9 +501,6 @@ int main() {
                         return 0;
                     }
                     infoLine = "SpaceRockBreaker.exe niet gevonden in installatiemap.";
-                } else if (refreshBtnR.contains(m) && !workerRunning) {
-                    infoLine = "Opnieuw controleren...";
-                    refreshRemote();
                 } else if (updateBtnR.contains(m) && !workerRunning) {
                     if (!canUpdate) {
                         infoLine = "Geen nieuwere versie gezien. We proberen toch updatepakket...";
@@ -544,26 +540,26 @@ int main() {
         window.clear(sf::Color(20, 22, 34));
 
         sf::Text title(font);
-        title.setCharacterSize(30);
+        title.setCharacterSize(40);
         title.setString("Space Rock Breaker Launcher");
         title.setFillColor(sf::Color(235, 240, 255));
-        title.setPosition({ 20.f, 18.f });
+        title.setPosition({ 20.f, 24.f });
         window.draw(title);
 
         sf::Text versions(font);
-        versions.setCharacterSize(20);
+        versions.setCharacterSize(27);
         versions.setString(
             "Geinstalleerd: v" + localVer
             + (remoteVer.empty() ? "" : ("   Online: v" + remoteVer)));
         versions.setFillColor(sf::Color(185, 196, 220));
-        versions.setPosition({ 20.f, 74.f });
+        versions.setPosition({ 20.f, 108.f });
         window.draw(versions);
 
         sf::Text msg(font);
-        msg.setCharacterSize(22);
+        msg.setCharacterSize(30);
         msg.setString(infoLine);
         msg.setFillColor(sf::Color(220, 228, 248));
-        msg.setPosition({ 20.f, 122.f });
+        msg.setPosition({ 20.f, 172.f });
         window.draw(msg);
 
         const std::uint64_t t = total.load();
@@ -575,20 +571,19 @@ int main() {
                          static_cast<double>(d) / static_cast<double>(t)));
         }
 
-        sf::RectangleShape track(sf::Vector2f{ 724.f, 30.f });
-        track.setPosition({ 18.f, 220.f });
+        sf::RectangleShape track(sf::Vector2f{ 940.f, 44.f });
+        track.setPosition({ 20.f, 390.f });
         track.setFillColor(sf::Color(40, 44, 70));
         track.setOutlineColor(sf::Color(90, 100, 150));
         track.setOutlineThickness(2.f);
         window.draw(track);
 
-        sf::RectangleShape fill(sf::Vector2f{ 718.f * p, 24.f });
-        fill.setPosition({ 21.f, 223.f });
+        sf::RectangleShape fill(sf::Vector2f{ 934.f * p, 38.f });
+        fill.setPosition({ 23.f, 393.f });
         fill.setFillColor(sf::Color(80, 180, 255));
         window.draw(fill);
 
         drawButton(startBtnR, "Start Game", !workerRunning);
-        drawButton(refreshBtnR, "Hercheck", !workerRunning);
         drawButton(updateBtnR, "Update", !workerRunning);
         drawButton(closeBtnR, "Afsluiten", !workerRunning);
 
