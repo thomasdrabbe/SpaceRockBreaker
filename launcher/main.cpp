@@ -278,10 +278,13 @@ int main() {
     const std::string localVer = readLocalVersion(dir);
 
     std::string remoteVer;
+    const std::wstring cacheBust = L"?ts=" + std::to_wstring(GetTickCount64());
     try {
+        const std::wstring versionPath =
+            LR"(/thomasdrabbe/SpaceRockBreaker/main/version.txt)" + cacheBust;
         remoteVer = httpGetText(
             L"raw.githubusercontent.com",
-            LR"(/thomasdrabbe/SpaceRockBreaker/main/version.txt)",
+            versionPath,
             true);
     } catch (...) {
         remoteVer.clear();
@@ -349,7 +352,8 @@ int main() {
             total.store(0);
             ok = winHttpDownload(
                 L"raw.githubusercontent.com",
-                LR"(/thomasdrabbe/SpaceRockBreaker/main/SpaceRockBreaker.zip)",
+                LR"(/thomasdrabbe/SpaceRockBreaker/main/SpaceRockBreaker.zip?ts=)"
+                    + std::to_wstring(GetTickCount64()),
                 INTERNET_DEFAULT_HTTPS_PORT, true, zipPath, &downloaded, &total);
             if (ok)
                 logLine("Updater fallback gebruikt: raw main/SpaceRockBreaker.zip");
@@ -361,7 +365,8 @@ int main() {
             total.store(0);
             ok = winHttpDownload(
                 L"raw.githubusercontent.com",
-                LR"(/thomasdrabbe/SpaceRockBreaker/main/installer_output/SpaceRockBreaker.zip)",
+                LR"(/thomasdrabbe/SpaceRockBreaker/main/installer_output/SpaceRockBreaker.zip?ts=)"
+                    + std::to_wstring(GetTickCount64()),
                 INTERNET_DEFAULT_HTTPS_PORT, true, zipPath, &downloaded, &total);
             if (ok)
                 logLine("Updater fallback gebruikt: raw installer_output/SpaceRockBreaker.zip");
