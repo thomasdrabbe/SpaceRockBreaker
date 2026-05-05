@@ -185,6 +185,14 @@ inline std::string resolveAssetPath(const std::string& rel) {
     if (relP.is_absolute())
         return rel;
 
+    // Prefer current working directory first (IDE/dev runs from repo root).
+    if (isFile(relP))
+        return rel;
+    if (isFile(fs::path("..") / relP))
+        return (fs::path("..") / relP).string();
+    if (isFile(fs::path("..") / ".." / relP))
+        return (fs::path("..") / ".." / relP).string();
+
     const std::string appStr = applicationDirectory();
     if (!appStr.empty()) {
         const fs::path app(appStr);
@@ -200,13 +208,6 @@ inline std::string resolveAssetPath(const std::string& rel) {
         if (isFile(twoUp))
             return twoUp.string();
     }
-
-    if (isFile(relP))
-        return rel;
-    if (isFile(fs::path("..") / relP))
-        return (fs::path("..") / relP).string();
-    if (isFile(fs::path("..") / ".." / relP))
-        return (fs::path("..") / ".." / relP).string();
 
     /// Laat SFML nog één poging naast exe doen ook als het bestand ontbreekt (duidelijke foutpad)
     if (!appStr.empty())
