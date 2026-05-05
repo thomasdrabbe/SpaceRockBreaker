@@ -20,7 +20,6 @@ void applyPhaseVisibility(int                    phase,
             break;
         case 2:
             game.setTabVisible(Tab::SHOP, true);
-            shop.setCategoryVisible(ShopCategory::WEAPONS, false);
             shop.setCategoryVisible(ShopCategory::MINING, true);
             shop.setCategoryVisible(ShopCategory::PLINKO, false);
             shop.setCategoryVisible(ShopCategory::ECONOMY, false);

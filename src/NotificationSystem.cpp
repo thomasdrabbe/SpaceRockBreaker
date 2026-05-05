@@ -1,6 +1,7 @@
 #include "NotificationSystem.h"
 #include <algorithm>
 #include <cstdint>
+#include <cmath>
 
 void NotificationSystem::push(const std::string& message,
                               sf::Color              color,
@@ -48,19 +49,16 @@ void NotificationSystem::draw(sf::RenderTarget& target,
     const auto px   = target.getSize();
     const float scrW = px.x > 0 ? static_cast<float>(px.x) : 1.f;
     const float scrH = px.y > 0 ? static_cast<float>(px.y) : 1.f;
+    const float uiScale = std::min(scrW / 1920.f, scrH / 1080.f);
+    const unsigned textSize =
+        static_cast<unsigned>(std::round(26.f * uiScale));
+    const float notifW  = std::round(540.f * uiScale);
+    const float notifH  = std::round(52.f * uiScale);
+    const float gap     = std::round(10.f * uiScale);
+    const float padX    = std::round(18.f * uiScale);
 
-    constexpr float kW = 400.f;
-    constexpr float kH = 52.f;
-    constexpr float kPad = 16.f;
-    constexpr float kGap = 8.f;
-    constexpr float kBarW = 6.f;
-    constexpr float kTextOffset = 20.f;
-    constexpr float kTimerH = 2.f;
-    constexpr float kTimerMaxW = 394.f;
-    constexpr unsigned kTextSize = 14u;
-
-    const float baseX = std::max(0.f, scrW - kPad - insetRight - kW);
-    const float baseY = std::max(0.f, scrH - kPad - kH);
+    const float baseX = std::max(0.f, scrW - insetRight - notifW - 10.f);
+    const float baseY = std::max(0.f, scrH - std::round(58.f * uiScale));
 
     int slotFromBottom = 0;
     for (int i = static_cast<int>(m_queue.size()) - 1; i >= 0; --i) {
@@ -77,46 +75,33 @@ void NotificationSystem::draw(sf::RenderTarget& target,
             continue;
 
         const float x = baseX;
-        const float y = baseY - static_cast<float>(slotFromBottom) * (kH + kGap);
+        const float y = baseY - static_cast<float>(slotFromBottom)
+                              * (notifH + gap);
 
-        const std::uint8_t baseAlpha =
-            static_cast<std::uint8_t>(std::clamp(a, 0.f, 1.f) * 220.f);
-        const std::uint8_t accentAlpha =
+        const std::uint8_t fillAlpha =
             static_cast<std::uint8_t>(std::clamp(a, 0.f, 1.f) * 180.f);
+        const std::uint8_t outlineAlpha =
+            static_cast<std::uint8_t>(std::clamp(a, 0.f, 1.f) * 160.f);
 
-        sf::RectangleShape bg(sf::Vector2f{ kW, kH });
+        sf::RectangleShape bg(sf::Vector2f{ notifW, notifH });
         bg.setPosition({ x, y });
-        bg.setFillColor(sf::Color(26, 28, 46, baseAlpha));
+        bg.setFillColor(sf::Color(12, 14, 28, fillAlpha));
+        bg.setOutlineColor(sf::Color(
+            e.color.r, e.color.g, e.color.b, outlineAlpha));
+        bg.setOutlineThickness(2.f);
         target.draw(bg);
 
-        sf::RectangleShape bar(sf::Vector2f{ kBarW, kH });
-        bar.setPosition({ x, y });
-        bar.setFillColor(sf::Color(e.color.r, e.color.g, e.color.b, baseAlpha));
-        target.draw(bar);
-
         sf::Text txt(font);
-        txt.setCharacterSize(kTextSize);
+        txt.setCharacterSize(textSize);
         txt.setString(e.message);
         txt.setStyle(sf::Text::Bold);
         txt.setFillColor(sf::Color(
-            255, 255, 255,
+            e.color.r, e.color.g, e.color.b,
             static_cast<std::uint8_t>(std::clamp(a, 0.f, 1.f) * 255.f)));
-        const sf::FloatRect lb = txt.getLocalBounds();
         txt.setPosition({
-            x + kBarW + kTextOffset - lb.position.x,
-            y + (kH * 0.5f) - (lb.position.y + lb.size.y * 0.5f) });
+            x + padX,
+            y + notifH * 0.5f - static_cast<float>(textSize) * 0.5f });
         target.draw(txt);
-
-        const float visibleTime =
-            std::clamp(e.elapsed - fi, 0.f, e.holdSec);
-        const float timerRatio = e.holdSec > 0.0001f
-            ? std::clamp((e.holdSec - visibleTime) / e.holdSec, 0.f, 1.f)
-            : 0.f;
-        sf::RectangleShape tbar(sf::Vector2f{ kTimerMaxW * timerRatio, kTimerH });
-        tbar.setPosition({ x + kBarW, y + kH - kTimerH });
-        tbar.setFillColor(sf::Color(
-            e.color.r, e.color.g, e.color.b, accentAlpha));
-        target.draw(tbar);
 
         slotFromBottom++;
     }

@@ -800,7 +800,7 @@ void Game::render() {
     drawSidePanel();
     drawSidePanelAuxButtons();
     drawNotifs();
-    m_notifications.draw(m_window, m_font, m_sideW + 18.f, m_tabH + 12.f);
+    m_notifications.draw(m_window, m_font, m_sideW, m_tabH + 12.f);
     if (m_chestOverlayAnim > 0.f)
         drawChestOpenOverlay();
     if (m_chestLootPopupActive && m_chestLootPopupRemain > 0.f)
