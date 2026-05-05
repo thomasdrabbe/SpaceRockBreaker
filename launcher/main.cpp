@@ -443,6 +443,60 @@ static bool scheduleApplyAndStart(const fs::path& installDir,
     return launchDetachedCmd(cmd, installDir.wstring());
 }
 
+static bool applyStagedUpdateInProcess(const fs::path& installDir,
+                                       const fs::path& stageDir) {
+    std::error_code ec;
+    if (!fs::exists(stageDir, ec) || ec)
+        return false;
+
+    bool allOk = true;
+    for (const auto& entry :
+         fs::recursive_directory_iterator(stageDir, fs::directory_options::skip_permission_denied, ec)) {
+        if (ec) {
+            allOk = false;
+            break;
+        }
+
+        const fs::path rel = fs::relative(entry.path(), stageDir, ec);
+        if (ec) {
+            allOk = false;
+            continue;
+        }
+        const fs::path dst = installDir / rel;
+
+        if (entry.is_directory()) {
+            fs::create_directories(dst, ec);
+            if (ec) {
+                allOk = false;
+                ec.clear();
+            }
+            continue;
+        }
+
+        if (!entry.is_regular_file())
+            continue;
+
+        // Avoid replacing the currently-running launcher binary in-process.
+        if (dst.filename() == "SpaceRockLauncher.exe")
+            continue;
+
+        fs::create_directories(dst.parent_path(), ec);
+        if (ec) {
+            allOk = false;
+            ec.clear();
+            continue;
+        }
+
+        fs::copy_file(entry.path(), dst, fs::copy_options::overwrite_existing, ec);
+        if (ec) {
+            allOk = false;
+            logLine("Copy failed for: " + dst.string());
+            ec.clear();
+        }
+    }
+    return allOk;
+}
+
 static void startGame(const fs::path& exe) {
     std::wstring p = exe.wstring();
     std::vector<wchar_t> args(p.begin(), p.end());
@@ -605,12 +659,31 @@ int main() {
                 workerJoined  = true;
                 workerRunning = false;
                 if (st == 2) {
-                    if (!scheduleApplyAndStart(
-                            dir, stagedDir, gameExe, stagedPackageVer,
-                            GetCurrentProcessId())) {
-                        startGame(gameExe);
+                    const bool inProcOk =
+                        applyStagedUpdateInProcess(dir, stagedDir);
+                    if (!inProcOk) {
+                        logLine("In-process apply failed, fallback to external apply script.");
+                        if (!scheduleApplyAndStart(
+                                dir, stagedDir, gameExe, stagedPackageVer,
+                                GetCurrentProcessId())) {
+                            startGame(gameExe);
+                            return 0;
+                        }
                         return 0;
                     }
+                    const std::string appliedVer = readLocalVersion(dir);
+                    if (appliedVer != stagedPackageVer) {
+                        logLine("In-process apply version mismatch, fallback to external apply script.");
+                        if (!scheduleApplyAndStart(
+                                dir, stagedDir, gameExe, stagedPackageVer,
+                                GetCurrentProcessId())) {
+                            startGame(gameExe);
+                            return 0;
+                        }
+                        return 0;
+                    }
+                    fs::remove_all(stagedDir);
+                    startGame(gameExe);
                     return 0;
                 } else {
                     logLine("Update check fell back to start game.");
