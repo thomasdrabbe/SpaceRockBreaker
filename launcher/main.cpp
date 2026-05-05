@@ -366,7 +366,7 @@ int main() {
     refreshRemote();
 
     sf::RenderWindow window(
-        sf::VideoMode(sf::Vector2u{ 520u, 230u }),
+        sf::VideoMode(sf::Vector2u{ 760u, 360u }),
         sf::String{ L"Space Rock Breaker — Launcher" },
         sf::Style::Titlebar | sf::Style::Close);
     window.setFramerateLimit(60);
@@ -389,10 +389,10 @@ int main() {
     bool        workerJoined  = true;
     fs::path    stagedDir;
 
-    const sf::FloatRect startBtnR({ 20.f, 175.f }, { 120.f, 36.f });
-    const sf::FloatRect refreshBtnR({ 150.f, 175.f }, { 120.f, 36.f });
-    const sf::FloatRect updateBtnR({ 280.f, 175.f }, { 110.f, 36.f });
-    const sf::FloatRect closeBtnR({ 400.f, 175.f }, { 100.f, 36.f });
+    const sf::FloatRect startBtnR({ 20.f, 290.f }, { 170.f, 50.f });
+    const sf::FloatRect refreshBtnR({ 205.f, 290.f }, { 170.f, 50.f });
+    const sf::FloatRect updateBtnR({ 390.f, 290.f }, { 170.f, 50.f });
+    const sf::FloatRect closeBtnR({ 575.f, 290.f }, { 170.f, 50.f });
 
     auto beginUpdate = [&]() {
         if (workerRunning)
@@ -471,11 +471,14 @@ int main() {
         window.draw(b);
 
         sf::Text t(font);
-        t.setCharacterSize(14);
+        t.setCharacterSize(18);
         t.setString(label);
         t.setFillColor(enabled ? sf::Color(240, 245, 255)
                                : sf::Color(150, 160, 175));
-        t.setPosition({ r.position.x + 12.f, r.position.y + 8.f });
+        const auto tb = t.getLocalBounds();
+        t.setPosition({
+            r.position.x + (r.size.x - tb.size.x) * 0.5f - tb.position.x,
+            r.position.y + (r.size.y - tb.size.y) * 0.5f - tb.position.y });
         window.draw(t);
     };
 
@@ -541,26 +544,26 @@ int main() {
         window.clear(sf::Color(20, 22, 34));
 
         sf::Text title(font);
-        title.setCharacterSize(18);
+        title.setCharacterSize(30);
         title.setString("Space Rock Breaker Launcher");
         title.setFillColor(sf::Color(235, 240, 255));
-        title.setPosition({ 20.f, 16.f });
+        title.setPosition({ 20.f, 18.f });
         window.draw(title);
 
         sf::Text versions(font);
-        versions.setCharacterSize(13);
+        versions.setCharacterSize(20);
         versions.setString(
             "Geinstalleerd: v" + localVer
             + (remoteVer.empty() ? "" : ("   Online: v" + remoteVer)));
         versions.setFillColor(sf::Color(185, 196, 220));
-        versions.setPosition({ 20.f, 48.f });
+        versions.setPosition({ 20.f, 74.f });
         window.draw(versions);
 
         sf::Text msg(font);
-        msg.setCharacterSize(14);
+        msg.setCharacterSize(22);
         msg.setString(infoLine);
         msg.setFillColor(sf::Color(220, 228, 248));
-        msg.setPosition({ 20.f, 76.f });
+        msg.setPosition({ 20.f, 122.f });
         window.draw(msg);
 
         const std::uint64_t t = total.load();
@@ -572,15 +575,15 @@ int main() {
                          static_cast<double>(d) / static_cast<double>(t)));
         }
 
-        sf::RectangleShape track(sf::Vector2f{ 480.f, 16.f });
-        track.setPosition({ 20.f, 125.f });
+        sf::RectangleShape track(sf::Vector2f{ 724.f, 30.f });
+        track.setPosition({ 18.f, 220.f });
         track.setFillColor(sf::Color(40, 44, 70));
         track.setOutlineColor(sf::Color(90, 100, 150));
-        track.setOutlineThickness(1.f);
+        track.setOutlineThickness(2.f);
         window.draw(track);
 
-        sf::RectangleShape fill(sf::Vector2f{ 476.f * p, 12.f });
-        fill.setPosition({ 22.f, 127.f });
+        sf::RectangleShape fill(sf::Vector2f{ 718.f * p, 24.f });
+        fill.setPosition({ 21.f, 223.f });
         fill.setFillColor(sf::Color(80, 180, 255));
         window.draw(fill);
 
