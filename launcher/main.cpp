@@ -231,6 +231,33 @@ static std::string httpGetText(const std::wstring& host,
     return trim(ss.str());
 }
 
+static std::string fetchRemoteVersionText() {
+    const std::wstring cacheBust = L"?ts=" + std::to_wstring(GetTickCount64());
+
+    // Primair: raw + cachebust
+    std::string v = httpGetText(
+        L"raw.githubusercontent.com",
+        LR"(/thomasdrabbe/SpaceRockBreaker/main/version.txt)" + cacheBust,
+        true);
+    if (!v.empty())
+        return v;
+
+    // Fallback 1: raw zonder query
+    v = httpGetText(
+        L"raw.githubusercontent.com",
+        LR"(/thomasdrabbe/SpaceRockBreaker/main/version.txt)",
+        true);
+    if (!v.empty())
+        return v;
+
+    // Fallback 2: github raw redirect endpoint
+    v = httpGetText(
+        L"github.com",
+        LR"(/thomasdrabbe/SpaceRockBreaker/raw/main/version.txt)",
+        true);
+    return v;
+}
+
 static bool runExpandArchive(const fs::path& zip, const fs::path& dest) {
     std::wstring cmd =
         L"powershell.exe -NoProfile -NonInteractive -Command "
@@ -335,18 +362,15 @@ int main() {
         remoteVer.clear();
         canUpdate = false;
 
-        const std::wstring cacheBust = L"?ts=" + std::to_wstring(GetTickCount64());
         try {
-            const std::wstring versionPath =
-                LR"(/thomasdrabbe/SpaceRockBreaker/main/version.txt)" + cacheBust;
-            remoteVer = httpGetText(
-                L"raw.githubusercontent.com", versionPath, true);
+            remoteVer = fetchRemoteVersionText();
         } catch (...) {
             remoteVer.clear();
         }
 
         if (remoteVer.empty()) {
-            infoLine = "Geen update-info beschikbaar. Je kunt wel starten.";
+            infoLine = "Versiecheck mislukt. Update werkt mogelijk nog wel.";
+            logLine("Version check failed on all endpoints.");
             return;
         }
 
