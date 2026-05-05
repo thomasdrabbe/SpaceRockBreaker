@@ -152,5 +152,16 @@ void UnlockSystem::update(GameState&           state,
         markDone(8);
     }
 
+    // Eerste boss staat in zone 3: eerste Gun Damage-level gratis (geen credits).
+    if (state.currentLevel >= 3 && state.nextBossMilestone == 3
+        && state.levelOf(UpgradeID::GUN_DAMAGE) == 0) {
+        state.upgradeLevels[static_cast<int>(UpgradeID::GUN_DAMAGE)] = 1;
+        notifications.push(
+            "\xE2\x9A\x94\xEF\xB8\x8F Gratis Gun Damage (lv1) voor je eerste boss!",
+            sf::Color(255, 180, 140),
+            4.5f,
+            static_cast<int>(Tab::SHOP));
+    }
+
     mining.setKeyAsteroidsEnabled(state.keyAsteroidsEnabled);
 }
