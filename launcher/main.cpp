@@ -120,6 +120,54 @@ static void logLine(const std::string& msg) {
     out << msg << '\n';
 }
 
+static std::wstring psQuote(const std::wstring& s) {
+    std::wstring out;
+    out.reserve(s.size() + 8);
+    out.push_back(L'\'');
+    for (wchar_t c : s) {
+        if (c == L'\'')
+            out += L"''";
+        else
+            out.push_back(c);
+    }
+    out.push_back(L'\'');
+    return out;
+}
+
+static bool runPowerShellScript(const std::wstring& script) {
+    std::wstring cmd =
+        L"powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command ";
+    cmd += psQuote(script);
+
+    STARTUPINFOW si{};
+    si.cb = sizeof(si);
+    PROCESS_INFORMATION pi{};
+    std::vector<wchar_t> buf(cmd.begin(), cmd.end());
+    buf.push_back(L'\0');
+    if (!CreateProcessW(nullptr, buf.data(), nullptr, nullptr, FALSE, 0,
+                        nullptr, nullptr, &si, &pi))
+        return false;
+    WaitForSingleObject(pi.hProcess, INFINITE);
+    DWORD code = 1;
+    GetExitCodeProcess(pi.hProcess, &code);
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    return code == 0;
+}
+
+static bool psDownloadToFile(const std::wstring& url, const fs::path& destFile) {
+    const std::wstring dst = destFile.wstring();
+    std::wstring script =
+        L"$ErrorActionPreference='Stop'; "
+        L"$ProgressPreference='SilentlyContinue'; "
+        L"Invoke-WebRequest -UseBasicParsing -Uri ";
+    script += psQuote(url);
+    script += L" -OutFile ";
+    script += psQuote(dst);
+    script += L";";
+    return runPowerShellScript(script);
+}
+
 static bool winHttpDownload(const std::wstring& host,
                             const std::wstring& urlPath,
                             INTERNET_PORT      port,
@@ -225,8 +273,11 @@ static std::string httpGetText(const std::wstring& host,
     std::atomic<std::uint64_t> tot{};
     if (!winHttpDownload(host, urlPath, https ? INTERNET_DEFAULT_HTTPS_PORT
                                              : INTERNET_DEFAULT_HTTP_PORT,
-                         https, tmp, &down, &tot))
-        return {};
+                         https, tmp, &down, &tot)) {
+        const std::wstring url = (https ? L"https://" : L"http://") + host + urlPath;
+        if (!psDownloadToFile(url, tmp))
+            return {};
+    }
     std::ifstream in(tmp, std::ios::binary);
     std::stringstream ss;
     ss << in.rdbuf();
@@ -468,20 +519,34 @@ int main() {
         downloaded.store(0);
         total.store(0);
 
+        const std::wstring zipUrlA =
+            L"https://raw.githubusercontent.com/thomasdrabbe/SpaceRockBreaker/main/installer_output/SpaceRockBreaker.zip?ts="
+            + std::to_wstring(GetTickCount64());
+        const std::wstring zipPathA =
+            LR"(/thomasdrabbe/SpaceRockBreaker/main/installer_output/SpaceRockBreaker.zip?ts=)"
+            + std::to_wstring(GetTickCount64());
         ok = winHttpDownload(
             L"raw.githubusercontent.com",
-            LR"(/thomasdrabbe/SpaceRockBreaker/main/installer_output/SpaceRockBreaker.zip?ts=)"
-                + std::to_wstring(GetTickCount64()),
+            zipPathA,
             INTERNET_DEFAULT_HTTPS_PORT, true, zipPath, &downloaded, &total);
+        if (!ok)
+            ok = psDownloadToFile(zipUrlA, zipPath);
 
         if (!ok) {
             downloaded.store(0);
             total.store(0);
+            const std::wstring zipUrlB =
+                L"https://raw.githubusercontent.com/thomasdrabbe/SpaceRockBreaker/main/SpaceRockBreaker.zip?ts="
+                + std::to_wstring(GetTickCount64());
+            const std::wstring zipPathB =
+                LR"(/thomasdrabbe/SpaceRockBreaker/main/SpaceRockBreaker.zip?ts=)"
+                + std::to_wstring(GetTickCount64());
             ok = winHttpDownload(
                 L"raw.githubusercontent.com",
-                LR"(/thomasdrabbe/SpaceRockBreaker/main/SpaceRockBreaker.zip?ts=)"
-                    + std::to_wstring(GetTickCount64()),
+                zipPathB,
                 INTERNET_DEFAULT_HTTPS_PORT, true, zipPath, &downloaded, &total);
+            if (!ok)
+                ok = psDownloadToFile(zipUrlB, zipPath);
         }
 
         if (!ok) {
