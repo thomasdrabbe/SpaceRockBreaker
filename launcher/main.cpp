@@ -165,7 +165,6 @@ static bool winHttpDownload(const std::wstring& host,
                         WINHTTP_HEADER_NAME_BY_INDEX, &status, &sz,
                         WINHTTP_NO_HEADER_INDEX);
     if (status != 200) {
-        logLine("HTTP status: " + std::to_string(status));
         WinHttpCloseHandle(req);
         WinHttpCloseHandle(conn);
         WinHttpCloseHandle(ses);
@@ -431,26 +430,18 @@ int main() {
         worker = std::thread([&]() {
             bool ok = false;
 
-            // 1) Normale distributie via GitHub Releases.
+            // Primair: direct bestand in repository root.
+            downloaded.store(0);
+            total.store(0);
             ok = winHttpDownload(
-                L"github.com",
-                LR"(/thomasdrabbe/SpaceRockBreaker/releases/latest/download/SpaceRockBreaker.zip)",
+                L"raw.githubusercontent.com",
+                LR"(/thomasdrabbe/SpaceRockBreaker/main/SpaceRockBreaker.zip?ts=)"
+                    + std::to_wstring(GetTickCount64()),
                 INTERNET_DEFAULT_HTTPS_PORT, true, zipPath, &downloaded, &total);
+            if (ok)
+                logLine("Updater gebruikt: raw main/SpaceRockBreaker.zip");
 
-            // 2) Fallback: direct bestand in repository root.
-            if (!ok) {
-                downloaded.store(0);
-                total.store(0);
-                ok = winHttpDownload(
-                    L"raw.githubusercontent.com",
-                    LR"(/thomasdrabbe/SpaceRockBreaker/main/SpaceRockBreaker.zip?ts=)"
-                        + std::to_wstring(GetTickCount64()),
-                    INTERNET_DEFAULT_HTTPS_PORT, true, zipPath, &downloaded, &total);
-                if (ok)
-                    logLine("Updater fallback gebruikt: raw main/SpaceRockBreaker.zip");
-            }
-
-            // 3) Fallback: zip in installer_output map in de repo.
+            // Fallback: zip in installer_output map in de repo.
             if (!ok) {
                 downloaded.store(0);
                 total.store(0);
@@ -465,6 +456,7 @@ int main() {
 
             if (!ok) {
                 status.store(-1);
+                logLine("Update failed: all download endpoints unavailable.");
                 return;
             }
             const fs::path stage =
