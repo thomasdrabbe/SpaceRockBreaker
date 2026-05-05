@@ -976,6 +976,12 @@ void Game::onKeyPress(sf::Keyboard::Key key, bool ctrl, bool shift) {
             }
             break;
 
+        case K::W:
+            if (m_activeTab == Tab::SHOP
+                && m_shop.trySelectCategory(ShopCategory::WEAPONS, m_state))
+                gSfx.play(Sfx::UiClick);
+            break;
+
         case K::P:
             if (m_diskSessionActive) {
                 m_state.save(currentSavePath());

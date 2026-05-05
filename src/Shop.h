@@ -45,6 +45,9 @@ public:
     bool miningShowsWarpOnly() const { return m_miningShowsWarpOnly; }
     void resetProgressiveShopState();
 
+    /// Alleen als categorie zichtbaar is: actief maken + cards bouwen (bv. toets W).
+    bool trySelectCategory(ShopCategory cat, GameState& state);
+
 private:
     sf::Font* m_font  = nullptr;
     float     m_x     = 0.f;

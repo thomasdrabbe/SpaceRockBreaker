@@ -92,6 +92,15 @@ void Shop::resetProgressiveShopState() {
     m_layoutFp            = 0;
 }
 
+bool Shop::trySelectCategory(ShopCategory cat, GameState& state) {
+    if (!m_categoryVisible[static_cast<int>(cat)])
+        return false;
+    m_activeCategory = cat;
+    m_scroll         = 0.f;
+    buildCards(state);
+    return true;
+}
+
 int Shop::visibleCategoryCount() const {
     int n = 0;
     for (bool v : m_categoryVisible)

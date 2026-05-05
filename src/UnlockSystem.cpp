@@ -163,5 +163,10 @@ void UnlockSystem::update(GameState&           state,
             static_cast<int>(Tab::SHOP));
     }
 
+    // Zone 2+: Weapons hoort altijd in de shop (phase 3). Zonder dit kan phase 2
+    // (elke frame WEAPONS uit) phase 3 "winnen" alleen als unlockPhaseDone[3] gezet is;
+    // een haperende flag laat dan geen wapen-tab zien tijdens de eerste boss.
+    shop.setCategoryVisible(ShopCategory::WEAPONS, state.currentLevel >= 2);
+
     mining.setKeyAsteroidsEnabled(state.keyAsteroidsEnabled);
 }
