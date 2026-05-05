@@ -557,14 +557,22 @@ void SoundHub::syncMainMenuMusic(bool showMainMenu) {
     }
     if (!m_ready)
         return;
-    if (m_gameOverMusicFileOk
-        && m_gameOverMusic.getStatus() == sf::SoundSource::Status::Playing)
-        return;
+
+    // Main menu gebruikt altijd traploop als enige achtergrondmuziek.
+    if (m_bossMusicFileOk)
+        m_bossMusic.stop();
+    if (m_gameOverMusicFileOk)
+        m_gameOverMusic.stop();
+    m_miningMusic.stop();
+    m_miningSessionActive = false;
+    m_miningPausedForBoss = false;
 
     m_menuMusic.setLooping(true);
     m_menuMusic.setRelativeToListener(true);
-    if (m_menuMusic.getStatus() != sf::SoundSource::Status::Playing)
+    if (m_menuMusic.getStatus() != sf::SoundSource::Status::Playing) {
+        m_menuMusic.setPlayingOffset(sf::Time::Zero);
         m_menuMusic.play();
+    }
 }
 
 void SoundHub::play(Sfx id, float warpPitch) {
