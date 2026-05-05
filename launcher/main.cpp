@@ -345,14 +345,14 @@ int main() {
     const sf::FloatRect closeBtnR({ 400.f, 175.f }, { 100.f, 36.f });
 
     auto beginUpdate = [&]() {
-        if (workerRunning || !canUpdate)
+        if (workerRunning)
             return;
         downloaded.store(0);
         total.store(0);
         status.store(0);
         workerRunning = true;
         workerJoined  = false;
-        infoLine      = "Update downloaden...";
+        infoLine      = "Updatepakket downloaden...";
 
         worker = std::thread([&]() {
             bool ok = false;
@@ -399,8 +399,6 @@ int main() {
                 return;
             }
             fs::remove(zipPath);
-            std::ofstream verOut(dir / "version.txt");
-            verOut << remoteVer << '\n';
             if (!fs::exists(gameExe))
                 status.store(-3);
             else
@@ -452,11 +450,8 @@ int main() {
                     refreshRemote();
                 } else if (updateBtnR.contains(m) && !workerRunning) {
                     if (!canUpdate) {
-                        infoLine = "Nog geen update gevonden. Hercontrole...";
+                        infoLine = "Geen nieuwere versie gezien. We proberen toch updatepakket...";
                         refreshRemote();
-                        if (!canUpdate)
-                            infoLine = "Geen nieuwere versie beschikbaar.";
-                        continue;
                     }
                     beginUpdate();
                 } else if (closeBtnR.contains(m) && !workerRunning) {
@@ -472,9 +467,9 @@ int main() {
                 workerJoined  = true;
                 workerRunning = false;
                 if (st == 1) {
-                    localVer  = remoteVer;
-                    canUpdate = false;
-                    infoLine  = "Update klaar. Klik op Start Game.";
+                    localVer = readLocalVersion(dir);
+                    refreshRemote();
+                    infoLine = "Update klaar. Klik op Start Game.";
                 } else if (st == -1) {
                     infoLine = "Download mislukt (release/zip niet gevonden).";
                 } else if (st == -2) {
