@@ -233,7 +233,7 @@ static std::string httpGetText(const std::wstring& host,
 static std::string fetchRemoteVersionText() {
     const std::wstring cacheBust = L"?ts=" + std::to_wstring(GetTickCount64());
 
-    // Primair: raw + cachebust
+    // 1) Primair: raw + cachebust
     std::string v = httpGetText(
         L"raw.githubusercontent.com",
         LR"(/thomasdrabbe/SpaceRockBreaker/main/version.txt)" + cacheBust,
@@ -241,7 +241,7 @@ static std::string fetchRemoteVersionText() {
     if (!v.empty())
         return v;
 
-    // Fallback 1: raw zonder query
+    // 2) raw zonder query
     v = httpGetText(
         L"raw.githubusercontent.com",
         LR"(/thomasdrabbe/SpaceRockBreaker/main/version.txt)",
@@ -249,10 +249,26 @@ static std::string fetchRemoteVersionText() {
     if (!v.empty())
         return v;
 
-    // Fallback 2: github raw redirect endpoint
+    // 3) github raw redirect endpoint
     v = httpGetText(
         L"github.com",
         LR"(/thomasdrabbe/SpaceRockBreaker/raw/main/version.txt)",
+        true);
+    if (!v.empty())
+        return v;
+
+    // 4) jsDelivr mirror van GitHub (extra fallback)
+    v = httpGetText(
+        L"cdn.jsdelivr.net",
+        LR"(/gh/thomasdrabbe/SpaceRockBreaker@main/version.txt)" + cacheBust,
+        true);
+    if (!v.empty())
+        return v;
+
+    // 5) jsDelivr zonder query
+    v = httpGetText(
+        L"cdn.jsdelivr.net",
+        LR"(/gh/thomasdrabbe/SpaceRockBreaker@main/version.txt)",
         true);
     return v;
 }
