@@ -386,7 +386,7 @@ int main() {
         }
 
         if (remoteVer.empty()) {
-            infoLine = "Geen online verbinding met updateserver.";
+            infoLine = "Geen online verbinding met updateserver. We proberen automatisch opnieuw.";
             logLine("Version check failed on all endpoints.");
             return;
         }
@@ -431,6 +431,7 @@ int main() {
     bool        workerRunning = false;
     bool        workerJoined  = true;
     fs::path    stagedDir;
+    sf::Clock   autoRefreshClock;
 
     const sf::FloatRect startBtnR({ 20.f, 480.f }, { 300.f, 60.f });
     const sf::FloatRect updateBtnR({ 340.f, 480.f }, { 300.f, 60.f });
@@ -573,6 +574,13 @@ int main() {
                     infoLine = "Gamebestand niet gevonden na update.";
                 }
             }
+        } else {
+            // Achtergrond-hercheck: als verbinding tijdelijk wegvalt hoeft de
+            // gebruiker niet handmatig te herstarten.
+            if (!onlineOk && autoRefreshClock.getElapsedTime().asSeconds() >= 8.f) {
+                refreshRemote();
+                autoRefreshClock.restart();
+            }
         }
 
         window.clear(sf::Color(20, 22, 34));
@@ -604,7 +612,7 @@ int main() {
         sf::Text available(font);
         available.setCharacterSize(24);
         if (remoteVer.empty())
-            available.setString("Beschikbare update: onbekend");
+            available.setString("Beschikbare update: v" + localVer + " (offline)");
         else if (canUpdate)
             available.setString("Beschikbare update: v" + remoteVer);
         else
