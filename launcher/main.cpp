@@ -314,47 +314,61 @@ static std::string httpGetText(const std::wstring& host,
 
 static std::string fetchRemoteVersionText() {
     const std::wstring cacheBust = L"?ts=" + std::to_wstring(GetTickCount64());
+    std::vector<std::string> candidates;
 
-    // 1) Primair: raw + cachebust
-    std::string v = httpGetText(
+    auto tryEndpoint = [&](const std::wstring& host,
+                           const std::wstring& path,
+                           const char*         label) {
+        std::string v = httpGetText(host, path, true);
+        if (!v.empty()) {
+            candidates.push_back(v);
+            logLine(std::string("Version endpoint ok: ") + label
+                    + " -> " + v);
+        }
+    };
+
+    // Vraag meerdere mirrors op. Sommige endpoints kunnen tijdelijk achterlopen
+    // door CDN-cache; we kiezen later de hoogste geldige semver.
+    tryEndpoint(
         L"raw.githubusercontent.com",
         LR"(/thomasdrabbe/SpaceRockBreaker/main/version.txt)" + cacheBust,
-        true);
-    if (!v.empty())
-        return v;
-
-    // 2) raw zonder query
-    v = httpGetText(
+        "raw+cachebust");
+    tryEndpoint(
         L"raw.githubusercontent.com",
         LR"(/thomasdrabbe/SpaceRockBreaker/main/version.txt)",
-        true);
-    if (!v.empty())
-        return v;
-
-    // 3) github raw redirect endpoint
-    v = httpGetText(
+        "raw");
+    tryEndpoint(
         L"github.com",
         LR"(/thomasdrabbe/SpaceRockBreaker/raw/main/version.txt)",
-        true);
-    if (!v.empty())
-        return v;
-
-    // 4) jsDelivr mirror van GitHub (extra fallback)
-    v = httpGetText(
+        "github-raw-redirect");
+    tryEndpoint(
         L"cdn.jsdelivr.net",
         LR"(/gh/thomasdrabbe/SpaceRockBreaker@main/version.txt)" + cacheBust,
-        true);
-    if (!v.empty())
-        return v;
-
-    // 5) jsDelivr zonder query
-    v = httpGetText(
+        "jsdelivr+cachebust");
+    tryEndpoint(
         L"cdn.jsdelivr.net",
         LR"(/gh/thomasdrabbe/SpaceRockBreaker@main/version.txt)",
-        true);
-    if (v.empty())
-        logLine("Remote version unavailable on all endpoints.");
-    return v;
+        "jsdelivr");
+
+    std::string best;
+    auto        bestT = std::tuple<int, int, int>{ -1, -1, -1 };
+    for (const auto& v : candidates) {
+        const auto t = semverTuple(v);
+        if (!semverParsed(t))
+            continue;
+        if (!semverParsed(bestT) || compareSemver(t, bestT) > 0) {
+            best  = v;
+            bestT = t;
+        }
+    }
+    if (!best.empty())
+        return best;
+
+    if (!candidates.empty())
+        return candidates.front();
+
+    logLine("Remote version unavailable on all endpoints.");
+    return {};
 }
 
 static bool runExpandArchive(const fs::path& zip, const fs::path& dest) {
