@@ -539,10 +539,8 @@ int main() {
                     infoLine = "SpaceRockBreaker.exe niet gevonden in installatiemap.";
                 } else if (updateBtnR.contains(m) && !workerRunning) {
                     if (!onlineOk) {
-                        infoLine = "Offline: update niet beschikbaar.";
-                        continue;
-                    }
-                    if (!canUpdate) {
+                        infoLine = "Versiecheck offline; updatepakket wordt toch geprobeerd...";
+                    } else if (!canUpdate) {
                         infoLine = "Je game is al up-to-date.";
                         continue;
                     }
@@ -645,7 +643,7 @@ int main() {
         window.draw(fill);
 
         drawButton(startBtnR, "Start Game", !workerRunning);
-        drawButton(updateBtnR, "Update", !workerRunning && onlineOk && canUpdate);
+        drawButton(updateBtnR, "Update", !workerRunning);
         drawButton(closeBtnR, "Afsluiten", !workerRunning);
 
         window.display();
