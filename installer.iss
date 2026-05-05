@@ -7,7 +7,7 @@
 ; - Handmatig Inno-compilen? Zorg dat deze string gelijk blijft aan version.txt.
 
 #define AppName      "Space Rock Breaker"
-#define AppVersion   "1.0.12"
+#define AppVersion   "1.0.13"
 #define AppPublisher "Chef Survival"
 #define AppExeName   "SpaceRockLauncher.exe"
 #define GameExeName  "SpaceRockBreaker.exe"
@@ -20,8 +20,8 @@ AppName={#AppName}
 AppVersion={#AppVersion}
 AppVerName={#AppName} {#AppVersion}
 AppPublisher={#AppPublisher}
-PrivilegesRequired=admin
-PrivilegesRequiredOverridesAllowed=dialog
+PrivilegesRequired=lowest
+PrivilegesRequiredOverridesAllowed=commandline
 CloseApplications=yes
 RestartApplications=no
 UninstallRestartComputer=false
@@ -30,7 +30,8 @@ UninstallRestartComputer=false
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64
 
-DefaultDirName={autopf}\{#AppName}
+; Altijd per-user locatie, zodat launcher-updates en paden consistent blijven.
+DefaultDirName={localappdata}\Programs\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=no
 AllowNetworkDrive=no
