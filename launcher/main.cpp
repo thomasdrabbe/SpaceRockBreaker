@@ -256,6 +256,55 @@ static bool runExpandArchive(const fs::path& zip, const fs::path& dest) {
     return code == 0;
 }
 
+static bool launchDetachedCmd(const std::wstring& cmdLine,
+                              const std::wstring& workingDir) {
+    STARTUPINFOW si{};
+    si.cb = sizeof(si);
+    PROCESS_INFORMATION pi{};
+    std::vector<wchar_t> buf(cmdLine.begin(), cmdLine.end());
+    buf.push_back(L'\0');
+    if (!CreateProcessW(nullptr, buf.data(), nullptr, nullptr, FALSE,
+                        CREATE_NO_WINDOW, nullptr, workingDir.c_str(), &si, &pi))
+        return false;
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    return true;
+}
+
+static bool scheduleApplyAndStart(const fs::path& installDir,
+                                  const fs::path& stageDir,
+                                  const fs::path& gameExe,
+                                  DWORD           launcherPid) {
+    const fs::path script =
+        fs::temp_directory_path()
+        / ("srb_apply_update_" + std::to_string(GetCurrentProcessId()) + ".cmd");
+
+    std::ofstream out(script);
+    if (!out)
+        return false;
+
+    out << "@echo off\r\n";
+    out << "setlocal\r\n";
+    out << "set \"SRC=" << stageDir.string() << "\"\r\n";
+    out << "set \"DST=" << installDir.string() << "\"\r\n";
+    out << "set \"GAME=" << gameExe.string() << "\"\r\n";
+    out << "set \"LPID=" << launcherPid << "\"\r\n";
+    out << ":waitlauncher\r\n";
+    out << "tasklist /FI \"PID eq %LPID%\" | find \"%LPID%\" >nul\r\n";
+    out << "if not errorlevel 1 (\r\n";
+    out << "  timeout /t 1 /nobreak >nul\r\n";
+    out << "  goto waitlauncher\r\n";
+    out << ")\r\n";
+    out << "robocopy \"%SRC%\" \"%DST%\" /E /IS /IT /R:2 /W:1 /NFL /NDL /NJH /NJS /NP >nul\r\n";
+    out << "start \"\" \"%GAME%\"\r\n";
+    out << "rmdir /S /Q \"%SRC%\" >nul 2>&1\r\n";
+    out << "del \"%~f0\" >nul 2>&1\r\n";
+    out.close();
+
+    const std::wstring cmd = L"cmd.exe /C \"" + script.wstring() + L"\"";
+    return launchDetachedCmd(cmd, installDir.wstring());
+}
+
 static void startGame(const fs::path& exe) {
     std::wstring p = exe.wstring();
     std::vector<wchar_t> args(p.begin(), p.end());
@@ -328,7 +377,7 @@ int main() {
 
     std::atomic<std::uint64_t> downloaded{ 0 };
     std::atomic<std::uint64_t> total{ 0 };
-    std::atomic<int>           status{ 0 }; // 0=running/idle, 1=ok, <0 fail
+    std::atomic<int>           status{ 0 }; // 0=running/idle, 2=staged, <0 fail
 
     const fs::path zipPath =
         fs::temp_directory_path()
@@ -338,6 +387,7 @@ int main() {
     std::thread worker;
     bool        workerRunning = false;
     bool        workerJoined  = true;
+    fs::path    stagedDir;
 
     const sf::FloatRect startBtnR({ 20.f, 175.f }, { 120.f, 36.f });
     const sf::FloatRect refreshBtnR({ 150.f, 175.f }, { 120.f, 36.f });
@@ -393,16 +443,20 @@ int main() {
                 status.store(-1);
                 return;
             }
-            if (!runExpandArchive(zipPath, dir)) {
+            const fs::path stage =
+                fs::temp_directory_path()
+                / ("srb_stage_" + std::to_string(GetCurrentProcessId())
+                   + "_" + std::to_string(GetTickCount64()));
+            std::error_code ec;
+            fs::create_directories(stage, ec);
+            if (ec || !runExpandArchive(zipPath, stage)) {
                 status.store(-2);
                 fs::remove(zipPath);
                 return;
             }
+            stagedDir = stage;
             fs::remove(zipPath);
-            if (!fs::exists(gameExe))
-                status.store(-3);
-            else
-                status.store(1);
+            status.store(2);
         });
     };
 
@@ -466,14 +520,18 @@ int main() {
                 worker.join();
                 workerJoined  = true;
                 workerRunning = false;
-                if (st == 1) {
-                    localVer = readLocalVersion(dir);
-                    refreshRemote();
-                    infoLine = "Update klaar. Klik op Start Game.";
+                if (st == 2) {
+                    infoLine = "Updatepakket klaar. Bestanden toepassen...";
+                    if (!scheduleApplyAndStart(
+                            dir, stagedDir, gameExe, GetCurrentProcessId())) {
+                        infoLine = "Kon update niet toepassen (helper starten mislukt).";
+                        continue;
+                    }
+                    return 0;
                 } else if (st == -1) {
                     infoLine = "Download mislukt (release/zip niet gevonden).";
                 } else if (st == -2) {
-                    infoLine = "Uitpakken mislukt.";
+                    infoLine = "Uitpakken naar staging mislukt.";
                 } else if (st == -3) {
                     infoLine = "Gamebestand niet gevonden na update.";
                 }
