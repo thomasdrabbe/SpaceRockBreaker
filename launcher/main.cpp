@@ -37,13 +37,16 @@ static std::string trim(std::string s) {
     return s.substr(i);
 }
 
-static std::string readLocalVersion(const fs::path& dir) {
-    const fs::path f = dir / "version.txt";
-    std::ifstream    in(f);
-    std::string      line;
+static std::string readVersionFile(const fs::path& filePath) {
+    std::ifstream in(filePath);
+    std::string   line;
     if (!std::getline(in, line))
         return "0.0.0";
     return trim(line);
+}
+
+static std::string readLocalVersion(const fs::path& dir) {
+    return readVersionFile(dir / "version.txt");
 }
 
 static std::tuple<int, int, int> semverTuple(const std::string& raw) {
@@ -369,8 +372,9 @@ int main() {
 
     std::string localVer  = readLocalVersion(dir);
     std::string remoteVer;
-    std::string infoLine  = "Klaar. Klik op Update om te controleren.";
+    std::string infoLine  = "Klik op Check update.";
     bool        canUpdate = false;
+    bool        updateChecked = false;
 
     auto refreshRemote = [&]() {
         localVer = readLocalVersion(dir);
@@ -384,7 +388,8 @@ int main() {
         }
 
         if (remoteVer.empty()) {
-            infoLine = "Versiecheck niet beschikbaar. Je kunt wel updaten.";
+            infoLine = "Versiecheck mislukt. Probeer opnieuw.";
+            updateChecked = false;
             return;
         }
 
@@ -400,9 +405,8 @@ int main() {
             infoLine = "Update beschikbaar: v" + remoteVer;
         else
             infoLine = "Je game is up-to-date.";
+        updateChecked = true;
     };
-
-    refreshRemote();
 
     sf::RenderWindow window(
         sf::VideoMode(sf::Vector2u{ 980u, 560u }),
@@ -427,7 +431,6 @@ int main() {
     bool        workerRunning = false;
     bool        workerJoined  = true;
     fs::path    stagedDir;
-    sf::Clock   autoRefreshClock;
 
     const sf::FloatRect startBtnR({ 20.f, 480.f }, { 300.f, 60.f });
     const sf::FloatRect updateBtnR({ 340.f, 480.f }, { 300.f, 60.f });
@@ -446,28 +449,28 @@ int main() {
         worker = std::thread([&]() {
             bool ok = false;
 
-            // Primair: direct bestand in repository root.
+            // Primair: zip in installer_output map in de repo.
             downloaded.store(0);
             total.store(0);
             ok = winHttpDownload(
                 L"raw.githubusercontent.com",
-                LR"(/thomasdrabbe/SpaceRockBreaker/main/SpaceRockBreaker.zip?ts=)"
+                LR"(/thomasdrabbe/SpaceRockBreaker/main/installer_output/SpaceRockBreaker.zip?ts=)"
                     + std::to_wstring(GetTickCount64()),
                 INTERNET_DEFAULT_HTTPS_PORT, true, zipPath, &downloaded, &total);
             if (ok)
-                logLine("Updater gebruikt: raw main/SpaceRockBreaker.zip");
+                logLine("Updater gebruikt: raw installer_output/SpaceRockBreaker.zip");
 
-            // Fallback: zip in installer_output map in de repo.
+            // Fallback: direct bestand in repository root.
             if (!ok) {
                 downloaded.store(0);
                 total.store(0);
                 ok = winHttpDownload(
                     L"raw.githubusercontent.com",
-                    LR"(/thomasdrabbe/SpaceRockBreaker/main/installer_output/SpaceRockBreaker.zip?ts=)"
+                    LR"(/thomasdrabbe/SpaceRockBreaker/main/SpaceRockBreaker.zip?ts=)"
                         + std::to_wstring(GetTickCount64()),
                     INTERNET_DEFAULT_HTTPS_PORT, true, zipPath, &downloaded, &total);
                 if (ok)
-                    logLine("Updater fallback gebruikt: raw installer_output/SpaceRockBreaker.zip");
+                    logLine("Updater fallback gebruikt: raw main/SpaceRockBreaker.zip");
             }
 
             if (!ok) {
@@ -484,6 +487,17 @@ int main() {
             if (ec || !runExpandArchive(zipPath, stage)) {
                 status.store(-2);
                 fs::remove(zipPath);
+                return;
+            }
+            const std::string installedVer = readLocalVersion(dir);
+            const std::string packageVer   = readVersionFile(stage / "version.txt");
+            const auto        locT         = semverTuple(installedVer);
+            const auto        pkgT         = semverTuple(packageVer);
+            if (semverParsed(locT) && semverParsed(pkgT)
+                && compareSemver(pkgT, locT) <= 0) {
+                fs::remove_all(stage);
+                fs::remove(zipPath);
+                status.store(-4);
                 return;
             }
             stagedDir = stage;
@@ -535,8 +549,13 @@ int main() {
                     }
                     infoLine = "SpaceRockBreaker.exe niet gevonden in installatiemap.";
                 } else if (updateBtnR.contains(m) && !workerRunning) {
-                    infoLine = "Updatepakket downloaden...";
-                    beginUpdate();
+                    if (!updateChecked || !canUpdate) {
+                        infoLine = "Versie controleren...";
+                        refreshRemote();
+                    } else {
+                        infoLine = "Updatepakket downloaden...";
+                        beginUpdate();
+                    }
                 } else if (closeBtnR.contains(m) && !workerRunning) {
                     window.close();
                 }
@@ -563,13 +582,9 @@ int main() {
                     infoLine = "Uitpakken naar staging mislukt.";
                 } else if (st == -3) {
                     infoLine = "Gamebestand niet gevonden na update.";
+                } else if (st == -4) {
+                    infoLine = "Updatepakket is niet nieuwer dan geinstalleerde versie.";
                 }
-            }
-        } else {
-            // Achtergrond-hercheck om versie-informatie actueel te houden.
-            if (autoRefreshClock.getElapsedTime().asSeconds() >= 8.f) {
-                refreshRemote();
-                autoRefreshClock.restart();
             }
         }
 
@@ -631,7 +646,9 @@ int main() {
         window.draw(fill);
 
         drawButton(startBtnR, "Start Game", !workerRunning);
-        drawButton(updateBtnR, "Update", !workerRunning);
+        drawButton(updateBtnR,
+                   (updateChecked && canUpdate) ? "Update" : "Check update",
+                   !workerRunning);
         drawButton(closeBtnR, "Afsluiten", !workerRunning);
 
         window.display();
