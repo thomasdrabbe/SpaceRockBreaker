@@ -273,7 +273,7 @@ static bool launchDetachedCmd(const std::wstring& cmdLine,
 
 static bool scheduleApplyAndStart(const fs::path& installDir,
                                   const fs::path& stageDir,
-                                  const fs::path& gameExe,
+                                  const fs::path& launcherExe,
                                   DWORD           launcherPid) {
     const fs::path script =
         fs::temp_directory_path()
@@ -287,7 +287,7 @@ static bool scheduleApplyAndStart(const fs::path& installDir,
     out << "setlocal\r\n";
     out << "set \"SRC=" << stageDir.string() << "\"\r\n";
     out << "set \"DST=" << installDir.string() << "\"\r\n";
-    out << "set \"GAME=" << gameExe.string() << "\"\r\n";
+    out << "set \"LAUNCHER=" << launcherExe.string() << "\"\r\n";
     out << "set \"LPID=" << launcherPid << "\"\r\n";
     out << ":waitlauncher\r\n";
     out << "tasklist /FI \"PID eq %LPID%\" | find \"%LPID%\" >nul\r\n";
@@ -296,7 +296,7 @@ static bool scheduleApplyAndStart(const fs::path& installDir,
     out << "  goto waitlauncher\r\n";
     out << ")\r\n";
     out << "robocopy \"%SRC%\" \"%DST%\" /E /IS /IT /R:2 /W:1 /NFL /NDL /NJH /NJS /NP >nul\r\n";
-    out << "start \"\" \"%GAME%\"\r\n";
+    out << "start \"\" \"%LAUNCHER%\"\r\n";
     out << "rmdir /S /Q \"%SRC%\" >nul 2>&1\r\n";
     out << "del \"%~f0\" >nul 2>&1\r\n";
     out.close();
@@ -323,6 +323,7 @@ static void startGame(const fs::path& exe) {
 int main() {
     const fs::path dir     = exeDir();
     const fs::path gameExe = dir / "SpaceRockBreaker.exe";
+    const fs::path launcherExe = dir / "SpaceRockLauncher.exe";
 
     std::string localVer  = readLocalVersion(dir);
     std::string remoteVer;
@@ -522,7 +523,7 @@ int main() {
                 if (st == 2) {
                     infoLine = "Updatepakket klaar. Bestanden toepassen...";
                     if (!scheduleApplyAndStart(
-                            dir, stagedDir, gameExe, GetCurrentProcessId())) {
+                            dir, stagedDir, launcherExe, GetCurrentProcessId())) {
                         infoLine = "Kon update niet toepassen (helper starten mislukt).";
                         continue;
                     }
