@@ -288,8 +288,10 @@ static std::string httpGetText(const std::wstring& host,
                                              : INTERNET_DEFAULT_HTTP_PORT,
                          https, tmp, &down, &tot)) {
         const std::wstring url = (https ? L"https://" : L"http://") + host + urlPath;
-        if (!psDownloadToFile(url, tmp))
+        if (!psDownloadToFile(url, tmp)) {
+            logLine("Version fetch failed for endpoint.");
             return {};
+        }
     }
     std::ifstream in(tmp, std::ios::binary);
     std::stringstream ss;
@@ -338,6 +340,8 @@ static std::string fetchRemoteVersionText() {
         L"cdn.jsdelivr.net",
         LR"(/gh/thomasdrabbe/SpaceRockBreaker@main/version.txt)",
         true);
+    if (v.empty())
+        logLine("Remote version unavailable on all endpoints.");
     return v;
 }
 
@@ -457,51 +461,7 @@ int main() {
         return 0;
     }
 
-    // State 3: offline -> korte melding en daarna starten zonder update.
-    if (!remoteAvailable) {
-        sf::RenderWindow w(
-            sf::VideoMode(sf::Vector2u{ 480u, 120u }),
-            sf::String{ L"Space Rock Breaker — Launcher" },
-            sf::Style::None);
-        w.setFramerateLimit(60);
-
-        sf::Font font;
-        if (!font.openFromFile("C:/Windows/Fonts/arial.ttf"))
-            (void)font.openFromFile("C:/Windows/Fonts/segoeui.ttf");
-
-        sf::Clock closeAfter;
-        while (w.isOpen()) {
-            while (const std::optional ev = w.pollEvent()) {
-                if (ev->is<sf::Event::Closed>())
-                    w.close();
-            }
-            if (closeAfter.getElapsedTime().asSeconds() >= 2.f)
-                w.close();
-
-            w.clear(sf::Color(12, 14, 28));
-
-            sf::Text t1(font);
-            t1.setCharacterSize(18);
-            t1.setStyle(sf::Text::Bold);
-            t1.setString("Kan geen verbinding maken");
-            t1.setFillColor(sf::Color::White);
-            t1.setPosition({ 20.f, 28.f });
-            w.draw(t1);
-
-            sf::Text t2(font);
-            t2.setCharacterSize(14);
-            t2.setString("Game wordt gestart zonder update.");
-            t2.setFillColor(sf::Color(180, 190, 210));
-            t2.setPosition({ 20.f, 64.f });
-            w.draw(t2);
-
-            w.display();
-        }
-        startGame(gameExe);
-        return 0;
-    }
-
-    // State 2: update beschikbaar -> compact progress-venster.
+    // State 2: update (of fallback download-check) -> compact progress-venster.
     sf::RenderWindow window(
         sf::VideoMode(sf::Vector2u{ 480u, 180u }),
         sf::String{ L"Space Rock Breaker — Launcher" },
@@ -515,7 +475,9 @@ int main() {
     std::atomic<std::uint64_t> downloaded{ 0 };
     std::atomic<std::uint64_t> total{ 0 };
     std::atomic<int>           status{ 0 }; // 0=running, 2=staged, <0 fail
-    std::string                logLineUi = "Verbinding maken met Github...";
+    std::string                logLineUi = remoteAvailable
+        ? "Update controleren..."
+        : "Versiecheck faalde, updatepakket direct proberen...";
 
     const fs::path zipPath =
         fs::temp_directory_path()
@@ -563,6 +525,7 @@ int main() {
         }
 
         if (!ok) {
+            logLine("Update download failed on all endpoints.");
             status.store(-1);
             return;
         }
@@ -585,6 +548,7 @@ int main() {
         const auto        pkgT         = semverTuple(packageVer);
         if (semverParsed(ilocT) && semverParsed(pkgT)
             && compareSemver(pkgT, ilocT) <= 0) {
+            logLine("Downloaded package is not newer than installed version.");
             fs::remove_all(stage);
             fs::remove(zipPath);
             status.store(-4);
@@ -622,6 +586,7 @@ int main() {
                     }
                     return 0;
                 } else {
+                    logLine("Update check fell back to start game.");
                     startGame(gameExe);
                     return 0;
                 }
@@ -656,7 +621,7 @@ int main() {
 
         sf::Text ver(font);
         ver.setCharacterSize(13);
-        ver.setString("v" + localVer + " -> v" + remoteVer);
+        ver.setString("v" + localVer + " -> v" + (remoteAvailable ? remoteVer : std::string("?")));
         ver.setFillColor(sf::Color(140, 150, 180));
         const auto vb = ver.getLocalBounds();
         ver.setPosition({
