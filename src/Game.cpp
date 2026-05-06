@@ -975,13 +975,6 @@ void Game::onKeyPress(sf::Keyboard::Key key, bool ctrl, bool shift) {
             }
             break;
 
-        case K::W:
-            if (isTabVisible(Tab::SHOP)) {
-                focusShopCategory(ShopCategory::WEAPONS);
-                gSfx.play(Sfx::UiClick);
-            }
-            break;
-
         case K::P:
             if (m_diskSessionActive) {
                 m_state.save(currentSavePath());

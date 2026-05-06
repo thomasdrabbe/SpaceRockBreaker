@@ -43,7 +43,7 @@ public:
     bool isCategoryVisible(ShopCategory cat) const;
     void setMiningShowsWarpOnly(bool warpOnly);
     bool miningShowsWarpOnly() const { return m_miningShowsWarpOnly; }
-    /// Tot volledige Plinko-shop unlock: alleen Auto-Plinko in het [P]-tabblad.
+    /// Tot volledige Plinko-shop unlock: alleen Auto-Plinko in de Plinko-categorie.
     void setPlinkoShopAutoOnly(bool autoOnly);
     bool plinkoShopAutoOnly() const { return m_plinkoShopAutoOnly; }
     void resetProgressiveShopState();

@@ -119,7 +119,7 @@ void UnlockSystem::update(GameState&           state,
 
     if (!state.unlockPhaseDone[5] && state.credits >= 100.0) {
         notifications.push(
-            "Auto-Plinko beschikbaar! Ga naar Shop (tab 3), categorie [P], "
+            "Auto-Plinko beschikbaar! Ga naar Shop (tab 3), categorie Plinko, "
             "en koop Auto-Plinko om tegelijk te minen en Plinko te laten lopen.",
             sf::Color(255, 200, 120),
             4.f,
