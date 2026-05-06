@@ -33,6 +33,7 @@ public:
 
     void setTabVisible(Tab t, bool visible);
     bool isTabVisible(Tab t) const;
+    void focusShopCategory(ShopCategory cat);
 
 private:
     // ── Window ────────────────────────────────────────────

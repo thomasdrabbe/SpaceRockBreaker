@@ -102,6 +102,7 @@ void UnlockSystem::update(GameState&           state,
             4.f,
             -1);
         markDone(3);
+        game.focusShopCategory(ShopCategory::WEAPONS);
     }
 
     if (!state.unlockPhaseDone[4] && state.credits >= 50.0) {
@@ -160,6 +161,7 @@ void UnlockSystem::update(GameState&           state,
             sf::Color(255, 180, 140),
             4.5f,
             static_cast<int>(Tab::SHOP));
+        game.focusShopCategory(ShopCategory::WEAPONS);
     }
 
     // Zone 2+: Weapons hoort altijd in de shop (phase 3). Zonder dit kan phase 2

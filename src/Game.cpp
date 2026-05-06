@@ -977,9 +977,10 @@ void Game::onKeyPress(sf::Keyboard::Key key, bool ctrl, bool shift) {
             break;
 
         case K::W:
-            if (m_activeTab == Tab::SHOP
-                && m_shop.trySelectCategory(ShopCategory::WEAPONS, m_state))
+            if (isTabVisible(Tab::SHOP)) {
+                focusShopCategory(ShopCategory::WEAPONS);
                 gSfx.play(Sfx::UiClick);
+            }
             break;
 
         case K::P:
@@ -1044,6 +1045,15 @@ void Game::setTabVisible(Tab t, bool visible) {
 
 bool Game::isTabVisible(Tab t) const {
     return m_tabVisible[static_cast<int>(t)];
+}
+
+void Game::focusShopCategory(ShopCategory cat) {
+    if (!isTabVisible(Tab::SHOP))
+        return;
+    m_activeTab = Tab::SHOP;
+    m_notifications.clearBadge(static_cast<int>(Tab::SHOP));
+    m_prestigeConfirm = false;
+    m_shop.trySelectCategory(cat, m_state);
 }
 
 void Game::clampActiveTabToVisibility() {
