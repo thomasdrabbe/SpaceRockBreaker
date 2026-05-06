@@ -17,6 +17,13 @@ set_target_properties(SpaceRockLauncher PROPERTIES
     CXX_STANDARD_REQUIRED ON
 )
 
+if(WIN32)
+    set_target_properties(SpaceRockLauncher PROPERTIES WIN32_EXECUTABLE TRUE)
+    if(MSVC)
+        target_link_options(SpaceRockLauncher PRIVATE /ENTRY:mainCRTStartup)
+    endif()
+endif()
+
 find_package(SFML COMPONENTS Graphics Window System REQUIRED)
 
 target_link_libraries(SpaceRockLauncher PRIVATE

@@ -65,6 +65,14 @@ endif()
 # ─── Executable ───────────────────────────────────────────────
 add_executable(SpaceRockBreaker ${SOURCES} ${HEADERS})
 
+# Geen zwart console-venster bij start (Windows GUI-subsystem; main() blijft entry).
+if(WIN32)
+    set_target_properties(SpaceRockBreaker PROPERTIES WIN32_EXECUTABLE TRUE)
+    if(MSVC)
+        target_link_options(SpaceRockBreaker PRIVATE /ENTRY:mainCRTStartup)
+    endif()
+endif()
+
 target_include_directories(SpaceRockBreaker PRIVATE src)
 
 target_link_libraries(SpaceRockBreaker PRIVATE
