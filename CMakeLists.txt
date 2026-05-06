@@ -108,6 +108,14 @@ add_custom_command(TARGET SpaceRockBreaker POST_BUILD
         "$<TARGET_FILE_DIR:SpaceRockBreaker>/assets"
 )
 
+# Zelfde semver als in repo/zip: hoofdmenu leest applicationDirectory()/version.txt
+add_custom_command(TARGET SpaceRockBreaker POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_SOURCE_DIR}/version.txt"
+        "$<TARGET_FILE_DIR:SpaceRockBreaker>/version.txt"
+    COMMENT "version.txt naast SpaceRockBreaker.exe (runtime versie-label)"
+)
+
 add_subdirectory(launcher)
 
 if(SRB_AUTO_BUMP_VERSION_ON_BUILD)

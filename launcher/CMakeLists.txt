@@ -39,3 +39,13 @@ endif()
 if(MSVC)
     target_compile_options(SpaceRockLauncher PRIVATE /utf-8)
 endif()
+
+# Launcher toont / vergelijkt lokale semver naast eigen .exe
+if(WIN32)
+    add_custom_command(TARGET SpaceRockLauncher POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_SOURCE_DIR}/version.txt"
+            "$<TARGET_FILE_DIR:SpaceRockLauncher>/version.txt"
+        COMMENT "version.txt naast SpaceRockLauncher.exe"
+    )
+endif()
