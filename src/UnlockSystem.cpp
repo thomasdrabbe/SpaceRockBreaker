@@ -34,6 +34,9 @@ void applyPhaseVisibility(int                    phase,
             shop.setCategoryVisible(ShopCategory::MINING, true);
             break;
         case 5:
+            // Auto-Plinko melding: Plinko-shop moet zichtbaar zijn (fase 2 zette die uit).
+            shop.setCategoryVisible(ShopCategory::PLINKO, true);
+            shop.setPlinkoShopAutoOnly(true);
             break;
         case 6:
             game.setTabVisible(Tab::CHESTS, true);
@@ -43,6 +46,7 @@ void applyPhaseVisibility(int                    phase,
             shop.setCategoryVisible(ShopCategory::PLINKO, true);
             shop.setCategoryVisible(ShopCategory::ECONOMY, true);
             shop.setCategoryVisible(ShopCategory::ORE_TIERS, true);
+            shop.setPlinkoShopAutoOnly(false);
             break;
         case 8:
             game.setTabVisible(Tab::PRESTIGE, true);
@@ -76,7 +80,7 @@ void UnlockSystem::update(GameState&           state,
         if (state.upgradeLevels[static_cast<int>(UpgradeID::PLINKO_BALLS)] == 0)
             state.upgradeLevels[static_cast<int>(UpgradeID::PLINKO_BALLS)] = 15;
         notifications.push(
-            "\xF0\x9F\x8E\xB2 Plinko unlocked! Je eerste 15 balls zijn gratis!",
+            "Plinko unlocked! Je eerste 15 balls zijn gratis.",
             sf::Color(255, 230, 120),
             4.f,
             -1);
@@ -86,8 +90,7 @@ void UnlockSystem::update(GameState&           state,
     if (!state.unlockPhaseDone[2]
         && (state.totalOre >= 25.0 || firstBossIncoming)) {
         notifications.push(
-            "\xF0\x9F\x9A\x80 Shop unlocked! Koop Warp Drive om naar de volgende "
-            "zone te gaan.",
+            "Shop unlocked! Koop Warp Drive om naar de volgende zone te gaan.",
             sf::Color(120, 200, 255),
             4.f,
             -1);
@@ -97,7 +100,7 @@ void UnlockSystem::update(GameState&           state,
     if (!state.unlockPhaseDone[3]
         && (state.currentLevel >= 2 || firstBossIncoming)) {
         notifications.push(
-            "\xE2\x9A\x94\xEF\xB8\x8F Zone 2 bereikt! Weapons upgrades beschikbaar.",
+            "Zone 2 bereikt! Weapons upgrades beschikbaar.",
             sf::Color(255, 180, 140),
             4.f,
             -1);
@@ -107,7 +110,7 @@ void UnlockSystem::update(GameState&           state,
 
     if (!state.unlockPhaseDone[4] && state.credits >= 50.0) {
         notifications.push(
-            "\xE2\x9B\x8F\xEF\xB8\x8F Mining upgrades beschikbaar!",
+            "Mining upgrades beschikbaar!",
             sf::Color(160, 220, 255),
             4.f,
             -1);
@@ -116,18 +119,18 @@ void UnlockSystem::update(GameState&           state,
 
     if (!state.unlockPhaseDone[5] && state.credits >= 100.0) {
         notifications.push(
-            "\xF0\x9F\xA4\x96 Auto Plinko beschikbaar! Koop het in de shop om "
-            "tegelijk te minen \xC3\xA9n Plinko te spelen.",
+            "Auto-Plinko beschikbaar! Ga naar Shop (tab 3), categorie [P], "
+            "en koop Auto-Plinko om tegelijk te minen en Plinko te laten lopen.",
             sf::Color(255, 200, 120),
             4.f,
             static_cast<int>(Tab::SHOP));
         markDone(5);
+        game.focusShopCategory(ShopCategory::PLINKO);
     }
 
     if (!state.unlockPhaseDone[6] && state.currentLevel >= 3) {
         notifications.push(
-            "\xF0\x9F\x97\x9D\xEF\xB8\x8F Chests unlocked! Schiet Key Asteroids neer "
-            "voor sleutels.",
+            "Chests unlocked! Schiet Key Asteroids neer voor sleutels.",
             sf::Color(255, 220, 160),
             4.f,
             -1);
@@ -136,7 +139,7 @@ void UnlockSystem::update(GameState&           state,
 
     if (!state.unlockPhaseDone[7] && state.currentLevel >= 3) {
         notifications.push(
-            "\xF0\x9F\x8E\xB0 Plinko, Economy en Ore Tier upgrades beschikbaar!",
+            "Plinko, Economy en Ore Tier upgrades beschikbaar!",
             sf::Color(220, 180, 255),
             4.f,
             -1);
@@ -145,7 +148,7 @@ void UnlockSystem::update(GameState&           state,
 
     if (!state.unlockPhaseDone[8] && state.currentLevel >= 5) {
         notifications.push(
-            "\xE2\x9C\xA8 Prestige beschikbaar! Reset voor permanente crystal bonussen.",
+            "Prestige beschikbaar! Reset voor permanente crystal bonussen.",
             sf::Color(200, 160, 255),
             4.f,
             -1);
@@ -157,7 +160,7 @@ void UnlockSystem::update(GameState&           state,
         && state.levelOf(UpgradeID::GUN_DAMAGE) == 0) {
         state.upgradeLevels[static_cast<int>(UpgradeID::GUN_DAMAGE)] = 1;
         notifications.push(
-            "\xE2\x9A\x94\xEF\xB8\x8F Gratis Gun Damage (lv1) voor je eerste boss!",
+            "Gratis Gun Damage (lv1) voor je eerste boss!",
             sf::Color(255, 180, 140),
             4.5f,
             static_cast<int>(Tab::SHOP));

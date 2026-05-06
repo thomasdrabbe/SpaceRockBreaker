@@ -387,14 +387,13 @@ void Game::update(float dt) {
     if (m_paused) return;
 
     if (m_showMainMenu) {
-        updateNotifs(dt);
+        m_notifications.update(dt);
         return;
     }
 
     if (!m_paused) {
         m_unlockSystem.update(m_state, m_notifications, *this, m_shop,
                               m_mining);
-        m_notifications.update(dt);
         clampActiveTabToVisibility();
     }
 
@@ -576,7 +575,7 @@ void Game::update(float dt) {
         pushNotif(std::to_string(keyDrop) + " key(s)!",
                   sf::Color(255, 220, 140));
 
-    updateNotifs(dt);
+    m_notifications.update(dt);
 
     m_saveTimer += dt;
     if (m_diskSessionActive && m_saveTimer >= SAVE_INTERVAL) {
@@ -770,6 +769,7 @@ void Game::render() {
 
     if (m_showMainMenu) {
         drawMainMenu();
+        m_notifications.draw(m_window, m_font, std::round(18.f * m_scale));
         m_window.display();
         return;
     }
@@ -799,8 +799,7 @@ void Game::render() {
         drawLives();
     drawSidePanel();
     drawSidePanelAuxButtons();
-    drawNotifs();
-    m_notifications.draw(m_window, m_font, m_sideW, m_tabH + 12.f);
+    m_notifications.draw(m_window, m_font, m_tabH + std::round(10.f * m_scale));
     if (m_chestOverlayAnim > 0.f)
         drawChestOpenOverlay();
     if (m_chestLootPopupActive && m_chestLootPopupRemain > 0.f)
@@ -1987,71 +1986,8 @@ Game::PauseButton Game::pauseButtonAt(sf::Vector2f pos) const {
 // ═════════════════════════════════════════════════════════════
 //  Notifications
 // ═════════════════════════════════════════════════════════════
-void Game::pushNotif(const std::string& text, sf::Color color) {
-    for (auto& n : m_notifs) {
-        if (!n.alive) {
-            n.text     = text;
-            n.color    = color;
-            n.lifetime = n.maxLifetime;
-            n.yOffset  = 0.f;
-            n.alive    = true;
-            return;
-        }
-    }
-    auto& n   = m_notifs[0];
-    n.text    = text;
-    n.color   = color;
-    n.lifetime= n.maxLifetime;
-    n.yOffset = 0.f;
-    n.alive   = true;
-}
-
-void Game::updateNotifs(float dt) {
-    for (auto& n : m_notifs) {
-        if (!n.alive) continue;
-        n.lifetime -= dt;
-        n.yOffset += 52.f * m_scale * dt;
-        if (n.lifetime <= 0.f) n.alive = false;
-    }
-}
-
-void Game::drawNotifs() const {
-    const unsigned fs =
-        static_cast<unsigned>(std::round(26.f * m_scale));
-    const float notifW = std::round(540.f * m_scale);
-    const float notifH = std::round(52.f * m_scale);
-    const float slotGap = std::round(10.f * m_scale);
-    const float padX    = std::round(18.f * m_scale);
-    const float baseX   = m_scrW - m_sideW - notifW - 10.f;
-    const float baseY   = m_scrH - std::round(58.f * m_scale);
-    int         slot    = 0;
-
-    for (const auto& n : m_notifs) {
-        if (!n.alive) continue;
-
-        float alpha = clamp(n.lifetime / n.maxLifetime, 0.f, 1.f);
-        float y     = baseY - slot * (notifH + slotGap) - n.yOffset;
-
-        sf::RectangleShape bg(sf::Vector2f{ notifW, notifH });
-        bg.setPosition({ baseX, y });
-        bg.setFillColor(sf::Color(12, 14, 28,
-            static_cast<uint8_t>(180 * alpha)));
-        bg.setOutlineColor(sf::Color(n.color.r, n.color.g, n.color.b,
-            static_cast<uint8_t>(160 * alpha)));
-        bg.setOutlineThickness(2.f);
-        m_window.draw(bg);
-
-        sf::Text txt(m_font);
-        txt.setCharacterSize(fs);
-        txt.setStyle(sf::Text::Bold);
-        txt.setString(n.text);
-        txt.setFillColor(sf::Color(n.color.r, n.color.g, n.color.b,
-            static_cast<uint8_t>(255 * alpha)));
-        txt.setPosition({ baseX + padX, y + notifH * 0.5f - fs * 0.5f });
-        m_window.draw(txt);
-
-        slot++;
-    }
+void Game::pushNotif(const std::string& text, sf::Color color, float holdSec) {
+    m_notifications.push(text, color, holdSec, -1);
 }
 
 // ═════════════════════════════════════════════════════════════

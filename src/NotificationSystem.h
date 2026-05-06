@@ -13,14 +13,14 @@ public:
               int                    badgeTab = -1);
 
     void update(float dt);
+    /// Toasts onder de tabbalk: `topInset` = Y-offset vanaf bovenkant scherm (px).
     void draw(sf::RenderTarget& target, const sf::Font& font,
-              float insetRight = 0.f,
-              float insetTop   = 0.f) const;
+              float topInset = 0.f) const;
 
     bool hasBadgeFor(int tabIndex) const;
     void clearBadge(int tabIndex);
 
-    static constexpr int kMaxVisible = 3;
+    static constexpr int kMaxVisible = 5;
     static constexpr float kFadeInSec  = 0.3f;
     static constexpr float kFadeOutSec = 0.5f;
 

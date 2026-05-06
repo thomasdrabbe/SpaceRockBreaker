@@ -43,6 +43,9 @@ public:
     bool isCategoryVisible(ShopCategory cat) const;
     void setMiningShowsWarpOnly(bool warpOnly);
     bool miningShowsWarpOnly() const { return m_miningShowsWarpOnly; }
+    /// Tot volledige Plinko-shop unlock: alleen Auto-Plinko in het [P]-tabblad.
+    void setPlinkoShopAutoOnly(bool autoOnly);
+    bool plinkoShopAutoOnly() const { return m_plinkoShopAutoOnly; }
     void resetProgressiveShopState();
 
     /// Alleen als categorie zichtbaar is: actief maken + cards bouwen (bv. toets W).
@@ -71,6 +74,7 @@ private:
     std::array<bool, static_cast<int>(ShopCategory::CATEGORY_COUNT)>
         m_categoryVisible{};
     bool m_miningShowsWarpOnly = true;
+    bool m_plinkoShopAutoOnly  = true;
 
     uint64_t m_layoutFp = 0;
 

@@ -12,18 +12,6 @@
 #include "UnlockSystem.h"
 
 // ─────────────────────────────────────────────────────────────
-//  Notification
-// ─────────────────────────────────────────────────────────────
-struct Notification {
-    std::string text;
-    sf::Color   color;
-    float       lifetime    = 2.5f;
-    float       maxLifetime = 2.5f;
-    float       yOffset     = 0.f;
-    bool        alive       = false;
-};
-
-// ─────────────────────────────────────────────────────────────
 //  Game
 // ─────────────────────────────────────────────────────────────
 class Game {
@@ -72,11 +60,10 @@ private:
     Shop         m_shop;
     ChestScreen  m_chest;
 
-    // ── Notifications ─────────────────────────────────────
-    static constexpr int MAX_NOTIFS = 6;
-    std::array<Notification, MAX_NOTIFS> m_notifs;
+    // ── Notifications (toast + timerbalk; zie NotificationSystem) ──
     void pushNotif(const std::string& text,
-                   sf::Color color = sf::Color(220, 230, 255));
+                   sf::Color color = sf::Color(220, 230, 255),
+                   float     holdSec = 2.5f);
 
     // ── Save slots (0 … SAVE_SLOT_COUNT-1) ────────────────
     int  m_saveSlot = 0;
@@ -208,10 +195,6 @@ private:
 
     void drawMainMenu() const;
     void handleMainMenuClick(sf::Vector2f pos);
-
-    // ── Notifications ─────────────────────────────────────
-    void updateNotifs(float dt);
-    void drawNotifs()  const;
 
     // ── Helpers ───────────────────────────────────────────
     void drawText(const std::string& str,

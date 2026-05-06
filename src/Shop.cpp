@@ -30,8 +30,7 @@ const std::vector<CatInfo> CATEGORIES = {
         UpgradeID::PLINKO_BALLS,   UpgradeID::PLINKO_LUCK,
         UpgradeID::AUTO_PLINKO } },
     { "[E] Economy", ShopCategory::ECONOMY,
-      { UpgradeID::CREDIT_MULT,  UpgradeID::BULK_PROCESS,
-        UpgradeID::AUTO_PLINKO } },
+      { UpgradeID::CREDIT_MULT, UpgradeID::BULK_PROCESS } },
     { "[O] Ore Tiers", ShopCategory::ORE_TIERS,
       { UpgradeID::UNLOCK_BRONZE,
       UpgradeID::UNLOCK_SILVER,
@@ -84,9 +83,14 @@ void Shop::setMiningShowsWarpOnly(bool warpOnly) {
     m_miningShowsWarpOnly = warpOnly;
 }
 
+void Shop::setPlinkoShopAutoOnly(bool autoOnly) {
+    m_plinkoShopAutoOnly = autoOnly;
+}
+
 void Shop::resetProgressiveShopState() {
     m_categoryVisible.fill(false);
     m_miningShowsWarpOnly = true;
+    m_plinkoShopAutoOnly  = true;
     m_activeCategory      = ShopCategory::MINING;
     m_scroll              = 0.f;
     m_layoutFp            = 0;
@@ -180,6 +184,7 @@ uint64_t Shop::layoutFingerprint(const GameState& state) const {
     for (bool vis : m_categoryVisible)
         mix(static_cast<uint64_t>(vis ? 1u : 0u));
     mix(static_cast<uint64_t>(m_miningShowsWarpOnly ? 1u : 0u));
+    mix(static_cast<uint64_t>(m_plinkoShopAutoOnly ? 1u : 0u));
 
     mix(floatBits64(m_x));
     mix(floatBits64(m_y));
@@ -207,6 +212,8 @@ void Shop::buildCards(const GameState& state) {
     std::vector<UpgradeID> ids = CATEGORIES[static_cast<int>(m_activeCategory)].ids;
     if (m_activeCategory == ShopCategory::MINING && m_miningShowsWarpOnly)
         ids = { UpgradeID::WARP_DRIVE };
+    if (m_activeCategory == ShopCategory::PLINKO && m_plinkoShopAutoOnly)
+        ids = { UpgradeID::AUTO_PLINKO };
 
     float cardW = m_w - m_scrollBarW - m_cardMargin * 2.f;
     float y     = m_y + m_tabH + m_cardMargin - m_scroll;
