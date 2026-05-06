@@ -150,12 +150,15 @@ static bool runPowerShellScript(const std::wstring& script) {
     }
 
     std::wstring cmd =
-        L"powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"";
+        L"powershell.exe -WindowStyle Hidden -NoProfile -NonInteractive "
+        L"-ExecutionPolicy Bypass -File \"";
     cmd += scriptFile.wstring();
     cmd += L"\"";
 
     STARTUPINFOW si{};
-    si.cb = sizeof(si);
+    si.cb          = sizeof(si);
+    si.dwFlags     = STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
     PROCESS_INFORMATION pi{};
     std::vector<wchar_t> buf(cmd.begin(), cmd.end());
     buf.push_back(L'\0');
@@ -377,16 +380,23 @@ static std::string fetchRemoteVersionText() {
 }
 
 static bool runExpandArchive(const fs::path& zip, const fs::path& dest) {
+    // Geen groen/teal voortgangspaneel: Write-Progress uit + verborgen venster.
     std::wstring cmd =
-        L"powershell.exe -NoProfile -NonInteractive -Command "
-        L"\"$ErrorActionPreference='Stop'; Expand-Archive -LiteralPath '";
+        L"powershell.exe -WindowStyle Hidden -NoProfile -NonInteractive "
+        L"-Command "
+        L"\"$ProgressPreference='SilentlyContinue'; "
+        L"$InformationPreference='SilentlyContinue'; "
+        L"$ErrorActionPreference='Stop'; "
+        L"Expand-Archive -LiteralPath '";
     cmd += zip.wstring();
     cmd += L"' -DestinationPath '";
     cmd += dest.wstring();
     cmd += L"' -Force\"";
 
     STARTUPINFOW si{};
-    si.cb = sizeof(si);
+    si.cb          = sizeof(si);
+    si.dwFlags     = STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
     PROCESS_INFORMATION pi{};
     std::vector<wchar_t> buf(cmd.begin(), cmd.end());
     buf.push_back(L'\0');
