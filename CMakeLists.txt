@@ -63,14 +63,14 @@ if(WIN32)
 endif()
 
 # ─── Executable ───────────────────────────────────────────────
-add_executable(SpaceRockBreaker ${SOURCES} ${HEADERS})
-
-# Geen zwart console-venster bij start (Windows GUI-subsystem; main() blijft entry).
+# WIN32 = Windows GUI-subsystem (geen conhost); main() blijft entry (CMake/MSVC).
 if(WIN32)
-    set_target_properties(SpaceRockBreaker PROPERTIES WIN32_EXECUTABLE TRUE)
+    add_executable(SpaceRockBreaker WIN32 ${SOURCES} ${HEADERS})
     if(MSVC)
         target_link_options(SpaceRockBreaker PRIVATE /ENTRY:mainCRTStartup)
     endif()
+else()
+    add_executable(SpaceRockBreaker ${SOURCES} ${HEADERS})
 endif()
 
 target_include_directories(SpaceRockBreaker PRIVATE src)
