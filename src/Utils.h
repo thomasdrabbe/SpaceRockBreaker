@@ -153,6 +153,26 @@ inline sf::Vector2f mapPixelToUi(const sf::RenderWindow& w, sf::Vector2i px) {
     return w.mapPixelToCoords(px, ui);
 }
 
+/// Tab-rij hit test: SFML 3 `Rect::contains` is half-open (rechter/onderrand
+/// telt niet mee), waardoor de rechtse tab(s) en rand-klikken vaak missen.
+/// Deze bucket-methode dekt de volledige rij-breedte zonder gaten.
+[[nodiscard]] inline int hitTestHorizTabSlot(float x,
+                                              float rowMinX,
+                                              float rowW,
+                                              int   tabCount,
+                                              float rightSlopPx = 1.f) {
+    if (tabCount <= 0 || rowW <= 0.f)
+        return -1;
+    const float rel = x - rowMinX;
+    if (rel < 0.f || rel > rowW + rightSlopPx)
+        return -1;
+    const float tabW = rowW / static_cast<float>(tabCount);
+    if (tabW <= 0.f)
+        return -1;
+    int slot = static_cast<int>(rel / tabW);
+    return std::clamp(slot, 0, tabCount - 1);
+}
+
 // ─────────────────────────────────────────────────────────────
 //  Asset paden — eerst naast .exe dan twee niveaus omhoog (cmake build/Release),
 //  dan cwd / ../ / ../../ voor IDE-run vanuit ander werkpad.

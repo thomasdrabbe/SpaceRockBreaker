@@ -851,10 +851,12 @@ void Game::onMouseClick(sf::Vector2f pos, sf::Mouse::Button btn) {
         return;
     }
     const int vTabs = visibleTabCount();
-    for (int v = 0; v < vTabs; v++) {
-        if (tabRect(v).contains(pos)) {
+    if (vTabs > 0 && pos.y >= 0.f && pos.y < m_tabH) {
+        const float rowW = m_scrW - m_sideW;
+        const int   slot = hitTestHorizTabSlot(pos.x, 0.f, rowW, vTabs);
+        if (slot >= 0) {
             gSfx.play(Sfx::UiClick);
-            Tab t             = tabFromVisibleSlot(v);
+            Tab t             = tabFromVisibleSlot(slot);
             m_activeTab       = t;
             m_notifications.clearBadge(static_cast<int>(t));
             m_prestigeConfirm = false;

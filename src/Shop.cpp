@@ -1,9 +1,9 @@
 #include "Shop.h"
 #include "Utils.h"
+#include <algorithm>
 #include <cstring>
 #include <sstream>
 #include <iomanip>
-#include <algorithm>
 #include <cmath>
 
 namespace {
@@ -247,9 +247,11 @@ bool Shop::handleEvent(const sf::Event& event, GameState& state,
             sf::Vector2f mp = mapPixelToUi(window, sf::Vector2i(e->position));
 
             const int visTabs = visibleCategoryCount();
-            for (int i = 0; i < visTabs; i++) {
-                if (tabBounds(i).contains(mp)) {
-                    m_activeCategory = categoryFromTabIndex(i);
+            if (visTabs > 0 && mp.y >= m_y && mp.y < m_y + m_tabH) {
+                const float rowW = m_w - m_scrollBarW;
+                const int   slot = hitTestHorizTabSlot(mp.x, m_x, rowW, visTabs);
+                if (slot >= 0) {
+                    m_activeCategory = categoryFromTabIndex(slot);
                     m_scroll         = 0.f;
                     buildCards(state);
                     return false;
