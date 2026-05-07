@@ -287,7 +287,7 @@ void PlinkoBoard::resolvePegCollision(PlinkoBall& ball,
             float vDotN = dot(ball.vel, normal);
             float rest  = 1.f + PEG_BOUNCE * m_pegBounceMult;
             ball.vel   -= normal * rest * vDotN;
-            ball.vel.x += randFloat(-25.f, 25.f);
+            ball.vel.x += randFloat(-34.f, 34.f);
 
             peg.hitFlash = 0.12f;
 

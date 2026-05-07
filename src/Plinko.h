@@ -149,8 +149,10 @@ private:
                           float bonus, float luck);
 
     static constexpr float WALL_BOUNCE   = 0.55f;
-    static constexpr float PEG_BOUNCE    = 0.45f;
-    static constexpr float BALL_FRICTION = 0.992f;
+    /// Normale richting: rest = 1 + PEG_BOUNCE * m_pegBounceMult (~= 1 + e).
+    /// Hoger = meer “bouncy” (was 0.45).
+    static constexpr float PEG_BOUNCE    = 0.78f;
+    static constexpr float BALL_FRICTION = 0.994f;
     static constexpr float DROP_SPEED_MIN= 80.f;
     static constexpr float DROP_SPEED_MAX= 140.f;
     static constexpr float SLOT_HEIGHT   = 40.f;

@@ -133,6 +133,8 @@ private:
     bool          shouldShowRunRetreatButton() const;
     bool          shouldShowPlinkoSideDrop() const;
     float         sidePanelResourcesBottomY() const;
+    /// Onderkant van de kleine "+ … on prestige"-regel (zelfde ty als drawSidePanel).
+    float         sidePanelAfterPrestigeHintBottomY() const;
     float         sidePanelAuxReservedHeight() const;
     float         sidePanelAuxButtonsBaseY() const;
     sf::FloatRect plinkoSideDropButtonBounds() const;
@@ -169,7 +171,7 @@ private:
 
     // ── Side panel ────────────────────────────────────────
     void drawSidePanel() const;
-    // DROP (Plinko) + Terug naar basis onder resources-blok
+    // DROP (Plinko) onder "+ … on prestige"; retreat-knop onder resources-gat of onder DROP
 
     // ── Plinko tab ────────────────────────────────────────
     void drawPlinkoTab(bool seeThroughMiningBackdrop) const;

@@ -2102,19 +2102,46 @@ float Game::sidePanelResourcesBottomY() const {
     return ty;
 }
 
+float Game::sidePanelAfterPrestigeHintBottomY() const {
+    const float py     = m_tabH;
+    float       ty     = py + 16.f;
+    const unsigned fHeader =
+        static_cast<unsigned>(std::round(13.f * m_scale));
+    const unsigned fSmall =
+        static_cast<unsigned>(std::round(12.f * m_scale));
+    const float gap = std::round(24.f * m_scale);
+
+    ty += static_cast<float>(fHeader) + gap + 2.f;
+    ty += 7.f * gap;
+
+    {
+        const float skipAux = sidePanelAuxReservedHeight();
+        if (skipAux > 0.f)
+            ty += skipAux;
+    }
+    ty += std::round(10.f * m_scale);
+
+    ty += static_cast<float>(fHeader) + gap + 2.f;
+    ty += 7.f * gap;
+    ty += std::round(10.f * m_scale);
+
+    ty += static_cast<float>(fHeader) + gap + 2.f;
+    ty += 2.f * gap;
+    ty += std::round(10.f * m_scale);
+
+    return ty + static_cast<float>(fSmall);
+}
+
 float Game::sidePanelAuxReservedHeight() const {
-    const float bh     = std::round(44.f * m_scale);
-    const float rowGap = std::round(8.f * m_scale);
-    const float pad    = std::round(8.f * m_scale);
-    int         rows   = 0;
+    const float bh  = std::round(44.f * m_scale);
+    const float pad = std::round(8.f * m_scale);
+    // Plinko-DROP staat onderaan bij "+ … on prestige" — geen gat tussen
+    // resources en STATS. Alleen "Terug naar basis" houdt het oude blok.
     if (shouldShowPlinkoSideDrop())
-        ++rows;
-    if (shouldShowRunRetreatButton())
-        ++rows;
-    if (rows == 0)
         return 0.f;
-    return pad + static_cast<float>(rows) * bh
-         + static_cast<float>(rows - 1) * rowGap;
+    if (shouldShowRunRetreatButton())
+        return pad + bh;
+    return 0.f;
 }
 
 float Game::sidePanelAuxButtonsBaseY() const {
@@ -2127,8 +2154,9 @@ sf::FloatRect Game::plinkoSideDropButtonBounds() const {
     const float px   = m_scrW - m_sideW + 14.f;
     const float bw   = m_sideW - 28.f;
     const float bh   = std::round(44.f * m_scale);
-    const float base = sidePanelAuxButtonsBaseY();
-    return sf::FloatRect({ px, base }, { bw, bh });
+    const float topY =
+        sidePanelAfterPrestigeHintBottomY() + std::round(6.f * m_scale);
+    return sf::FloatRect({ px, topY }, { bw, bh });
 }
 
 sf::FloatRect Game::runRetreatButtonBounds() const {
@@ -2138,9 +2166,13 @@ sf::FloatRect Game::runRetreatButtonBounds() const {
     const float bw = m_sideW - 28.f;
     const float bh = std::round(44.f * m_scale);
     const float rowGap = std::round(8.f * m_scale);
-    float       y    = sidePanelAuxButtonsBaseY();
-    if (shouldShowPlinkoSideDrop())
-        y += bh + rowGap;
+    float       y    = 0.f;
+    if (shouldShowPlinkoSideDrop()) {
+        const sf::FloatRect drop = plinkoSideDropButtonBounds();
+        y = drop.position.y + drop.size.y + rowGap;
+    } else {
+        y = sidePanelAuxButtonsBaseY();
+    }
     return sf::FloatRect({ px, y }, { bw, bh });
 }
 
