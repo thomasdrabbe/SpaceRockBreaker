@@ -542,16 +542,19 @@ void Game::update(float dt) {
     if (m_state.autoPlinkoEnabled()
         && m_state.ore >= m_state.plinkoBallOreCost())
         m_plinko.updateAuto(dt, m_state.ore, 1.f / m_state.fireRatePerSec(),
-                             m_state.plinkoBallOreCost());
+                             m_state.plinkoBallOreCost(),
+                             m_state.autoPlinkoBallsPerTick(),
+                             m_state.maxPlinkoBalls());
 
     {
         double plinkoCredits = 0.0;
         m_plinko.update(dt, plinkoCredits,
                         m_state.creditMult(),
                         m_state.bulkProcess(),
-                        m_mining.particles());
+                        m_plinkoParticles);
         creditsEarned += plinkoCredits;
     }
+    m_plinkoParticles.update(dt);
 
     if (m_activeTab == Tab::SHOP) {
         m_shop.update(
@@ -1584,59 +1587,9 @@ void Game::drawPlinkoTab(bool seeThroughMiningBackdrop) const {
 
     m_plinko.draw(m_window, const_cast<sf::Font&>(m_font),
                   seeThroughMiningBackdrop);
+    m_plinkoParticles.draw(m_window, const_cast<sf::Font&>(m_font));
 
     const float statusY = m_cntY + m_cntH - std::round(52.f * m_scale);
-    if (!m_showMainMenu) {
-        const float gap    = std::round(8.f * m_scale);
-        const float panelH = std::round(88.f * m_scale);
-        const float panelT = statusY - gap - panelH;
-        const float padX   = std::round(14.f * m_scale);
-        const float panelW = m_cntW - 2.f * padX;
-
-        const UnlockNextHint hint = computeUnlockNextHint(m_state);
-        sf::RectangleShape hintBg(sf::Vector2f{ panelW, panelH });
-        hintBg.setPosition({ m_cntX + padX, panelT });
-        hintBg.setFillColor(hubBackdropTint(sf::Color(14, 18, 36, 220),
-                                          seeThroughMiningBackdrop));
-        hintBg.setOutlineColor(hubBackdropTint(sf::Color(70, 90, 140, 160),
-                                               seeThroughMiningBackdrop));
-        hintBg.setOutlineThickness(1.f);
-        m_window.draw(hintBg);
-
-        const unsigned fsZ = static_cast<unsigned>(std::round(11.f * m_scale));
-        const unsigned fsH = static_cast<unsigned>(std::round(12.f * m_scale));
-        float            ty = panelT + std::round(8.f * m_scale);
-
-        std::string zoneLine = "Zone " + std::to_string(m_state.currentLevel);
-        zoneLine += (m_runMode == RunMode::RUNNING) ? " · run" : " · basis";
-        drawText(zoneLine, m_cntX + padX + 10.f, ty, fsZ,
-                 sf::Color(140, 200, 255));
-        ty += static_cast<float>(fsZ) + 2.f;
-        drawText(hint.heading, m_cntX + padX + 10.f, ty, fsZ,
-                 sf::Color(160, 165, 190));
-        ty += static_cast<float>(fsZ) + 1.f;
-        drawText(hint.phaseName, m_cntX + padX + 10.f, ty, fsH,
-                 sf::Color(255, 215, 130));
-        ty += static_cast<float>(fsH) + 3.f;
-        drawText(hint.progressDetail, m_cntX + padX + 10.f, ty, fsZ,
-                 sf::Color(185, 200, 220));
-
-        const float barW = panelW - 20.f;
-        const float barH = std::round(5.f * m_scale);
-        const float barY = panelT + panelH - barH - std::round(8.f * m_scale);
-        const float barX = m_cntX + padX + 10.f;
-        sf::RectangleShape barBg(sf::Vector2f{ barW, barH });
-        barBg.setPosition({ barX, barY });
-        barBg.setFillColor(sf::Color(25, 30, 50, 220));
-        m_window.draw(barBg);
-        const float fillW = std::max(0.f, (barW - 2.f) * hint.progress01);
-        if (fillW > 0.5f) {
-            sf::RectangleShape barFill(sf::Vector2f{ fillW, barH - 2.f });
-            barFill.setPosition({ barX + 1.f, barY + 1.f });
-            barFill.setFillColor(sf::Color(90, 200, 140, 240));
-            m_window.draw(barFill);
-        }
-    }
 
     unsigned fs = static_cast<unsigned>(std::round(14.f * m_scale));
     std::ostringstream os, bs;
@@ -2217,6 +2170,67 @@ sf::FloatRect Game::plinkoSideDropButtonBounds() const {
     return sf::FloatRect({ px, topY }, { bw, bh });
 }
 
+float Game::plinkoUnlockHintBelowDropBlockHeight() const {
+    if (!shouldShowPlinkoSideDrop())
+        return 0.f;
+    const float gap    = std::round(8.f * m_scale);
+    const float panelH = std::round(88.f * m_scale);
+    return gap + panelH;
+}
+
+void Game::drawPlinkoUnlockHintBelowDrop(bool seeThroughMiningBackdrop) const {
+    if (!shouldShowPlinkoSideDrop())
+        return;
+
+    const sf::FloatRect drop   = plinkoSideDropButtonBounds();
+    const float         gap    = std::round(8.f * m_scale);
+    const float         panelH = std::round(88.f * m_scale);
+    const float         panelT = drop.position.y + drop.size.y + gap;
+    const float         padIn  = std::round(8.f * m_scale);
+    const float         panelW = drop.size.x;
+
+    const UnlockNextHint hint = computeUnlockNextHint(m_state);
+    sf::RectangleShape   hintBg(sf::Vector2f{ panelW, panelH });
+    hintBg.setPosition({ drop.position.x, panelT });
+    hintBg.setFillColor(hubBackdropTint(sf::Color(14, 18, 36, 220),
+                                        seeThroughMiningBackdrop));
+    hintBg.setOutlineColor(hubBackdropTint(sf::Color(70, 90, 140, 160),
+                                           seeThroughMiningBackdrop));
+    hintBg.setOutlineThickness(1.f);
+    m_window.draw(hintBg);
+
+    const unsigned fsZ = static_cast<unsigned>(std::round(11.f * m_scale));
+    const unsigned fsH = static_cast<unsigned>(std::round(12.f * m_scale));
+    float          ty  = panelT + std::round(6.f * m_scale);
+    const float    tx  = drop.position.x + padIn;
+
+    std::string zoneLine = "Zone " + std::to_string(m_state.currentLevel);
+    zoneLine += (m_runMode == RunMode::RUNNING) ? " - run" : " - basis";
+    drawText(zoneLine, tx, ty, fsZ, sf::Color(140, 200, 255));
+    ty += static_cast<float>(fsZ) + 2.f;
+    drawText(hint.heading, tx, ty, fsZ, sf::Color(160, 165, 190));
+    ty += static_cast<float>(fsZ) + 1.f;
+    drawText(hint.phaseName, tx, ty, fsH, sf::Color(255, 215, 130));
+    ty += static_cast<float>(fsH) + 3.f;
+    drawText(hint.progressDetail, tx, ty, fsZ, sf::Color(185, 200, 220));
+
+    const float barW = panelW - 2.f * padIn;
+    const float barH = std::round(5.f * m_scale);
+    const float barY = panelT + panelH - barH - std::round(6.f * m_scale);
+    const float barX = tx;
+    sf::RectangleShape barBg(sf::Vector2f{ barW, barH });
+    barBg.setPosition({ barX, barY });
+    barBg.setFillColor(sf::Color(25, 30, 50, 220));
+    m_window.draw(barBg);
+    const float fillW = std::max(0.f, (barW - 2.f) * hint.progress01);
+    if (fillW > 0.5f) {
+        sf::RectangleShape barFill(sf::Vector2f{ fillW, barH - 2.f });
+        barFill.setPosition({ barX + 1.f, barY + 1.f });
+        barFill.setFillColor(sf::Color(90, 200, 140, 240));
+        m_window.draw(barFill);
+    }
+}
+
 sf::FloatRect Game::runRetreatButtonBounds() const {
     if (!shouldShowRunRetreatButton())
         return sf::FloatRect({ 0.f, 0.f }, { 0.f, 0.f });
@@ -2227,7 +2241,8 @@ sf::FloatRect Game::runRetreatButtonBounds() const {
     float       y    = 0.f;
     if (shouldShowPlinkoSideDrop()) {
         const sf::FloatRect drop = plinkoSideDropButtonBounds();
-        y = drop.position.y + drop.size.y + rowGap;
+        y = drop.position.y + drop.size.y + plinkoUnlockHintBelowDropBlockHeight()
+            + rowGap;
     } else {
         y = sidePanelAuxButtonsBaseY();
     }
@@ -2235,6 +2250,7 @@ sf::FloatRect Game::runRetreatButtonBounds() const {
 }
 
 void Game::drawSidePanelAuxButtons() const {
+    const bool st = hubMiningBackdropTransparent();
     if (shouldShowPlinkoSideDrop()) {
         sf::FloatRect rb = plinkoSideDropButtonBounds();
         const double  oreCost = m_state.plinkoBallOreCost();
@@ -2258,6 +2274,7 @@ void Game::drawSidePanelAuxButtons() const {
                  canDrop ? sf::Color(210, 170, 255)
                          : sf::Color(90, 80, 110),
                  true);
+        drawPlinkoUnlockHintBelowDrop(st);
     }
     if (shouldShowRunRetreatButton()) {
         sf::FloatRect rb = runRetreatButtonBounds();

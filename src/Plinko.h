@@ -75,7 +75,7 @@ public:
     bool dropBall(double oreValue, float dropX = -1.f);
 
     void updateAuto(float dt, double& oreStock, float autoInterval,
-                    double orePerBall);
+                    double orePerBall, int ballsPerTick, int maxBalls);
 
     void update(float dt, double& creditsOut,
                 float creditMult, int bulkMult,

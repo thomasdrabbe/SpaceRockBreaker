@@ -28,7 +28,11 @@ GameState::upgradeCatalog = {{
     // Economy  (iets zachter mult zodat mid-game niet vastloopt)
     { "Credit Multiplier", "+25% all credits",               198.0,  1.74, 0 },
     { "Bulk Processor",    "Convert more ore per drop",      315.0,  1.96, 0 },
-    { "Auto-Plinko",       "Auto-drop balls",                540.0,  2.12, 0 },
+    { "Auto-Plinko",
+      "Lv1: unlock auto-drop; elk extra level +1 bal per tick (zelfde interval)",
+      540.0,
+      2.12,
+      0 },
     // Ore tier unlocks  (maxLevel = 1; vloeiendere curve, minder “muur” eindgame)
     { "Unlock Bronze",     "Spawn Bronze asteroids (3x ore)",     1400.0,  1.0, 1 },
     { "Unlock Silver",     "Spawn Silver asteroids (8x ore)",     6200.0,  1.0, 1 },
@@ -286,6 +290,11 @@ int GameState::bulkProcess() const {
 
 bool GameState::autoPlinkoEnabled() const {
     return levelOf(UpgradeID::AUTO_PLINKO) > 0;
+}
+
+int GameState::autoPlinkoBallsPerTick() const {
+    const int lv = levelOf(UpgradeID::AUTO_PLINKO);
+    return lv > 0 ? lv : 0;
 }
 
 // ═════════════════════════════════════════════════════════════

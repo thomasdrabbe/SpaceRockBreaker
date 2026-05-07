@@ -9,6 +9,7 @@
 #include "Shop.h"
 #include "ChestScreen.h"
 #include "NotificationSystem.h"
+#include "Particle.h"
 #include "UnlockSystem.h"
 
 // ─────────────────────────────────────────────────────────────
@@ -57,6 +58,8 @@ private:
     // ── Sub-systems ───────────────────────────────────────
     MiningScreen m_mining;
     PlinkoBoard  m_plinko;
+    /// Alleen Plinko slot-explosies; niet tekenen op mining-tab.
+    ParticleSystem m_plinkoParticles{ MAX_PARTICLES };
     Shop         m_shop;
     ChestScreen  m_chest;
 
@@ -138,6 +141,10 @@ private:
     float         sidePanelAuxReservedHeight() const;
     float         sidePanelAuxButtonsBaseY() const;
     sf::FloatRect plinkoSideDropButtonBounds() const;
+    /// Ruimte onder DROP voor unlock-hint (gap + paneel); 0 als geen Plinko-drop.
+    float         plinkoUnlockHintBelowDropBlockHeight() const;
+    void          drawPlinkoUnlockHintBelowDrop(
+                       bool seeThroughMiningBackdrop) const;
     sf::FloatRect runRetreatButtonBounds() const;
     void          drawSidePanelAuxButtons() const;
     void          retreatRunToBase();

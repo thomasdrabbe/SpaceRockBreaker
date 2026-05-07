@@ -582,7 +582,12 @@ std::string Shop::formatEffect(UpgradeID id,
         case UpgradeID::BULK_PROCESS:
             ss << "Bulk: " << state.bulkProcess() << "x"; break;
         case UpgradeID::AUTO_PLINKO:
-            ss << (lv > 0 ? "Actief" : "Inactief"); break;
+            if (lv > 0)
+                ss << "Auto: " << lv << " bal" << (lv == 1 ? "" : "len")
+                   << "/tick";
+            else
+                ss << "Inactief";
+            break;
         case UpgradeID::WARP_DRIVE:
             ss << "Charge: " << state.warpDurationSec() << "s"; break;
         case UpgradeID::UNLOCK_BRONZE:

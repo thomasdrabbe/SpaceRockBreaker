@@ -247,16 +247,29 @@ bool PlinkoBoard::dropBall(double oreValue, float dropX) {
 //  updateAuto
 // ═════════════════════════════════════════════════════════════
 void PlinkoBoard::updateAuto(float dt, double& oreStock, float autoInterval,
-                             double orePerBall) {
+                             double orePerBall, int ballsPerTick, int maxBalls) {
     m_autoTimer -= dt;
     if (m_autoTimer > 0.f || oreStock < orePerBall) return;
 
+    const int want = std::max(1, ballsPerTick);
+    const int room = std::max(0, maxBalls - ballsAlive());
+    const int canAfford =
+        static_cast<int>(std::floor(oreStock / orePerBall + 1e-9));
+    const int n      = std::min({ want, room, canAfford });
+    if (n <= 0)
+        return;
+
     m_autoTimer = autoInterval;
 
-    oreStock -= orePerBall;
-    if (oreStock < 0.0) oreStock = 0.0;
-
-    dropBall(orePerBall);
+    for (int i = 0; i < n; i++) {
+        if (oreStock < orePerBall)
+            break;
+        if (!dropBall(orePerBall))
+            break;
+        oreStock -= orePerBall;
+        if (oreStock < 0.0)
+            oreStock = 0.0;
+    }
 }
 
 // ═════════════════════════════════════════════════════════════

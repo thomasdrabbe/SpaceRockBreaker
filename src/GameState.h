@@ -149,6 +149,8 @@ public:
     float creditMult()        const;
     int   bulkProcess()       const;
     bool  autoPlinkoEnabled() const;
+    /// Ballen per auto-interval (1 bij Lv1, +1 per extra level).
+    int   autoPlinkoBallsPerTick() const;
 
     float crystalAmp()        const;
 
