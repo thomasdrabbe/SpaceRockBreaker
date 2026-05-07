@@ -38,7 +38,12 @@ GameState::upgradeCatalog = {{
     { "Unlock Titanium",   "Spawn Titanium asteroids (380x)",  1350000.0, 1.0, 1 },
     { "Unlock Iridium",    "Spawn Iridium asteroids (1000x)",  4500000.0, 1.0, 1 },
     // Travel
-    { "Warp Drive", "Hold Space to warp to next zone (sneller per level)", 30.0, 1.0, 5 },
+    { "Warp Drive",
+      "Hold Space to warp to next zone (sneller per level; prijs schaalt per "
+      "level)",
+      35.0,
+      1.42,
+      5 },
     { "Bullet Range", "+8% bullet travel time / range", 88.0, 1.50, 0 },
 }};
 

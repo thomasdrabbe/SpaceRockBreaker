@@ -511,6 +511,7 @@ void Game::update(float dt) {
                 }
                 m_warpCharge += dt / m_state.warpDurationSec();
                 if (m_warpCharge >= 1.f) {
+                    gSfx.stopWarpSound();
                     m_warpCharge = 0.f;
                     m_state.doWarp();
                     m_mining.clearAll();
@@ -521,14 +522,20 @@ void Game::update(float dt) {
                               sf::Color(120, 220, 255));
                 }
             } else {
+                if (m_warpCharge > 0.001f)
+                    gSfx.stopWarpSound();
                 m_warpCharge = std::max(0.f, m_warpCharge - dt * 2.f);
                 m_warpSfxArmed = true;
             }
         } else {
+            if (m_warpCharge > 0.001f)
+                gSfx.stopWarpSound();
             m_warpCharge   = 0.f;
             m_warpSfxArmed = true;
         }
     } else {
+        if (m_warpCharge > 0.001f)
+            gSfx.stopWarpSound();
         m_warpCharge   = 0.f;
         m_warpSfxArmed = true;
     }
@@ -1578,6 +1585,59 @@ void Game::drawPlinkoTab(bool seeThroughMiningBackdrop) const {
     m_plinko.draw(m_window, const_cast<sf::Font&>(m_font),
                   seeThroughMiningBackdrop);
 
+    const float statusY = m_cntY + m_cntH - std::round(52.f * m_scale);
+    if (!m_showMainMenu) {
+        const float gap    = std::round(8.f * m_scale);
+        const float panelH = std::round(88.f * m_scale);
+        const float panelT = statusY - gap - panelH;
+        const float padX   = std::round(14.f * m_scale);
+        const float panelW = m_cntW - 2.f * padX;
+
+        const UnlockNextHint hint = computeUnlockNextHint(m_state);
+        sf::RectangleShape hintBg(sf::Vector2f{ panelW, panelH });
+        hintBg.setPosition({ m_cntX + padX, panelT });
+        hintBg.setFillColor(hubBackdropTint(sf::Color(14, 18, 36, 220),
+                                          seeThroughMiningBackdrop));
+        hintBg.setOutlineColor(hubBackdropTint(sf::Color(70, 90, 140, 160),
+                                               seeThroughMiningBackdrop));
+        hintBg.setOutlineThickness(1.f);
+        m_window.draw(hintBg);
+
+        const unsigned fsZ = static_cast<unsigned>(std::round(11.f * m_scale));
+        const unsigned fsH = static_cast<unsigned>(std::round(12.f * m_scale));
+        float            ty = panelT + std::round(8.f * m_scale);
+
+        std::string zoneLine = "Zone " + std::to_string(m_state.currentLevel);
+        zoneLine += (m_runMode == RunMode::RUNNING) ? " · run" : " · basis";
+        drawText(zoneLine, m_cntX + padX + 10.f, ty, fsZ,
+                 sf::Color(140, 200, 255));
+        ty += static_cast<float>(fsZ) + 2.f;
+        drawText(hint.heading, m_cntX + padX + 10.f, ty, fsZ,
+                 sf::Color(160, 165, 190));
+        ty += static_cast<float>(fsZ) + 1.f;
+        drawText(hint.phaseName, m_cntX + padX + 10.f, ty, fsH,
+                 sf::Color(255, 215, 130));
+        ty += static_cast<float>(fsH) + 3.f;
+        drawText(hint.progressDetail, m_cntX + padX + 10.f, ty, fsZ,
+                 sf::Color(185, 200, 220));
+
+        const float barW = panelW - 20.f;
+        const float barH = std::round(5.f * m_scale);
+        const float barY = panelT + panelH - barH - std::round(8.f * m_scale);
+        const float barX = m_cntX + padX + 10.f;
+        sf::RectangleShape barBg(sf::Vector2f{ barW, barH });
+        barBg.setPosition({ barX, barY });
+        barBg.setFillColor(sf::Color(25, 30, 50, 220));
+        m_window.draw(barBg);
+        const float fillW = std::max(0.f, (barW - 2.f) * hint.progress01);
+        if (fillW > 0.5f) {
+            sf::RectangleShape barFill(sf::Vector2f{ fillW, barH - 2.f });
+            barFill.setPosition({ barX + 1.f, barY + 1.f });
+            barFill.setFillColor(sf::Color(90, 200, 140, 240));
+            m_window.draw(barFill);
+        }
+    }
+
     unsigned fs = static_cast<unsigned>(std::round(14.f * m_scale));
     std::ostringstream os, bs;
     os << "Ore: " << static_cast<long long>(m_state.ore);
@@ -1588,8 +1648,6 @@ void Game::drawPlinkoTab(bool seeThroughMiningBackdrop) const {
     }
     bs << "Balls: " << m_plinko.ballsAlive() << " / " << m_state.maxPlinkoBalls();
 
-    const float statusY =
-        m_cntY + m_cntH - std::round(52.f * m_scale);
     drawText(os.str(), m_cntX + 16.f, statusY, fs, sf::Color(170, 225, 110));
     drawText(bs.str(), m_cntX + 16.f, statusY + fs + 4.f, fs,
              sf::Color(150, 130, 195));

@@ -32,6 +32,8 @@ public:
     void setMuted(bool m);
     bool isMuted() const { return m_muted; }
     void play(Sfx id, float warpPitch = 1.f);
+    /// Stop het lange warp-charge geluid (bij loslaten Space vóór warp).
+    void stopWarpSound();
 
     /// Loopt zolang `bossAlive` true (zone-boss op het veld).
     void syncBossMusic(bool bossAlive);

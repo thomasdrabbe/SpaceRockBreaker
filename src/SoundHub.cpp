@@ -575,6 +575,11 @@ void SoundHub::syncMainMenuMusic(bool showMainMenu) {
     }
 }
 
+void SoundHub::stopWarpSound() {
+    if (m_warpSound && m_warpSound->getStatus() == sf::SoundSource::Status::Playing)
+        m_warpSound->stop();
+}
+
 void SoundHub::play(Sfx id, float warpPitch) {
     if (!m_ready || m_muted)
         return;

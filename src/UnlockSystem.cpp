@@ -4,6 +4,9 @@
 #include "Game.h"
 #include "Shop.h"
 #include "MiningScreen.h"
+#include <algorithm>
+#include <cmath>
+#include <sstream>
 
 namespace {
 
@@ -65,6 +68,122 @@ void applyPhaseVisibility(int                    phase,
 }
 
 } // namespace
+
+UnlockNextHint computeUnlockNextHint(const GameState& s) {
+    UnlockNextHint h;
+    h.heading = "Volgende doel";
+
+    const auto& d = s.unlockPhaseDone;
+    const bool  firstBossIncoming =
+        (s.nextBossMilestone == 3 && s.currentLevel >= 2);
+
+    auto fmtOre = [](double v) {
+        std::ostringstream o;
+        o << static_cast<long long>(v + 1e-9);
+        return o.str();
+    };
+    auto fmtCredits = [](double v) {
+        std::ostringstream o;
+        o << static_cast<long long>(v + 0.5);
+        return o.str();
+    };
+
+    for (int p = 1; p <= 8; ++p) {
+        if (d[static_cast<std::size_t>(p)])
+            continue;
+
+        switch (p) {
+        case 1:
+            h.phaseName = "Plinko-tab";
+            h.progressDetail =
+                "Totale ore: " + fmtOre(s.totalOre) + " / 5";
+            h.progress01 = static_cast<float>(
+                std::clamp(s.totalOre / 5.0, 0.0, 1.0));
+            return h;
+        case 2:
+            h.phaseName = "Shop-tab";
+            if (firstBossIncoming) {
+                h.progressDetail = "Naderende boss — shop opent automatisch";
+                h.progress01     = 1.f;
+            } else {
+                h.progressDetail =
+                    "Totale ore: " + fmtOre(s.totalOre) + " / 25";
+                h.progress01 = static_cast<float>(
+                    std::clamp(s.totalOre / 25.0, 0.0, 1.0));
+            }
+            return h;
+        case 3:
+            h.phaseName = "Weapons (zone 2)";
+            if (s.currentLevel >= 2) {
+                h.progressDetail = "Zone 2 bereikt";
+                h.progress01     = 1.f;
+            } else {
+                h.progressDetail = "Warp naar zone 2 (nu zone "
+                                   + std::to_string(s.currentLevel) + ")";
+                h.progress01 = 0.f;
+            }
+            return h;
+        case 4:
+            h.phaseName = "Mining-upgrades";
+            h.progressDetail =
+                "Credits: $" + fmtCredits(s.credits) + " / $50";
+            h.progress01 = static_cast<float>(
+                std::clamp(s.credits / 50.0, 0.0, 1.0));
+            return h;
+        case 5:
+            h.phaseName = "Auto-Plinko";
+            h.progressDetail =
+                "Credits: $" + fmtCredits(s.credits) + " / $100";
+            h.progress01 = static_cast<float>(
+                std::clamp(s.credits / 100.0, 0.0, 1.0));
+            return h;
+        case 6:
+            h.phaseName = "Chests & sleutels";
+            if (s.currentLevel >= 3) {
+                h.progressDetail = "Zone 3+ — chest-tab en sleutels";
+                h.progress01     = 1.f;
+            } else {
+                h.progressDetail = "Warp naar zone 3 (nu zone "
+                                   + std::to_string(s.currentLevel) + ")";
+                h.progress01 = static_cast<float>(std::clamp(
+                    static_cast<double>(s.currentLevel - 1) / 2.0, 0.0, 0.99));
+            }
+            return h;
+        case 7:
+            h.phaseName = "Economy & ore tiers";
+            if (s.currentLevel >= 3) {
+                h.progressDetail = "Zone 3+ — volledige shop";
+                h.progress01     = 1.f;
+            } else {
+                h.progressDetail = "Warp naar zone 3 (nu zone "
+                                   + std::to_string(s.currentLevel) + ")";
+                h.progress01 = static_cast<float>(std::clamp(
+                    static_cast<double>(s.currentLevel - 1) / 2.0, 0.0, 0.99));
+            }
+            return h;
+        case 8:
+            h.phaseName = "Prestige";
+            if (s.currentLevel >= 5) {
+                h.progressDetail = "Zone 5+ — prestige-tab";
+                h.progress01     = 1.f;
+            } else {
+                h.progressDetail = "Warp naar zone 5 (nu zone "
+                                   + std::to_string(s.currentLevel) + ")";
+                h.progress01 = static_cast<float>(std::clamp(
+                    static_cast<double>(s.currentLevel - 1) / 4.0, 0.0, 0.99));
+            }
+            return h;
+        default:
+            break;
+        }
+    }
+
+    h.allPhasesComplete = true;
+    h.phaseName         = "Alles vrijgespeeld";
+    h.progressDetail    = "Verken prestige en eindgame-upgrades.";
+    h.progress01        = 1.f;
+    return h;
+}
 
 void UnlockSystem::update(GameState&           state,
                           NotificationSystem&  notifications,
