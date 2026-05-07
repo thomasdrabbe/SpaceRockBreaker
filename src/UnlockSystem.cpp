@@ -21,9 +21,17 @@ void applyPhaseVisibility(int                    phase,
         case 2:
             game.setTabVisible(Tab::SHOP, true);
             shop.setCategoryVisible(ShopCategory::MINING, true);
-            shop.setCategoryVisible(ShopCategory::PLINKO, false);
-            shop.setCategoryVisible(ShopCategory::ECONOMY, false);
-            shop.setCategoryVisible(ShopCategory::ORE_TIERS, false);
+            // Alleen verbergen zolang latere fases die categorieën nog niet
+            // vrijgegeven hebben. Anders: elke frame opnieuw `setVisible(...,
+            // false)` → `ensureActiveCategoryVisible()` springt de actieve shop-tab
+            // terug naar de eerste zichtbare (Weapons), ook al zijn Plinko/Economy
+            // daarna weer true door fase 5/7.
+            if (!state.unlockPhaseDone[5])
+                shop.setCategoryVisible(ShopCategory::PLINKO, false);
+            if (!state.unlockPhaseDone[7]) {
+                shop.setCategoryVisible(ShopCategory::ECONOMY, false);
+                shop.setCategoryVisible(ShopCategory::ORE_TIERS, false);
+            }
             shop.setMiningShowsWarpOnly(true);
             break;
         case 3:

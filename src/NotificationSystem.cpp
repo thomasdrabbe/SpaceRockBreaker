@@ -5,7 +5,8 @@
 
 namespace {
 
-constexpr float kVisualScale = 2.f;   // t.o.v. oude toast (540×52, font 26)
+// Onder 1920×1080-referentie; eerder 2.f was op grote schermen te imposant.
+constexpr float kVisualScale = 1.38f;
 
 } // namespace
 
@@ -57,14 +58,14 @@ void NotificationSystem::draw(sf::RenderTarget& target,
         std::min(scrW / 1920.f, scrH / 1080.f) * kVisualScale;
 
     const unsigned textSize =
-        static_cast<unsigned>(std::round(26.f * uiScale));
+        static_cast<unsigned>(std::round(22.f * uiScale));
     const float notifW =
-        std::min(std::round(540.f * uiScale), std::max(120.f, scrW - 24.f));
-    const float barH   = std::max(8.f, std::round(10.f * uiScale));
-    const float mainH  = std::round(52.f * uiScale);
+        std::min(std::round(460.f * uiScale), std::max(110.f, scrW - 48.f));
+    const float barH   = std::max(6.f, std::round(8.f * uiScale));
+    const float mainH  = std::round(44.f * uiScale);
     const float notifH = mainH + barH;
-    const float gap    = std::round(10.f * uiScale);
-    const float padX   = std::round(18.f * uiScale);
+    const float gap    = std::round(8.f * uiScale);
+    const float padX   = std::round(14.f * uiScale);
 
     const float x = std::max(12.f, (scrW - notifW) * 0.5f);
     float       y = std::max(4.f, topInset);
@@ -97,7 +98,7 @@ void NotificationSystem::draw(sf::RenderTarget& target,
         bg.setFillColor(sf::Color(12, 14, 28, fillAlpha));
         bg.setOutlineColor(sf::Color(
             e.color.r, e.color.g, e.color.b, outlineAlpha));
-        bg.setOutlineThickness(2.f);
+        bg.setOutlineThickness(1.5f);
         target.draw(bg);
 
         sf::RectangleShape track(sf::Vector2f{ notifW, barH });
