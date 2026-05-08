@@ -39,6 +39,7 @@ public:
     virtual void syncMainMenuMusic(bool showMainMenu) = 0;
     virtual void syncMiningAmbientMusic(bool miningTabActive,
                                         bool bossAlive) = 0;
+    virtual float warpPitchForChargeDuration(float chargeDurationSec) const = 0;
 };
 
 class SoundHub : public IAudioBus {
@@ -61,9 +62,10 @@ public:
 
     /// Mining-tab: Lightyear City-tracks (achtergrond, laag). Pauzeert tijdens boss.
     void syncMiningAmbientMusic(bool miningTabActive, bool bossAlive) override;
+    float warpPitchForChargeDuration(float chargeDurationSec) const override;
 
 private:
-    static constexpr int kPool = 12;
+    static constexpr int kPool = 24;
 
     std::array<sf::SoundBuffer, static_cast<int>(Sfx::COUNT)> m_buf{};
     std::array<bool, static_cast<int>(Sfx::COUNT)>          m_ok{};
@@ -103,6 +105,7 @@ private:
 
     bool tryLoad(int idx, const std::string& path);
     void loadShotVariants();
+    float warpClipDurationSec() const;
 };
 
 extern SoundHub gSfx;

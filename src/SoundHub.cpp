@@ -580,6 +580,20 @@ void SoundHub::stopWarpSound() {
         m_warpSound->stop();
 }
 
+float SoundHub::warpClipDurationSec() const {
+    const int wi = static_cast<int>(Sfx::Warp);
+    if (wi < 0 || wi >= static_cast<int>(Sfx::COUNT) || !m_ok[wi])
+        return 16.f;
+    const float sec = m_buf[wi].getDuration().asSeconds();
+    return sec > 0.05f ? sec : 16.f;
+}
+
+float SoundHub::warpPitchForChargeDuration(float chargeDurationSec) const {
+    const float clampedCharge = std::max(0.1f, chargeDurationSec);
+    const float clipSec       = warpClipDurationSec();
+    return std::clamp(clipSec / clampedCharge, 0.25f, 4.f);
+}
+
 void SoundHub::play(Sfx id, float warpPitch) {
     if (!m_ready || m_muted)
         return;
@@ -601,7 +615,8 @@ void SoundHub::play(Sfx id, float warpPitch) {
     const float t = m_clk.getElapsedTime().asSeconds();
 
     if (id == Sfx::Shot) {
-        if (t - m_lastShot < 0.05f)
+        // Laat snelle salvo's hoorbaar blijven; alleen extreme spam begrenzen.
+        if (t - m_lastShot < 0.025f)
             return;
         m_lastShot = t;
     } else if (id == Sfx::OreCollect) {

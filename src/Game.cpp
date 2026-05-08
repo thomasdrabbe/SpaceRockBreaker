@@ -539,7 +539,8 @@ void Game::update(float dt) {
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Space)) {
                 // Eén keer SFX per vasthoud (loslaten reset; los van m_warpCharge≈0 float).
                 if (m_warpSfxArmed) {
-                    const float pitch = 16.f / m_state.warpDurationSec();
+                    const float pitch =
+                        m_audio->warpPitchForChargeDuration(m_state.warpDurationSec());
                     m_audio->play(Sfx::Warp, pitch);
                     m_warpSfxArmed = false;
                 }
@@ -814,7 +815,10 @@ void Game::render() {
 
     drawTabBar();
 
-    if (m_activeTab == Tab::MINING) {
+    const bool drawMiningBackdrop =
+        (m_activeTab == Tab::MINING)
+        || (m_state.difficulty != Difficulty::Easy);
+    if (drawMiningBackdrop) {
         m_mining.draw(m_window, m_state, m_warpCharge, m_warpFlashRemain,
                       m_animClock.getElapsedTime().asSeconds());
     }
