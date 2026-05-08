@@ -519,7 +519,8 @@ bool GameState::warpDriveUnlocked() const {
 
 float GameState::warpDurationSec() const {
     const int lv = levelOf(UpgradeID::WARP_DRIVE);
-    constexpr float durations[] = { 16.f, 13.f, 10.f, 8.f, 6.f, 3.f };
+    // Warp Drive is pas bruikbaar vanaf lv1; lv1 moet 16s blijven voor juiste timing.
+    constexpr float durations[] = { 16.f, 16.f, 13.f, 10.f, 8.f, 6.f };
     const int       idx         = std::clamp(lv, 0, 5);
     return durations[idx];
 }
