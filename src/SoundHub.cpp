@@ -260,8 +260,8 @@ const char* kRelPaths[static_cast<int>(Sfx::COUNT)] = {
     "assets/sounds/explosion.wav",
     "assets/sounds/ore.wav",
     "assets/sounds/ui.wav",
-    /// Geen `warp.wav`/`warp.m4a` in release; SFML ondersteunt m4a niet.
-    "assets/sounds/freesound_community-warp-speed-6255.mp3",
+    // Primaire warp-asset.
+    "assets/sounds/warp.mp3",
     "assets/sounds/gameover.wav",
     "assets/sounds/boss.wav",
     "assets/sounds/plinko_drop.wav",
@@ -338,6 +338,8 @@ void SoundHub::init() {
                 return false;
             return m_buf[wi].loadFromFile(p);
         };
+        if (!m_ok[wi])
+            m_ok[wi] = loadResolved("assets/sounds/freesound_community-warp-speed-6255.mp3");
         if (!m_ok[wi])
             m_ok[wi] = loadResolved("assets/sounds/warp.wav");
         if (!m_ok[wi])
