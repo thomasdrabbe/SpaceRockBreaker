@@ -1,5 +1,8 @@
 #pragma once
+#include <algorithm>
+#include <array>
 #include <string>
+#include <SFML/Graphics/Color.hpp>
 
 // ─── Window ───────────────────────────────────────────────────
 constexpr unsigned WINDOW_WIDTH  = 2560;
@@ -93,6 +96,31 @@ enum class OreTier {
     ORE_TIER_COUNT
 };
 
+constexpr int ORE_TIER_COUNT = static_cast<int>(OreTier::ORE_TIER_COUNT);
+
+inline double oreTierBaseValue(OreTier tier) {
+    constexpr std::array<double, ORE_TIER_COUNT> kBaseValues = {
+        1.0, 3.0, 8.0, 20.0, 55.0, 140.0, 380.0, 1000.0
+    };
+    const int ti = std::clamp(static_cast<int>(tier), 0, ORE_TIER_COUNT - 1);
+    return kBaseValues[static_cast<std::size_t>(ti)];
+}
+
+inline sf::Color oreTierColor(OreTier tier) {
+    constexpr std::array<sf::Color, ORE_TIER_COUNT> kTierColors = {
+        sf::Color(140, 140, 150), // IRON
+        sf::Color(200, 120, 50),  // BRONZE
+        sf::Color(210, 215, 225), // SILVER
+        sf::Color(255, 215, 50),  // GOLD
+        sf::Color(140, 230, 255), // DIAMOND
+        sf::Color(160, 185, 255), // PLATINUM
+        sf::Color(90, 120, 220),  // TITANIUM
+        sf::Color(160, 60, 220),  // IRIDIUM
+    };
+    const int ti = std::clamp(static_cast<int>(tier), 0, ORE_TIER_COUNT - 1);
+    return kTierColors[static_cast<std::size_t>(ti)];
+}
+
 // ─── Entity limits ────────────────────────────────────────────
 constexpr int MAX_ASTEROIDS    = 80;
 /// Vrijhouden in de pool voor meteorregen (max 14) + key/boss overlap.
@@ -117,7 +145,7 @@ constexpr float TAB_BAR_H    = 46.f;
 // ─── Save ─────────────────────────────────────────────────────
 const std::string SAVE_FILE = "srb_save.bin"; // legacy (wordt naar slot 0 gemigreerd)
 constexpr int     SAVE_SLOT_COUNT = 3;
-constexpr int     SAVE_VERSION    = 14;
+constexpr int     SAVE_VERSION    = 15;
 
 // ─── Nieuwe spel-moeilijkheid ─────────────────────────────────
 enum class Difficulty {

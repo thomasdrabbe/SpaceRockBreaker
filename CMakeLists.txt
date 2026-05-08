@@ -31,6 +31,8 @@ set(SOURCES
     src/SoundHub.cpp
     src/NotificationSystem.cpp
     src/UnlockSystem.cpp
+    src/RunFlowController.cpp
+    src/UiFlowController.cpp
 )
 
 set(HEADERS
@@ -52,6 +54,8 @@ set(HEADERS
     src/SoundHub.h
     src/NotificationSystem.h
     src/UnlockSystem.h
+    src/RunFlowController.h
+    src/UiFlowController.h
 )
 
 # ─── Windows icoon in .exe inbakken ───────────────────────────

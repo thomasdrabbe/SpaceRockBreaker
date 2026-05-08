@@ -1,6 +1,7 @@
 #pragma once
 #include <SFML/Graphics.hpp>
 #include <array>
+#include <memory>
 #include <string>
 #include "Constants.h"
 #include "GameState.h"
@@ -10,7 +11,11 @@
 #include "ChestScreen.h"
 #include "NotificationSystem.h"
 #include "Particle.h"
+#include "RunFlowController.h"
+#include "UiFlowController.h"
 #include "UnlockSystem.h"
+
+class IAudioBus;
 
 // ─────────────────────────────────────────────────────────────
 //  Game
@@ -48,6 +53,9 @@ private:
 
     NotificationSystem m_notifications;
     UnlockSystem       m_unlockSystem;
+    IAudioBus*         m_audio = nullptr;
+    std::unique_ptr<RunFlowController> m_runFlow;
+    std::unique_ptr<UiFlowController>  m_uiFlow;
 
     // ── Assets (gedeeld met mining UI) ────────────────────
     sf::Texture m_keyTex;
@@ -83,6 +91,14 @@ private:
     float m_hitCooldown = 0.f;
 
     bool m_mainMenuPickDifficulty = false;
+    struct SaveSlotPreview {
+        bool        hasSave = false;
+        int         zone = 1;
+        double      credits = 0.0;
+        std::string summary = "Leeg";
+    };
+    mutable std::array<SaveSlotPreview, SAVE_SLOT_COUNT> m_saveSlotPreview{};
+    mutable bool m_saveSlotPreviewDirty = true;
 
     void drawLives() const;
 
@@ -148,6 +164,9 @@ private:
     sf::FloatRect runRetreatButtonBounds() const;
     void          drawSidePanelAuxButtons() const;
     void          retreatRunToBase();
+    void          syncMiningSystemsFromState(bool rebuildPlinkoBoard);
+    void          collectRunOreToState();
+    void          moveRunToBaseState();
 
     // ── Main loop ─────────────────────────────────────────
     void processEvents();
@@ -204,6 +223,8 @@ private:
 
     void drawMainMenu() const;
     void handleMainMenuClick(sf::Vector2f pos);
+    void refreshSaveSlotPreviewCache() const;
+    void invalidateSaveSlotPreviewCache();
 
     // ── Helpers ───────────────────────────────────────────
     void drawText(const std::string& str,

@@ -15,6 +15,9 @@ public:
     float        angle      = 0.f;
     float        targetAngle= 0.f;
     float        fireTimer  = 0.f;
+    float        reacquireTimer = 0.f;
+    bool         hasCachedTarget = false;
+    sf::Vector2f cachedTargetPos{};
     bool         active     = false;
     sf::Color    baseColor  = sf::Color(60,  70,  90);
     sf::Color    barrelColor= sf::Color(100, 120, 150);
@@ -37,6 +40,7 @@ private:
     static constexpr float BARREL_LEN    = 22.f;
     static constexpr float BASE_RADIUS   = 14.f;
     static constexpr float ACQUIRE_RANGE = 99999.f;
+    static constexpr float REACQUIRE_INTERVAL = 0.06f;
 };
 
 // ─────────────────────────────────────────────────────────────

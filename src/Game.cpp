@@ -139,6 +139,36 @@ void drawBoldTextCenteredInRect(sf::RenderTarget& target, const sf::Font& font,
     target.draw(text);
 }
 
+class GameUnlockEffects final : public IUnlockEffects {
+public:
+    GameUnlockEffects(Game& game, Shop& shop, MiningScreen& mining)
+        : m_game(game), m_shop(shop), m_mining(mining) {}
+
+    void setTabVisible(Tab tab, bool visible) override {
+        m_game.setTabVisible(tab, visible);
+    }
+    void setShopCategoryVisible(ShopCategory category, bool visible) override {
+        m_shop.setCategoryVisible(category, visible);
+    }
+    void setShopMiningWarpOnly(bool warpOnly) override {
+        m_shop.setMiningShowsWarpOnly(warpOnly);
+    }
+    void setShopPlinkoAutoOnly(bool autoOnly) override {
+        m_shop.setPlinkoShopAutoOnly(autoOnly);
+    }
+    void focusShopCategory(ShopCategory category) override {
+        m_game.focusShopCategory(category);
+    }
+    void setKeyAsteroidsEnabled(bool enabled) override {
+        m_mining.setKeyAsteroidsEnabled(enabled);
+    }
+
+private:
+    Game& m_game;
+    Shop& m_shop;
+    MiningScreen& m_mining;
+};
+
 } // namespace
 
 // ═════════════════════════════════════════════════════════════
@@ -190,6 +220,9 @@ Game::Game()
 
     migrateLegacySaveIfNeeded();
     gSfx.init();
+    m_audio = &gSfx;
+    m_mining.setAudioBus(m_audio);
+    m_plinko.setAudioBus(m_audio);
 
     m_tabVisible.fill(false);
     m_tabVisible[static_cast<int>(Tab::MINING)] = true;
@@ -201,6 +234,13 @@ Game::Game()
     rebuildPlinko();
 
     resetZoneKeyState();
+    m_runFlow = std::make_unique<RunFlowController>(
+        m_state,
+        m_mining,
+        m_runMode,
+        [this]() { rebuildPlinko(); },
+        [this]() { resetZoneKeyState(); });
+    m_uiFlow = std::make_unique<UiFlowController>(m_activeTab, m_notifications);
     m_mining.syncTurrets(m_state);
 }
 
@@ -239,6 +279,8 @@ void Game::initLayout() {
 void Game::reinitSystems() {
     m_mining.init(m_font, m_cntX, m_cntY, m_cntW, m_cntH,
                   m_keyTexLoaded ? &m_keyTex : nullptr);
+    if (m_audio)
+        m_mining.setAudioBus(m_audio);
     m_shop.init  (m_font, m_cntX, m_cntY, m_cntW, m_cntH, m_scale);
     m_chest.init(m_font, m_cntX, m_cntY, m_cntW, m_cntH, m_scale,
                  m_chestTexLoaded ? &m_chestTex : nullptr);
@@ -259,6 +301,7 @@ void Game::run() {
     }
     if (m_diskSessionActive)
         m_state.save(currentSavePath());
+    invalidateSaveSlotPreviewCache();
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -270,8 +313,8 @@ void Game::processEvents() {
         if (!m_showMainMenu && m_activeTab == Tab::SHOP) {
             bool bought = m_shop.handleEvent(*event, m_state, m_window);
             if (bought) {
-                m_mining.syncTurrets(m_state);
-                gSfx.play(Sfx::UiClick);
+                syncMiningSystemsFromState(false);
+                m_audio->play(Sfx::UiClick);
                 pushNotif("Upgrade gekocht!", sf::Color(120, 220, 255));
             }
         }
@@ -280,10 +323,9 @@ void Game::processEvents() {
             bool           bought = m_chest.handleEvent(
                 *event, m_state, m_window, m_chestOverlayAnim > 0.f, &chestGot);
             if (bought) {
-                m_mining.syncTurrets(m_state);
-                rebuildPlinko();
-                gSfx.play(Sfx::ChestOpen);
-                gSfx.play(Sfx::LevelUp);
+                syncMiningSystemsFromState(true);
+                m_audio->play(Sfx::ChestOpen);
+                m_audio->play(Sfx::LevelUp);
                 m_chestLootSfxPending = true;
                 m_chestOverlayAnim = CHEST_OVERLAY_SEC;
                 const auto& cn =
@@ -299,6 +341,7 @@ void Game::processEvents() {
         if (event->is<sf::Event::Closed>()) {
             if (m_diskSessionActive)
                 m_state.save(currentSavePath());
+            invalidateSaveSlotPreviewCache();
             m_window.close();
         }
         else if (event->is<sf::Event::Resized>()) {
@@ -358,7 +401,7 @@ void Game::update(float dt) {
     if (m_chestLootSfxPending) {
         const float elapsed = CHEST_OVERLAY_SEC - m_chestOverlayAnim;
         if (elapsed >= 0.36f) {
-            gSfx.play(Sfx::ChestLoot);
+            m_audio->play(Sfx::ChestLoot);
             m_chestLootSfxPending = false;
         }
     }
@@ -374,15 +417,15 @@ void Game::update(float dt) {
                                   && m_mining.hasLivingBoss();
 
     if (!m_showMainMenu)
-        gSfx.syncBossMusic(bossLiveForAudio);
+        m_audio->syncBossMusic(bossLiveForAudio);
     else
-        gSfx.syncBossMusic(false);
+        m_audio->syncBossMusic(false);
 
-    gSfx.syncMainMenuMusic(m_showMainMenu);
+    m_audio->syncMainMenuMusic(m_showMainMenu);
 
     const bool miningBgmActive =
         !m_showMainMenu && m_activeTab == Tab::MINING && !m_paused;
-    gSfx.syncMiningAmbientMusic(miningBgmActive, bossLiveForAudio);
+    m_audio->syncMiningAmbientMusic(miningBgmActive, bossLiveForAudio);
 
     if (m_paused) return;
 
@@ -392,13 +435,14 @@ void Game::update(float dt) {
     }
 
     if (!m_paused) {
-        m_unlockSystem.update(m_state, m_notifications, *this, m_shop,
-                              m_mining);
+        GameUnlockEffects unlockFx(*this, m_shop, m_mining);
+        m_unlockSystem.update(m_state, m_notifications, unlockFx);
         clampActiveTabToVisibility();
     }
 
     double creditsEarned = 0.0;
     double oreEarned     = 0.0;
+    std::array<double, ORE_TIER_COUNT> oreByTierEarned{};
 
     if (m_runMode == RunMode::RUNNING && !m_showMainMenu && !m_paused) {
         const bool pauseMining =
@@ -416,6 +460,7 @@ void Game::update(float dt) {
         if (!pauseMining) {
             m_mining.tickMeteorShower(dt, m_state, meteorAsteroidHp);
             m_mining.update(dt, m_state, creditsEarned, oreEarned,
+                             oreByTierEarned,
                              m_warpCharge);
 
             if (m_state.bossCrystalPopup > 0.0) {
@@ -435,14 +480,11 @@ void Game::update(float dt) {
                     40.f, sf::Color(255, 80, 60), 30);
 
                 if (m_state.isGameOver()) {
-                    if (!gSfx.playGameOverMusicOnce())
-                        gSfx.play(Sfx::GameOver);
+                    if (!m_audio->playGameOverMusicOnce())
+                        m_audio->play(Sfx::GameOver);
                     m_state.gameOver();
-                    m_mining.clearAll();
-                    m_mining.syncTurrets(m_state);
-                    rebuildPlinko();
-                    resetZoneKeyState();
-                    m_runMode = RunMode::BASE;
+                    syncMiningSystemsFromState(true);
+                    moveRunToBaseState();
                     pushNotif("GAME OVER - terug naar zone 1",
                               sf::Color(255, 60, 60));
                 } else {
@@ -477,17 +519,9 @@ void Game::update(float dt) {
             }
 
             if (m_mining.pullBossReturnToBase()) {
-                double orePick = 0.0;
-                m_mining.collectAllOre(orePick, m_state);
-                if (orePick > 0.0) {
-                    m_state.ore          += orePick;
-                    m_state.totalOre     += orePick;
-                    m_state.oreThisLevel += orePick;
-                }
-                m_mining.clearAll();
-                m_mining.syncTurrets(m_state);
-                m_runMode = RunMode::BASE;
-                resetZoneKeyState();
+                collectRunOreToState();
+                syncMiningSystemsFromState(false);
+                moveRunToBaseState();
                 pushNotif(
                     "Basis - loot binnen. Start een nieuwe run of prestige.",
                     sf::Color(160, 220, 255));
@@ -506,16 +540,15 @@ void Game::update(float dt) {
                 // Eén keer SFX per vasthoud (loslaten reset; los van m_warpCharge≈0 float).
                 if (m_warpSfxArmed) {
                     const float pitch = 16.f / m_state.warpDurationSec();
-                    gSfx.play(Sfx::Warp, pitch);
+                    m_audio->play(Sfx::Warp, pitch);
                     m_warpSfxArmed = false;
                 }
                 m_warpCharge += dt / m_state.warpDurationSec();
                 if (m_warpCharge >= 1.f) {
-                    gSfx.stopWarpSound();
+                    m_audio->stopWarpSound();
                     m_warpCharge = 0.f;
                     m_state.doWarp();
-                    m_mining.clearAll();
-                    m_mining.syncTurrets(m_state);
+                    syncMiningSystemsFromState(false);
                     m_warpFlashRemain = WARP_FLASH_DURATION_SEC;
                     m_warpSfxArmed    = true;
                     pushNotif("Zone " + std::to_string(m_state.currentLevel) + "!",
@@ -523,28 +556,26 @@ void Game::update(float dt) {
                 }
             } else {
                 if (m_warpCharge > 0.001f)
-                    gSfx.stopWarpSound();
+                    m_audio->stopWarpSound();
                 m_warpCharge = std::max(0.f, m_warpCharge - dt * 2.f);
                 m_warpSfxArmed = true;
             }
         } else {
             if (m_warpCharge > 0.001f)
-                gSfx.stopWarpSound();
+                m_audio->stopWarpSound();
             m_warpCharge   = 0.f;
             m_warpSfxArmed = true;
         }
     } else {
         if (m_warpCharge > 0.001f)
-            gSfx.stopWarpSound();
+            m_audio->stopWarpSound();
         m_warpCharge   = 0.f;
         m_warpSfxArmed = true;
     }
-    if (m_state.autoPlinkoEnabled()
-        && m_state.ore >= m_state.plinkoBallOreCost())
-        m_plinko.updateAuto(dt, m_state.ore, 1.f / m_state.fireRatePerSec(),
-                             m_state.plinkoBallOreCost(),
-                             m_state.autoPlinkoBallsPerTick(),
-                             m_state.maxPlinkoBalls());
+    if (m_state.autoPlinkoEnabled() && m_state.ore >= m_state.plinkoBallOreCost())
+        m_plinko.updateAuto(dt, m_state, 1.f / m_state.fireRatePerSec(),
+                            m_state.autoPlinkoBallsPerTick(),
+                            m_state.maxPlinkoBalls());
 
     {
         double plinkoCredits = 0.0;
@@ -570,14 +601,10 @@ void Game::update(float dt) {
     }
 
     if (creditsEarned > 0.0) {
-        m_state.credits      += creditsEarned;
-        m_state.totalCredits += creditsEarned;
+        m_state.addCredits(creditsEarned);
     }
     if (oreEarned > 0.0) {
-        m_state.ore      += oreEarned;
-        m_state.totalOre += oreEarned;
-        m_state.oreThisLevel += oreEarned;
-
+        m_state.addOreTiered(oreByTierEarned, true);
     }
 
     int keyDrop = m_mining.pullPendingKeyDrop();
@@ -591,6 +618,7 @@ void Game::update(float dt) {
     if (m_diskSessionActive && m_saveTimer >= SAVE_INTERVAL) {
         m_saveTimer = 0.f;
         m_state.save(currentSavePath());
+        invalidateSaveSlotPreviewCache();
     }
 
     static int   lastRows    = -1;
@@ -786,8 +814,10 @@ void Game::render() {
 
     drawTabBar();
 
-    m_mining.draw(m_window, m_state, m_warpCharge, m_warpFlashRemain,
-                   m_animClock.getElapsedTime().asSeconds());
+    if (m_activeTab == Tab::MINING) {
+        m_mining.draw(m_window, m_state, m_warpCharge, m_warpFlashRemain,
+                      m_animClock.getElapsedTime().asSeconds());
+    }
 
     const bool dimOtherTabs =
         m_activeTab != Tab::MINING
@@ -835,18 +865,20 @@ void Game::onMouseClick(sf::Vector2f pos, sf::Mouse::Button btn) {
     if (m_paused) {
           switch (pauseButtonAt(pos)) {
               case PauseButton::RESUME:
-                  gSfx.play(Sfx::UiClick);
+                  m_audio->play(Sfx::UiClick);
                   m_paused = false;
                   break;
               case PauseButton::SAVE:
-                  gSfx.play(Sfx::UiClick);
+                  m_audio->play(Sfx::UiClick);
                   m_state.save(currentSavePath());
+                  invalidateSaveSlotPreviewCache();
                   pushNotif("Opgeslagen.", sf::Color(100, 220, 120));
                   break;
               case PauseButton::MAIN_MENU:
-                  gSfx.play(Sfx::UiClick);
+                  m_audio->play(Sfx::UiClick);
                   m_state.save(currentSavePath());
-                  gSfx.stopGameOverMusic();
+                  invalidateSaveSlotPreviewCache();
+                  m_audio->stopGameOverMusic();
                   m_showMainMenu           = true;
                   m_mainMenuPickDifficulty = false;
                   m_paused                 = false;
@@ -865,10 +897,12 @@ void Game::onMouseClick(sf::Vector2f pos, sf::Mouse::Button btn) {
         const float rowW = m_scrW - m_sideW;
         const int   slot = hitTestHorizTabSlot(pos.x, 0.f, rowW, vTabs);
         if (slot >= 0) {
-            gSfx.play(Sfx::UiClick);
-            Tab t             = tabFromVisibleSlot(slot);
-            m_activeTab       = t;
-            m_notifications.clearBadge(static_cast<int>(t));
+            m_audio->play(Sfx::UiClick);
+            const Tab t = tabFromVisibleSlot(slot);
+            if (m_uiFlow)
+                m_uiFlow->activateTab(t);
+            else
+                m_activeTab = t;
             m_prestigeConfirm = false;
             return;
         }
@@ -876,21 +910,19 @@ void Game::onMouseClick(sf::Vector2f pos, sf::Mouse::Button btn) {
 
     if (shouldShowRunRetreatButton()
         && runRetreatButtonBounds().contains(pos)) {
-        gSfx.play(Sfx::UiClick);
+        m_audio->play(Sfx::UiClick);
         retreatRunToBase();
         return;
     }
 
     if (m_activeTab == Tab::MINING && m_runMode == RunMode::BASE) {
         if (miningStartRunBounds().contains(pos)) {
-            gSfx.play(Sfx::UiClick);
+            m_audio->play(Sfx::UiClick);
             if (m_state.lives <= 0)
                 m_state.lives = m_state.maxLives();
-            gSfx.stopGameOverMusic();
-            m_runMode = RunMode::RUNNING;
-            m_mining.prepareNewRun();
-            m_mining.syncTurrets(m_state);
-            resetZoneKeyState();
+            m_audio->stopGameOverMusic();
+            if (m_runFlow)
+                m_runFlow->startRun();
             pushNotif("Run gestart - zone " +
                       std::to_string(m_state.currentLevel),
                       sf::Color(120, 220, 255));
@@ -924,10 +956,9 @@ void Game::onKeyPress(sf::Keyboard::Key key, bool ctrl, bool shift) {
     // Dev: Ctrl+Shift+C = +1 000 000 credits & +100 keys (ook vóór main menu)
     if (ctrl && shift && key == K::C) {
         constexpr double add = 1'000'000.0;
-        m_state.credits += add;
-        m_state.totalCredits += add;
-        m_state.keys += 100;
-        gSfx.play(Sfx::UiClick);
+        m_state.addCredits(add);
+        m_state.addKeys(100);
+        m_audio->play(Sfx::UiClick);
         pushNotif("+" + formatBig(add) + " credits",
                   sf::Color(120, 255, 160));
         pushNotif("+100 keys", sf::Color(255, 220, 140));
@@ -936,8 +967,8 @@ void Game::onKeyPress(sf::Keyboard::Key key, bool ctrl, bool shift) {
 
     if (m_showMainMenu) {
         if (key == K::M) {
-            gSfx.setMuted(!gSfx.isMuted());
-            pushNotif(gSfx.isMuted() ? "Geluid uit" : "Geluid aan",
+            m_audio->setMuted(!m_audio->isMuted());
+            pushNotif(m_audio->isMuted() ? "Geluid uit" : "Geluid aan",
                       sf::Color(160, 200, 255));
         }
         return;
@@ -946,32 +977,42 @@ void Game::onKeyPress(sf::Keyboard::Key key, bool ctrl, bool shift) {
     switch (key) {
         case K::Num1:
             if (isTabVisible(Tab::MINING)) {
-                m_activeTab = Tab::MINING;
-                m_notifications.clearBadge(static_cast<int>(Tab::MINING));
+                if (m_uiFlow)
+                    m_uiFlow->activateTab(Tab::MINING);
+                else
+                    m_activeTab = Tab::MINING;
             }
             break;
         case K::Num2:
             if (isTabVisible(Tab::PLINKO)) {
-                m_activeTab = Tab::PLINKO;
-                m_notifications.clearBadge(static_cast<int>(Tab::PLINKO));
+                if (m_uiFlow)
+                    m_uiFlow->activateTab(Tab::PLINKO);
+                else
+                    m_activeTab = Tab::PLINKO;
             }
             break;
         case K::Num3:
             if (isTabVisible(Tab::SHOP)) {
-                m_activeTab = Tab::SHOP;
-                m_notifications.clearBadge(static_cast<int>(Tab::SHOP));
+                if (m_uiFlow)
+                    m_uiFlow->activateTab(Tab::SHOP);
+                else
+                    m_activeTab = Tab::SHOP;
             }
             break;
         case K::Num4:
             if (isTabVisible(Tab::CHESTS)) {
-                m_activeTab = Tab::CHESTS;
-                m_notifications.clearBadge(static_cast<int>(Tab::CHESTS));
+                if (m_uiFlow)
+                    m_uiFlow->activateTab(Tab::CHESTS);
+                else
+                    m_activeTab = Tab::CHESTS;
             }
             break;
         case K::Num5:
             if (isTabVisible(Tab::PRESTIGE)) {
-                m_activeTab = Tab::PRESTIGE;
-                m_notifications.clearBadge(static_cast<int>(Tab::PRESTIGE));
+                if (m_uiFlow)
+                    m_uiFlow->activateTab(Tab::PRESTIGE);
+                else
+                    m_activeTab = Tab::PRESTIGE;
             }
             break;
 
@@ -980,9 +1021,10 @@ void Game::onKeyPress(sf::Keyboard::Key key, bool ctrl, bool shift) {
                 const double c = m_state.plinkoBallOreCost();
                 if (m_state.ore >= c
                     && m_plinko.ballsAlive() < m_state.maxPlinkoBalls()) {
-                    m_state.ore -= c;
-                    if (m_state.ore < 0.0) m_state.ore = 0.0;
-                    m_plinko.dropBall(c);
+                    OreTier paidTier = OreTier::IRON;
+                    if (m_state.spendOreForPlinko(c, paidTier))
+                        m_plinko.dropBall(oreTierBaseValue(paidTier),
+                                          oreTierColor(paidTier));
                 }
             }
             break;
@@ -990,14 +1032,15 @@ void Game::onKeyPress(sf::Keyboard::Key key, bool ctrl, bool shift) {
         case K::P:
             if (m_diskSessionActive) {
                 m_state.save(currentSavePath());
-                gSfx.play(Sfx::UiClick);
+                invalidateSaveSlotPreviewCache();
+                m_audio->play(Sfx::UiClick);
                 pushNotif("Opgeslagen.", sf::Color(100, 220, 120));
             }
             break;
 
         case K::M:
-            gSfx.setMuted(!gSfx.isMuted());
-            pushNotif(gSfx.isMuted() ? "Geluid uit" : "Geluid aan",
+            m_audio->setMuted(!m_audio->isMuted());
+            pushNotif(m_audio->isMuted() ? "Geluid uit" : "Geluid aan",
                       sf::Color(160, 200, 255));
             break;
 
@@ -1345,8 +1388,34 @@ Game::MainMenuLayout Game::computeMainMenuLayout() const {
     return L;
 }
 
+void Game::refreshSaveSlotPreviewCache() const {
+    if (!m_saveSlotPreviewDirty)
+        return;
+    for (int s = 0; s < SAVE_SLOT_COUNT; s++) {
+        int z = 1;
+        double cr = 0.0;
+        auto& slot = m_saveSlotPreview[static_cast<std::size_t>(s)];
+        slot.hasSave = GameState::peekSaveSlot(saveSlotPath(s), z, cr);
+        slot.zone = z;
+        slot.credits = cr;
+        if (slot.hasSave) {
+            std::ostringstream os;
+            os << "Z" << z << "  $" << formatBig(cr);
+            slot.summary = os.str();
+        } else {
+            slot.summary = "Leeg";
+        }
+    }
+    m_saveSlotPreviewDirty = false;
+}
+
+void Game::invalidateSaveSlotPreviewCache() {
+    m_saveSlotPreviewDirty = true;
+}
+
 void Game::drawMainMenu() const {
     static const std::string kRuntimeVersion = readRuntimeVersionTag();
+    refreshSaveSlotPreviewCache();
 
     sf::RectangleShape bg(sf::Vector2f{ m_scrW, m_scrH });
     bg.setFillColor(sf::Color(6, 8, 18));
@@ -1385,15 +1454,8 @@ void Game::drawMainMenu() const {
                  sel ? sf::Color(200, 230, 255) : sf::Color(140, 155, 190),
                  true);
 
-        int         z = 1;
-        double      cr = 0.0;
-        std::string line2 = "Leeg";
-        if (GameState::peekSaveSlot(saveSlotPath(s), z, cr)) {
-            std::ostringstream os;
-            os << "Z" << z << "  $" << formatBig(cr);
-            line2 = os.str();
-        }
-        drawText(line2,
+        const auto& slot = m_saveSlotPreview[static_cast<std::size_t>(s)];
+        drawText(slot.summary,
                  bx + 10.f,
                  L.slotY + 8.f + static_cast<float>(L.fSlot) + 4.f,
                  L.fHint,
@@ -1480,18 +1542,8 @@ void Game::drawMainMenu() const {
         return;
     }
 
-    auto selectedSlotSummary = [&]() -> std::string {
-        int         z = 1;
-        double      cr = 0.0;
-        std::string line = "Leeg";
-        if (GameState::peekSaveSlot(saveSlotPath(m_saveSlot), z, cr)) {
-            std::ostringstream os;
-            os << "Z" << z << "  $" << formatBig(cr);
-            line = os.str();
-        }
-        return line;
-    };
-    const std::string slotStatusTxt = selectedSlotSummary();
+    const std::string slotStatusTxt =
+        m_saveSlotPreview[static_cast<std::size_t>(m_saveSlot)].summary;
 
     struct BtnDef { std::string label; sf::Color color; };
     const BtnDef btns[] = {
@@ -1564,6 +1616,8 @@ void Game::drawMainMenu() const {
 //  Plinko tab
 // ═════════════════════════════════════════════════════════════
 void Game::rebuildPlinko() {
+    if (m_audio)
+        m_plinko.setAudioBus(m_audio);
     float bx = m_cntX + 30.f;
     float by = m_cntY + 20.f;
     float bw = m_cntW - 60.f;
@@ -1621,8 +1675,9 @@ void Game::handleMainMenuClick(sf::Vector2f pos) {
         float bx = L.slotX0 + static_cast<float>(s) * (L.slotW + L.slotGap);
         sf::FloatRect slotR({ bx, L.slotY }, { L.slotW, L.slotH });
         if (slotR.contains(pos)) {
-            gSfx.play(Sfx::UiClick);
+            m_audio->play(Sfx::UiClick);
             m_saveSlot = s;
+            invalidateSaveSlotPreviewCache();
             return;
         }
     }
@@ -1635,21 +1690,20 @@ void Game::handleMainMenuClick(sf::Vector2f pos) {
                 { L.btnW, L.btnH });
             if (!r.contains(pos))
                 continue;
-            gSfx.play(Sfx::UiClick);
+            m_audio->play(Sfx::UiClick);
             m_state.reset();
             resetNewGameUi();
-            gSfx.stopGameOverMusic();
+            m_audio->stopGameOverMusic();
             m_state.difficulty =
                 static_cast<Difficulty>(static_cast<int>(Difficulty::Easy) + d);
             m_state.lives = m_state.maxLives();
-            m_mining.clearAll();
-            m_mining.syncTurrets(m_state);
             m_plinko.resetGoldenPegRarityState();
-            rebuildPlinko();
+            syncMiningSystemsFromState(true);
             resetZoneKeyState();
             m_runMode              = RunMode::BASE;
             m_mainMenuPickDifficulty = false;
             m_state.save(currentSavePath());
+            invalidateSaveSlotPreviewCache();
             m_diskSessionActive    = true;
             m_showMainMenu         = false;
             pushNotif("Nieuw spel - slot " +
@@ -1661,7 +1715,7 @@ void Game::handleMainMenuClick(sf::Vector2f pos) {
             { L.slotX0, L.firstBtnTop + 3.f * (L.btnH + L.gap) },
             { L.btnW, L.btnH });
         if (rBack.contains(pos)) {
-            gSfx.play(Sfx::UiClick);
+            m_audio->play(Sfx::UiClick);
             m_mainMenuPickDifficulty = false;
         }
         return;
@@ -1675,8 +1729,8 @@ void Game::handleMainMenuClick(sf::Vector2f pos) {
         if (r.contains(pos)) {
             if (i == 0) {                          // Doorgaan
                 if (m_state.load(currentSavePath())) {
-                    gSfx.stopGameOverMusic();
-                    gSfx.play(Sfx::UiClick);
+                    m_audio->stopGameOverMusic();
+                    m_audio->play(Sfx::UiClick);
                     pushNotif("Save geladen (slot " +
                                     std::to_string(m_saveSlot + 1) + ")!",
                                 sf::Color(100, 220, 120));
@@ -1686,19 +1740,22 @@ void Game::handleMainMenuClick(sf::Vector2f pos) {
                     m_runMode             = RunMode::BASE;
                     m_diskSessionActive   = true;
                     m_showMainMenu        = false;
-                    m_unlockSystem.update(m_state, m_notifications, *this,
-                                          m_shop, m_mining);
+                    invalidateSaveSlotPreviewCache();
+                    syncMiningSystemsFromState(false);
+                    GameUnlockEffects unlockFx(*this, m_shop, m_mining);
+                    m_unlockSystem.update(m_state, m_notifications, unlockFx);
                     clampActiveTabToVisibility();
                 } else {
                     pushNotif("Geen save in dit slot.",
                               sf::Color(255, 100, 80));
                 }
             } else if (i == 1) {                   // Nieuw Spel
-                gSfx.play(Sfx::UiClick);
+                m_audio->play(Sfx::UiClick);
                 m_mainMenuPickDifficulty = true;
             } else if (i == 2) {                   // Afsluiten
                 if (m_diskSessionActive)
                     m_state.save(currentSavePath());
+                invalidateSaveSlotPreviewCache();
                 m_window.close();
             }
             return;
@@ -1712,9 +1769,10 @@ void Game::handlePlinkoClick(sf::Vector2f pos) {
 
     const double c = m_state.plinkoBallOreCost();
     if (m_state.ore >= c && m_plinko.ballsAlive() < m_state.maxPlinkoBalls()) {
-        m_state.ore -= c;
-        if (m_state.ore < 0.0) m_state.ore = 0.0;
-        m_plinko.dropBall(c);
+        OreTier paidTier = OreTier::IRON;
+        if (m_state.spendOreForPlinko(c, paidTier))
+            m_plinko.dropBall(oreTierBaseValue(paidTier),
+                              oreTierColor(paidTier));
     } else if (m_state.ore < c) {
         pushNotif("Geen ore!", sf::Color(255, 100, 80));
     }
@@ -1865,15 +1923,13 @@ void Game::handlePrestigeClick(sf::Vector2f pos) {
     float pbY = m_cntY + m_cntH - pbH - 14.f;
 
     if (sf::FloatRect({ pbX, pbY }, { pbW, pbH }).contains(pos)) {
-        gSfx.play(Sfx::UiClick);
+        m_audio->play(Sfx::UiClick);
         if (!m_prestigeConfirm) {
             m_prestigeConfirm = true;
         } else {
             double gained = m_state.crystalsOnPrestige();
             m_state.doPrestige();
-            m_mining.clearAll();
-            m_mining.syncTurrets(m_state);
-            rebuildPlinko();
+            syncMiningSystemsFromState(true);
             m_prestigeConfirm = false;
 
             std::ostringstream ns;
@@ -1902,7 +1958,7 @@ void Game::handlePrestigeClick(sf::Vector2f pos) {
 
         if (cardRect.contains(pos) && m_state.canBuy(pid)) {
             m_state.buy(pid);
-            gSfx.play(Sfx::UiClick);
+            m_audio->play(Sfx::UiClick);
             pushNotif("Permanente upgrade gekocht!", sf::Color(200, 150, 255));
             return;
         }
@@ -2294,19 +2350,29 @@ void Game::drawSidePanelAuxButtons() const {
 }
 
 void Game::retreatRunToBase() {
-    double orePick = 0.0;
-    m_mining.collectAllOre(orePick, m_state);
-    if (orePick > 0.0) {
-        m_state.ore          += orePick;
-        m_state.totalOre     += orePick;
-        m_state.oreThisLevel += orePick;
-    }
-    m_mining.clearAll();
-    m_mining.syncTurrets(m_state);
-    m_runMode = RunMode::BASE;
-    resetZoneKeyState();
+    collectRunOreToState();
+    syncMiningSystemsFromState(false);
+    moveRunToBaseState();
     pushNotif("Basis - run gestopt, loot verzameld.",
               sf::Color(160, 220, 255));
+}
+
+void Game::syncMiningSystemsFromState(bool rebuildPlinkoBoard) {
+    if (!m_runFlow)
+        return;
+    m_runFlow->syncFromState(rebuildPlinkoBoard);
+}
+
+void Game::collectRunOreToState() {
+    if (!m_runFlow)
+        return;
+    m_runFlow->collectRunOreToState();
+}
+
+void Game::moveRunToBaseState() {
+    if (!m_runFlow)
+        return;
+    m_runFlow->moveToBase();
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -2331,15 +2397,9 @@ void Game::drawText(const std::string& str,
 //  formatBig / pct  — helpers
 // ═════════════════════════════════════════════════════════════
 std::string Game::formatBig(double v) const {
-    if (v >= 1e12) { std::ostringstream s; s << std::fixed << std::setprecision(2) << v/1e12 << "T"; return s.str(); }
-    if (v >= 1e9 ) { std::ostringstream s; s << std::fixed << std::setprecision(2) << v/1e9  << "B"; return s.str(); }
-    if (v >= 1e6 ) { std::ostringstream s; s << std::fixed << std::setprecision(2) << v/1e6  << "M"; return s.str(); }
-    if (v >= 1e3 ) { std::ostringstream s; s << std::fixed << std::setprecision(1) << v/1e3  << "K"; return s.str(); }
-    std::ostringstream s; s << static_cast<long long>(v); return s.str();
+    return ::formatBig(v);
 }
 
 std::string Game::pct(float v) const {
-    std::ostringstream s;
-    s << std::fixed << std::setprecision(1) << v * 100.f << "%";
-    return s.str();
+    return ::pct(v);
 }

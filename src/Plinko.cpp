@@ -84,7 +84,13 @@ OreRarity rollPegRarityTier() {
 //  Constructor
 // ═════════════════════════════════════════════════════════════
 PlinkoBoard::PlinkoBoard() {
+    m_audio = &gSfx;
     for (auto& b : m_balls) b.alive = false;
+}
+
+void PlinkoBoard::setAudioBus(IAudioBus* audioBus) {
+    if (audioBus)
+        m_audio = audioBus;
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -148,6 +154,7 @@ void PlinkoBoard::buildPegs() {
             Peg peg;
             peg.pos      = { m_boardX + offset + colStep * (col + 1), y };
             peg.hitFlash = 0.f;
+            peg.isWall   = false;
             peg.cellRow  = row;
             peg.cellCol  = col;
             const auto key = std::make_pair(row, col);
@@ -158,6 +165,53 @@ void PlinkoBoard::buildPegs() {
             peg.duplicator =
                 peg.cellRow >= 0
                 && m_duplicatorCells.count({ peg.cellRow, peg.cellCol }) > 0;
+            m_pegs.push_back(peg);
+        }
+    }
+
+    // ── Diagonale zijwand-bumpers (links/rechts) ───────────
+    constexpr int kWallGroups = 4;
+    constexpr int kPegsPerWallGroup = 4;
+    const float groupT[kWallGroups] = { 0.20f, 0.40f, 0.60f, 0.80f };
+    const float diagStep = std::max(4.f, colStep * 0.5f);
+    const float leftEdgeX =
+        m_boardX + m_pegHitRadius + std::round(2.f * m_scale);
+    const float rightEdgeX =
+        m_boardX + m_boardW - (m_pegHitRadius + std::round(2.f * m_scale));
+    const float yTop = m_boardY + rowStep;
+    const float yBottom = m_boardY + usableH - rowStep;
+
+    for (int gi = 0; gi < kWallGroups; ++gi) {
+        const float baseY = std::clamp(
+            m_boardY + usableH * groupT[gi], yTop, yBottom);
+
+        // Links: links-boven -> rechts-onder
+        for (int pi = 0; pi < kPegsPerWallGroup; ++pi) {
+            Peg peg;
+            peg.hitFlash = 0.f;
+            peg.isWall   = true;
+            peg.cellRow  = -1;
+            peg.cellCol  = -1;
+            peg.pos = {
+                leftEdgeX + diagStep * static_cast<float>(pi),
+                std::clamp(baseY + diagStep * static_cast<float>(pi),
+                           yTop, yBottom),
+            };
+            m_pegs.push_back(peg);
+        }
+
+        // Rechts: rechts-boven -> links-onder (gespiegeld)
+        for (int pi = 0; pi < kPegsPerWallGroup; ++pi) {
+            Peg peg;
+            peg.hitFlash = 0.f;
+            peg.isWall   = true;
+            peg.cellRow  = -1;
+            peg.cellCol  = -1;
+            peg.pos = {
+                rightEdgeX - diagStep * static_cast<float>(pi),
+                std::clamp(baseY + diagStep * static_cast<float>(pi),
+                           yTop, yBottom),
+            };
             m_pegs.push_back(peg);
         }
     }
@@ -223,7 +277,7 @@ int PlinkoBoard::ballsAlive() const {
 // ═════════════════════════════════════════════════════════════
 //  dropBall
 // ═════════════════════════════════════════════════════════════
-bool PlinkoBoard::dropBall(double oreValue, float dropX) {
+bool PlinkoBoard::dropBall(double oreValue, sf::Color ballColor, float dropX) {
     PlinkoBall* b = claimBall();
     if (!b) return false;
 
@@ -236,25 +290,28 @@ bool PlinkoBoard::dropBall(double oreValue, float dropX) {
     b->vel      = { randFloat(-30.f, 30.f),
                     randFloat(DROP_SPEED_MIN, DROP_SPEED_MAX) };
     b->oreValue   = oreValue;
+    b->ballColor  = ballColor;
     b->alive      = true;
     b->scored     = false;
     b->forkDepth  = 0;
-    gSfx.play(Sfx::PlinkoDrop);
+    m_audio->play(Sfx::PlinkoDrop);
     return true;
 }
 
 // ═════════════════════════════════════════════════════════════
 //  updateAuto
 // ═════════════════════════════════════════════════════════════
-void PlinkoBoard::updateAuto(float dt, double& oreStock, float autoInterval,
-                             double orePerBall, int ballsPerTick, int maxBalls) {
+void PlinkoBoard::updateAuto(float dt, GameState& state, float autoInterval,
+                             int ballsPerTick, int maxBalls) {
     m_autoTimer -= dt;
-    if (m_autoTimer > 0.f || oreStock < orePerBall) return;
+    const double orePerBall = state.plinkoBallOreCost();
+    if (m_autoTimer > 0.f || state.ore < orePerBall)
+        return;
 
     const int want = std::max(1, ballsPerTick);
     const int room = std::max(0, maxBalls - ballsAlive());
-    const int canAfford =
-        static_cast<int>(std::floor(oreStock / orePerBall + 1e-9));
+    const int canAfford = static_cast<int>(
+        std::floor(state.ore / orePerBall + 1e-9));
     const int n      = std::min({ want, room, canAfford });
     if (n <= 0)
         return;
@@ -262,13 +319,13 @@ void PlinkoBoard::updateAuto(float dt, double& oreStock, float autoInterval,
     m_autoTimer = autoInterval;
 
     for (int i = 0; i < n; i++) {
-        if (oreStock < orePerBall)
+        if (state.ore < orePerBall)
             break;
-        if (!dropBall(orePerBall))
+        OreTier paidTier = OreTier::IRON;
+        if (!state.spendOreForPlinko(orePerBall, paidTier))
             break;
-        oreStock -= orePerBall;
-        if (oreStock < 0.0)
-            oreStock = 0.0;
+        if (!dropBall(oreTierBaseValue(paidTier), oreTierColor(paidTier)))
+            break;
     }
 }
 
@@ -281,6 +338,7 @@ void PlinkoBoard::resolvePegCollision(PlinkoBall& ball,
     constexpr int kMaxFork = 4;
     struct DupSpawn {
         double       ore{};
+        sf::Color    color{};
         sf::Vector2f pos{};
         sf::Vector2f vel{};
         int          fork = 0;
@@ -307,6 +365,7 @@ void PlinkoBoard::resolvePegCollision(PlinkoBall& ball,
             if (peg.duplicator && ball.forkDepth < kMaxFork) {
                 DupSpawn s;
                 s.ore  = ball.oreValue;
+                s.color = ball.ballColor;
                 s.fork = ball.forkDepth + 1;
                 s.pos  = ball.pos
                       + sf::Vector2f(randFloat(-5.f, 5.f), randFloat(-4.f, 4.f));
@@ -337,6 +396,7 @@ void PlinkoBoard::resolvePegCollision(PlinkoBall& ball,
         c->pos      = s.pos;
         c->vel      = s.vel;
         c->oreValue = s.ore;
+        c->ballColor = s.color;
         c->radius   = PLINKO_BALL_RADIUS;
         c->alive    = true;
         c->scored   = false;
@@ -416,7 +476,7 @@ void PlinkoBoard::update(float dt, double& creditsOut,
 
                 creditsOut      += earned;
                 slot.flashTimer  = 0.6f;
-                gSfx.play(Sfx::PlinkoScore);
+                m_audio->play(Sfx::PlinkoScore);
 
                 const float slotCx = slot.pos.x + slot.width * 0.5f;
                 const float slotCy = slot.pos.y + SLOT_HEIGHT * 0.5f;
@@ -490,7 +550,9 @@ void PlinkoBoard::draw(sf::RenderTarget& target,
     for (const auto& peg : m_pegs) {
         const int pr = std::clamp(static_cast<int>(peg.pegRarity), 0,
             static_cast<int>(OreRarity::RARITY_COUNT) - 1);
-        sf::Color base = pegc::kFill[pr];
+        sf::Color base = peg.isWall
+            ? sf::Color(90, 215, 235)
+            : pegc::kFill[pr];
         const float ft =
             peg.hitFlash > 0.f ? std::min(1.f, peg.hitFlash / 0.12f) : 0.f;
         auto brighten = [](uint8_t v, float t) {
@@ -505,9 +567,11 @@ void PlinkoBoard::draw(sf::RenderTarget& target,
             sf::Color(static_cast<uint8_t>(std::min(255, base.r + 40)),
                       static_cast<uint8_t>(std::min(255, base.g + 40)),
                       static_cast<uint8_t>(std::min(255, base.b + 50)),
-                      90),
+                      peg.isWall ? 155 : 90),
             st));
-        pegShape.setOutlineThickness(1.f);
+        pegShape.setOutlineThickness(peg.isWall
+            ? std::max(1.4f, 1.8f * m_scale)
+            : 1.f);
         target.draw(pegShape);
 
         if (peg.duplicator) {
@@ -609,18 +673,23 @@ void PlinkoBoard::draw(sf::RenderTarget& target,
 
         // Glow
         float glowR = ball.radius + 5.f;
+        const sf::Color bc = ball.ballColor;
         ballShape.setRadius(glowR);
         ballShape.setOrigin({ glowR, glowR });
         ballShape.setPosition(ball.pos);
-        ballShape.setFillColor(sf::Color(180, 120, 255, 50));
+        ballShape.setFillColor(sf::Color(bc.r, bc.g, bc.b, 55));
         target.draw(ballShape);
 
         // Core
         ballShape.setRadius(ball.radius);
         ballShape.setOrigin({ ball.radius, ball.radius });
         ballShape.setPosition(ball.pos);
-        ballShape.setFillColor(sf::Color(200, 150, 255));
-        ballShape.setOutlineColor(sf::Color(255, 220, 255, 160));
+        ballShape.setFillColor(bc);
+        auto lift = [](uint8_t v) -> uint8_t {
+            return static_cast<uint8_t>(std::min(255, static_cast<int>(v) + 55));
+        };
+        ballShape.setOutlineColor(
+            sf::Color(lift(bc.r), lift(bc.g), lift(bc.b), 180));
         ballShape.setOutlineThickness(1.5f);
         target.draw(ballShape);
 

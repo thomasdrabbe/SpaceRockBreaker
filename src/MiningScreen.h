@@ -21,6 +21,8 @@ struct Star {
     uint8_t      brightness;
 };
 
+class IAudioBus;
+
 // ─────────────────────────────────────────────────────────────
 //  MiningScreen
 // ─────────────────────────────────────────────────────────────
@@ -43,6 +45,7 @@ public:
                 GameState& state,
                 double&    creditsEarned,
                 double&    oreEarned,
+                std::array<double, ORE_TIER_COUNT>& oreByTierEarned,
                 float        warpChargeStars);
 
     void draw(sf::RenderTarget& target,
@@ -60,7 +63,9 @@ public:
 
     void syncTurrets(const GameState& state);
 
-    void collectAllOre(double& oreOut, GameState& state);
+    void collectAllOre(double& oreOut,
+                       std::array<double, ORE_TIER_COUNT>& oreByTierOut,
+                       GameState& state);
     void clearAll();
     void prepareNewRun();
 
@@ -75,6 +80,7 @@ public:
     /// Alleen meteoren bewegen (Game roept dit aan bij gepauzeerde mining-tab).
     void advanceMeteorsOnly(float dt);
     void tickMeteorSpawnQueue();
+    void setAudioBus(IAudioBus* audioBus);
 
     // ── Sub-system toegang ────────────────────────────────
     OreManager&     ores()      { return m_ores;      }
@@ -110,6 +116,7 @@ private:
     int m_lastTurretCnt = 0;
     int m_pendingKeyDrop = 0;
     bool m_pendingBossReturnToBase = false;
+    IAudioBus* m_audio = nullptr;
 
     float                  m_meteorTimeToNext = -1.f;
 

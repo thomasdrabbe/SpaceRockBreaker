@@ -10,7 +10,13 @@
 // ═════════════════════════════════════════════════════════════
 MiningScreen::MiningScreen()
     : m_particles(MAX_PARTICLES) {
+    m_audio = &gSfx;
 }
+void MiningScreen::setAudioBus(IAudioBus* audioBus) {
+    if (audioBus)
+        m_audio = audioBus;
+}
+
 
 
 // ═════════════════════════════════════════════════════════════
@@ -84,6 +90,7 @@ void MiningScreen::update(float      dt,
                             GameState& state,
                             double&    creditsEarned,
                             double&    oreEarned,
+                            std::array<double, ORE_TIER_COUNT>& oreByTierEarned,
                             float      warpChargeStars) {
     //
     m_player.clearHit();
@@ -150,6 +157,7 @@ void MiningScreen::update(float      dt,
                   m_collectorPos,
                   state.autoCollectRadius(),
                   oreThisFrame,
+                  &oreByTierEarned,
                   state.bulkProcess(),
                   m_particles);
     oreEarned += oreThisFrame;
@@ -161,7 +169,7 @@ void MiningScreen::update(float      dt,
                         keysThisFrame,
                         m_particles);
     if (keysThisFrame > 0) {
-        state.keys += keysThisFrame;
+        state.addKeys(keysThisFrame);
         m_pendingKeyDrop += keysThisFrame;
     }
 
@@ -227,9 +235,9 @@ void MiningScreen::resolveCollisions(GameState& state) {
             bool destroyed = asteroid.hit(bullet.damage, m_particles);
             if (destroyed) {
                 if (asteroid.isBoss)
-                    gSfx.play(Sfx::BossExplode);
+                    m_audio->play(Sfx::BossExplode);
                 else
-                    gSfx.play(Sfx::Explosion);
+                    m_audio->play(Sfx::Explosion);
                 if (asteroid.isKeyAsteroid) {
                     int nk = randInt(1, 3);
                     m_keyPickups.drop(asteroid.pos, nk, m_particles);
@@ -238,6 +246,7 @@ void MiningScreen::resolveCollisions(GameState& state) {
                         asteroid.oreDrop.color,
                         asteroid.oreDrop.value,
                         asteroid.oreDrop.count,
+                        asteroid.oreTier,
                         state.oreLuckBonus(),
                         m_particles);
                 } else if (asteroid.isBoss) {
@@ -248,6 +257,7 @@ void MiningScreen::resolveCollisions(GameState& state) {
                         asteroid.oreDrop.color,
                         asteroid.oreDrop.value,
                         count,
+                        asteroid.oreTier,
                         state.oreLuckBonus(),
                         m_particles);
                     if (static_cast<int>(state.maxOreTier())
@@ -257,6 +267,7 @@ void MiningScreen::resolveCollisions(GameState& state) {
                             sf::Color(255, 215, 50),
                             20.0,
                             26,
+                            OreTier::GOLD,
                             state.oreLuckBonus(),
                             m_particles);
                     }
@@ -267,6 +278,7 @@ void MiningScreen::resolveCollisions(GameState& state) {
                             sf::Color(210, 215, 225),
                             8.0,
                             20,
+                            OreTier::SILVER,
                             state.oreLuckBonus(),
                             m_particles);
                     }
@@ -280,6 +292,7 @@ void MiningScreen::resolveCollisions(GameState& state) {
                         asteroid.oreDrop.color,
                         asteroid.oreDrop.value,
                         count,
+                        asteroid.oreTier,
                         state.oreLuckBonus(),
                         m_particles);
                 }
@@ -292,11 +305,13 @@ void MiningScreen::resolveCollisions(GameState& state) {
 // ═════════════════════════════════════════════════════════════
 //  collectAllOre
 // ═════════════════════════════════════════════════════════════
-void MiningScreen::collectAllOre(double& oreOut, GameState& state) {
-    m_ores.collectAll(oreOut, state.bulkProcess());
+void MiningScreen::collectAllOre(double& oreOut,
+                                 std::array<double, ORE_TIER_COUNT>& oreByTierOut,
+                                 GameState& state) {
+    m_ores.collectAll(oreOut, &oreByTierOut, state.bulkProcess());
     int k = 0;
     m_keyPickups.collectAll(k);
-    state.keys += k;
+    state.addKeys(k);
     m_pendingKeyDrop += k;
 }
 

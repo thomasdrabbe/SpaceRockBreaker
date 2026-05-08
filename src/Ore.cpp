@@ -22,6 +22,7 @@ void OreManager::drop(sf::Vector2f    pos,
                        sf::Color       color,
                        double          value,
                        int             count,
+                       OreTier         tier,
                        float           oreLuckBonus,
                        ParticleSystem& particles) {
     int finalCount = count;
@@ -46,6 +47,7 @@ void OreManager::drop(sf::Vector2f    pos,
         o->alive      = true;
         o->collecting = false;
         o->value      = value;
+        o->tier       = tier;
 
         particles.emitOreCollect(
             o->pos,
@@ -61,6 +63,7 @@ void OreManager::update(float           dt,
                           sf::Vector2f    collectorPos,
                           float           collectRadius,
                           double&         oreOut,
+                          std::array<double, ORE_TIER_COUNT>* oreByTierOut,
                           int             bulkMultiplier,
                           ParticleSystem& particles) {
     m_alive = 0;
@@ -91,7 +94,11 @@ void OreManager::update(float           dt,
             o.pos += dir * COLLECT_PULL_SPEED * dt;
 
             if (distance(o.pos, collectorPos) < 8.f) {
-                oreOut += o.value * static_cast<double>(bulkMultiplier);
+                const double gain = o.value * static_cast<double>(bulkMultiplier);
+                oreOut += gain;
+                if (oreByTierOut) {
+                    (*oreByTierOut)[static_cast<std::size_t>(o.tier)] += gain;
+                }
                 gSfx.play(Sfx::OreCollect);
 
                 particles.emitSpark(
@@ -164,10 +171,16 @@ void OreManager::draw(sf::RenderTarget& target) const {
 // ═════════════════════════════════════════════════════════════
 //  collectAll
 // ═════════════════════════════════════════════════════════════
-void OreManager::collectAll(double& oreOut, int bulkMultiplier) {
+void OreManager::collectAll(double& oreOut,
+                            std::array<double, ORE_TIER_COUNT>* oreByTierOut,
+                            int bulkMultiplier) {
     for (auto& o : m_pool) {
         if (!o.alive) continue;
-        oreOut += o.value * static_cast<double>(bulkMultiplier);
+        const double gain = o.value * static_cast<double>(bulkMultiplier);
+        oreOut += gain;
+        if (oreByTierOut) {
+            (*oreByTierOut)[static_cast<std::size_t>(o.tier)] += gain;
+        }
         o.alive = false;
     }
     m_alive = 0;

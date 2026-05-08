@@ -329,14 +329,12 @@ void Shop::draw(sf::RenderTarget& target, const GameState& state,
 // ─────────────────────────────────────────────────────────────
 void Shop::drawBackground(sf::RenderTarget& target,
                           bool               seeThroughMiningBackdrop) const {
-    sf::RectangleShape bg(sf::Vector2f{ m_w, m_h });
-    bg.setPosition({ m_x, m_y });
-    bg.setFillColor(
-        hubBackdropTint(sf::Color(12, 14, 28, 245), seeThroughMiningBackdrop));
-    bg.setOutlineColor(hubBackdropTint(sf::Color(50, 60, 100, 180),
-                                      seeThroughMiningBackdrop));
-    bg.setOutlineThickness(1.f);
-    target.draw(bg);
+    drawPanelRect(
+        target,
+        sf::FloatRect({ m_x, m_y }, { m_w, m_h }),
+        hubBackdropTint(sf::Color(12, 14, 28, 245), seeThroughMiningBackdrop),
+        hubBackdropTint(sf::Color(50, 60, 100, 180), seeThroughMiningBackdrop),
+        1.f);
 }
 
 // ─────────────────────────────────────────────────────────────

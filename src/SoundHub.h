@@ -26,26 +26,41 @@ enum class Sfx : int {
     COUNT
 };
 
-class SoundHub {
+class IAudioBus {
+public:
+    virtual ~IAudioBus() = default;
+    virtual void setMuted(bool muted) = 0;
+    [[nodiscard]] virtual bool isMuted() const = 0;
+    virtual void play(Sfx id, float warpPitch = 1.f) = 0;
+    virtual void stopWarpSound() = 0;
+    virtual void syncBossMusic(bool bossAlive) = 0;
+    virtual bool playGameOverMusicOnce() = 0;
+    virtual void stopGameOverMusic() = 0;
+    virtual void syncMainMenuMusic(bool showMainMenu) = 0;
+    virtual void syncMiningAmbientMusic(bool miningTabActive,
+                                        bool bossAlive) = 0;
+};
+
+class SoundHub : public IAudioBus {
 public:
     void init();
-    void setMuted(bool m);
-    bool isMuted() const { return m_muted; }
-    void play(Sfx id, float warpPitch = 1.f);
+    void setMuted(bool m) override;
+    bool isMuted() const override { return m_muted; }
+    void play(Sfx id, float warpPitch = 1.f) override;
     /// Stop het lange warp-charge geluid (bij loslaten Space vóór warp).
-    void stopWarpSound();
+    void stopWarpSound() override;
 
     /// Loopt zolang `bossAlive` true (zone-boss op het veld).
-    void syncBossMusic(bool bossAlive);
+    void syncBossMusic(bool bossAlive) override;
     /// Eén keer bij game over; stopt boss-muziek. Retourneert false als geen file.
-    bool playGameOverMusicOnce();
-    void stopGameOverMusic();
+    bool playGameOverMusicOnce() override;
+    void stopGameOverMusic() override;
 
     /// Hoofdmenu: `traploop` op repeat.
-    void syncMainMenuMusic(bool showMainMenu);
+    void syncMainMenuMusic(bool showMainMenu) override;
 
     /// Mining-tab: Lightyear City-tracks (achtergrond, laag). Pauzeert tijdens boss.
-    void syncMiningAmbientMusic(bool miningTabActive, bool bossAlive);
+    void syncMiningAmbientMusic(bool miningTabActive, bool bossAlive) override;
 
 private:
     static constexpr int kPool = 12;

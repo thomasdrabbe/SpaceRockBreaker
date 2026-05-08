@@ -26,6 +26,7 @@ struct Peg {
     float        hitFlash = 0.f;
     OreRarity    pegRarity = OreRarity::COMMON;
     bool         duplicator = false;
+    bool         isWall = false;
     int          cellRow   = -1;
     int          cellCol   = -1;
 };
@@ -51,9 +52,12 @@ struct PlinkoBall {
     bool         alive    = false;
     bool         scored   = false;
     double       oreValue = 0.0;
+    sf::Color    ballColor = sf::Color(160, 100, 255);
     /// Beperkt ketting-duplicaties (duplicator pegs).
     int          forkDepth = 0;
 };
+
+class IAudioBus;
 
 // ─────────────────────────────────────────────────────────────
 //  PlinkoBoard
@@ -72,10 +76,13 @@ public:
            float pegBounceMult,
            float chestSlotMult);
 
-    bool dropBall(double oreValue, float dropX = -1.f);
+    bool dropBall(double oreValue,
+                  sf::Color ballColor = sf::Color(160, 100, 255),
+                  float dropX = -1.f);
+    void setAudioBus(IAudioBus* audioBus);
 
-    void updateAuto(float dt, double& oreStock, float autoInterval,
-                    double orePerBall, int ballsPerTick, int maxBalls);
+    void updateAuto(float dt, GameState& state, float autoInterval,
+                    int ballsPerTick, int maxBalls);
 
     void update(float dt, double& creditsOut,
                 float creditMult, int bulkMult,
@@ -116,6 +123,7 @@ private:
     std::array<PlinkoBall, MAX_PLINKO_BALLS> m_balls;
 
     float m_autoTimer = 0.f;
+    IAudioBus* m_audio = nullptr;
 
     std::map<std::pair<int, int>, OreRarity> m_pegRarityByCell;
     std::set<std::pair<int, int>>            m_duplicatorCells;

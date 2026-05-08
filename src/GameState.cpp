@@ -176,6 +176,149 @@ int GameState::meteorShowerMeteorCount() const {
     return 10;
 }
 
+void GameState::addCredits(double amount) {
+    if (amount <= 0.0)
+        return;
+    credits += amount;
+    totalCredits += amount;
+}
+
+bool GameState::spendCredits(double amount) {
+    if (amount <= 0.0)
+        return true;
+    if (credits + 1e-9 < amount)
+        return false;
+    credits -= amount;
+    if (credits < 0.0)
+        credits = 0.0;
+    return true;
+}
+
+void GameState::addOre(double amount, bool countForWarp) {
+    if (amount <= 0.0)
+        return;
+    ore += amount;
+    totalOre += amount;
+    orePerTier[static_cast<int>(OreTier::IRON)] += amount;
+    if (countForWarp)
+        oreThisLevel += amount;
+}
+
+void GameState::addOreTiered(
+    const std::array<double, ORE_TIER_COUNT>& oreByTier,
+    bool countForWarp) {
+    double sum = 0.0;
+    for (int i = 0; i < ORE_TIER_COUNT; ++i) {
+        const double add = std::max(0.0, oreByTier[static_cast<std::size_t>(i)]);
+        orePerTier[static_cast<std::size_t>(i)] += add;
+        sum += add;
+    }
+    if (sum <= 0.0)
+        return;
+    ore += sum;
+    totalOre += sum;
+    if (countForWarp)
+        oreThisLevel += sum;
+}
+
+bool GameState::spendOre(double amount) {
+    if (amount <= 0.0)
+        return true;
+    if (ore + 1e-9 < amount)
+        return false;
+    double remain = amount;
+    for (int i = ORE_TIER_COUNT - 1; i >= 0 && remain > 1e-9; --i) {
+        auto& bucket = orePerTier[static_cast<std::size_t>(i)];
+        if (bucket <= 0.0)
+            continue;
+        const double take = std::min(bucket, remain);
+        bucket -= take;
+        remain -= take;
+    }
+    if (remain > 1e-9) {
+        auto& iron = orePerTier[static_cast<int>(OreTier::IRON)];
+        iron = std::max(0.0, iron - remain);
+    }
+    ore -= amount;
+    if (ore < 0.0)
+        ore = 0.0;
+    return true;
+}
+
+void GameState::addCrystals(double amount) {
+    if (amount <= 0.0)
+        return;
+    crystals += amount;
+}
+
+void GameState::addKeys(int amount) {
+    if (amount <= 0)
+        return;
+    keys += amount;
+}
+
+bool GameState::consumeKeys(int amount) {
+    if (amount <= 0)
+        return true;
+    if (keys < amount)
+        return false;
+    keys -= amount;
+    return true;
+}
+
+OreTier GameState::dominantOreTier() const {
+    int bestIdx = 0;
+    double best = -1.0;
+    for (int i = 0; i < ORE_TIER_COUNT; ++i) {
+        const double amt = orePerTier[static_cast<std::size_t>(i)];
+        if (amt > best + 1e-9) {
+            best = amt;
+            bestIdx = i;
+        }
+    }
+    return static_cast<OreTier>(bestIdx);
+}
+
+sf::Color GameState::dominantOreColor() const {
+    return oreTierColor(dominantOreTier());
+}
+
+bool GameState::deductOneOre(OreTier& outTier) {
+    return spendOreForPlinko(1.0, outTier);
+}
+
+bool GameState::spendOreForPlinko(double amount, OreTier& outTier) {
+    if (amount <= 0.0)
+        return true;
+    if (ore + 1e-9 < amount)
+        return false;
+
+    double remain = amount;
+    bool firstTierAssigned = false;
+    for (int i = ORE_TIER_COUNT - 1; i >= 0 && remain > 1e-9; --i) {
+        auto& bucket = orePerTier[static_cast<std::size_t>(i)];
+        if (bucket <= 1e-9)
+            continue;
+        if (!firstTierAssigned) {
+            outTier = static_cast<OreTier>(i);
+            firstTierAssigned = true;
+        }
+        const double take = std::min(bucket, remain);
+        bucket -= take;
+        remain -= take;
+    }
+    if (remain > 1e-9) {
+        auto& iron = orePerTier[static_cast<int>(OreTier::IRON)];
+        iron = std::max(0.0, iron - remain);
+    }
+    if (!firstTierAssigned)
+        outTier = OreTier::IRON;
+    ore -= amount;
+    if (ore < 0.0)
+        ore = 0.0;
+    return true;
+}
+
 // Elke chest kost precies 1 key (geen tier-prijs).
 bool GameState::openOneChest(ChestUpgradeID* outChosen) {
     if (keys < 1)
@@ -194,7 +337,7 @@ bool GameState::openOneChest(ChestUpgradeID* outChosen) {
     if (n <= 0)
         return false;
     ChestUpgradeID pick = opts[randInt(0, n - 1)];
-    --keys;
+    consumeKeys(1);
     chestLevels[static_cast<int>(pick)]++;
     if (outChosen)
         *outChosen = pick;
@@ -411,19 +554,19 @@ void GameState::registerBossDefeated() {
     double bonus = 6.0 + static_cast<double>(z) * 2.0
                  + std::floor(std::sqrt(static_cast<double>(z * z)));
     const double gain = std::max(8.0, bonus);
-    crystals         += gain;
+    addCrystals(gain);
     bossCrystalPopup  = gain;
     nextBossMilestone = nextBossZoneAfter(z);
 }
 
 void GameState::buy(UpgradeID id) {
     if (!canBuy(id)) return;
-    credits -= costOf(id);
+    spendCredits(costOf(id));
     upgradeLevels[static_cast<int>(id)]++;
 }
 void GameState::buy(PrestigeUpgradeID id) {
     if (!canBuy(id)) return;
-    crystals -= costOf(id);
+    crystals = std::max(0.0, crystals - costOf(id));
     prestigeLevels[static_cast<int>(id)]++;
 }
 
@@ -445,7 +588,7 @@ void GameState::doPrestige() {
     const auto         savedUnlock = unlockPhaseDone;
     const bool         savedKeyAst = keyAsteroidsEnabled;
 
-    crystals += crystalsOnPrestige();
+    addCrystals(crystalsOnPrestige());
     prestigeCount++;
 
     auto savedPrestige = prestigeLevels;
@@ -480,6 +623,7 @@ void GameState::reset() {
     ore          = 0.0;
     totalCredits = 0.0;
     totalOre     = 0.0;
+    orePerTier.fill(0.0);
     currentLevel = 1;          // ← nieuw
     upgradeLevels.fill(0);
     oreThisLevel = 0.0;
@@ -533,6 +677,8 @@ bool GameState::save(const std::string& path) const {
     f.write(reinterpret_cast<const char*>(&oreThisLevel), sizeof(oreThisLevel));
     f.write(reinterpret_cast<const char*>(&lives), sizeof(lives));
     f.write(reinterpret_cast<const char*>(&keys), sizeof(keys));
+    f.write(reinterpret_cast<const char*>(orePerTier.data()),
+            orePerTier.size() * sizeof(double));
     f.write(reinterpret_cast<const char*>(upgradeLevels.data()),
             upgradeLevels.size() * sizeof(int));
     f.write(reinterpret_cast<const char*>(prestigeLevels.data()),
@@ -607,6 +753,13 @@ bool GameState::load(const std::string& path) {
     keys = 0;
     if (ver >= 6)
         f.read(reinterpret_cast<char*>(&keys), sizeof(keys));
+    orePerTier.fill(0.0);
+    if (ver >= 15) {
+        f.read(reinterpret_cast<char*>(orePerTier.data()),
+               orePerTier.size() * sizeof(double));
+    } else {
+        orePerTier[static_cast<int>(OreTier::IRON)] = std::max(0.0, ore);
+    }
     if (ver < 13) {
         constexpr int legacySlots =
             static_cast<int>(UpgradeID::UPGRADE_COUNT) - 1;
@@ -680,6 +833,7 @@ void GameState::loseLife() {
 void GameState::gameOver() {
     credits      = 0.0;
     ore          = 0.0;
+    orePerTier.fill(0.0);
     oreThisLevel = 0.0;
     currentLevel = 1;
     lives        = maxLives();

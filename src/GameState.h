@@ -52,8 +52,22 @@ public:
     double crystals      = 0.0;
     double totalCredits  = 0.0;
     double totalOre      = 0.0;
+    std::array<double, ORE_TIER_COUNT> orePerTier{};
     int    prestigeCount = 0;
     int    keys          = 0;   // sleutels (blijven bij game over; voor chests)
+    void addCredits(double amount);
+    bool spendCredits(double amount);
+    void addOre(double amount, bool countForWarp = true);
+    bool spendOre(double amount);
+    void addOreTiered(const std::array<double, ORE_TIER_COUNT>& oreByTier,
+                      bool countForWarp = true);
+    void addCrystals(double amount);
+    void addKeys(int amount);
+    bool consumeKeys(int amount = 1);
+    OreTier dominantOreTier() const;
+    sf::Color dominantOreColor() const;
+    bool deductOneOre(OreTier& outTier);
+    bool spendOreForPlinko(double amount, OreTier& outTier);
 
     /// Progressieve unlocks (index 1…8 gebruikt; 0 ongebruikt).
     std::array<bool, 9> unlockPhaseDone{};

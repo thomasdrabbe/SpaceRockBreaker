@@ -197,14 +197,12 @@ void ChestScreen::draw(sf::RenderTarget& target,
                        bool               seeThroughMiningBackdrop) const {
     const bool st = seeThroughMiningBackdrop;
 
-    sf::RectangleShape panel(sf::Vector2f{ m_w, m_h });
-    panel.setPosition({ m_x, m_y });
-    panel.setFillColor(
-        hubBackdropTint(sf::Color(10, 12, 22, 245), st));
-    panel.setOutlineColor(
-        hubBackdropTint(sf::Color(90, 70, 40, 160), st));
-    panel.setOutlineThickness(1.f);
-    target.draw(panel);
+    drawPanelRect(
+        target,
+        sf::FloatRect({ m_x, m_y }, { m_w, m_h }),
+        hubBackdropTint(sf::Color(10, 12, 22, 245), st),
+        hubBackdropTint(sf::Color(90, 70, 40, 160), st),
+        1.f);
 
     const float headerH = std::round(52.f * m_scale);
     unsigned    fTitle  = static_cast<unsigned>(std::round(20.f * m_scale));

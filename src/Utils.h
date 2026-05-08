@@ -17,6 +17,7 @@
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/Graphics/View.hpp>
 #include <SFML/Graphics/Color.hpp>
+#include <SFML/Graphics/RectangleShape.hpp>
 
 // ─────────────────────────────────────────────────────────────
 //  Hub UI (Mining zichtbaar onder dim-overlay Medium/Hard)
@@ -135,6 +136,19 @@ inline float angleTo(sf::Vector2f a, sf::Vector2f b) {
 /// Maak een sf::FloatRect aan (SFML 3 gebruikt {pos, size})
 inline sf::FloatRect makeRect(float x, float y, float w, float h) {
     return sf::FloatRect({ x, y }, { w, h });
+}
+
+inline void drawPanelRect(sf::RenderTarget& target,
+                          const sf::FloatRect& rect,
+                          sf::Color fill,
+                          sf::Color outline,
+                          float outlineThickness = 1.f) {
+    sf::RectangleShape panel(rect.size);
+    panel.setPosition(rect.position);
+    panel.setFillColor(fill);
+    panel.setOutlineColor(outline);
+    panel.setOutlineThickness(outlineThickness);
+    target.draw(panel);
 }
 
 /// rect.left  → rect.position.x  (shortcuts voor leesbaarheid)

@@ -19,11 +19,27 @@ void Turret::update(float            dt,
                      ParticleSystem&  particles) {
     if (!active) return;
 
-    // ── Acquire target ────────────────────────────────────
-    Asteroid* target = asteroids.nearest(pos, ACQUIRE_RANGE);
+    // ── Acquire target (throttled) ────────────────────────
+    reacquireTimer -= dt;
+    sf::Vector2f aimPos{};
+    bool hasAim = false;
+    if (reacquireTimer <= 0.f) {
+        reacquireTimer = REACQUIRE_INTERVAL;
+        Asteroid* target = asteroids.nearest(pos, ACQUIRE_RANGE);
+        if (target) {
+            cachedTargetPos = target->pos;
+            hasCachedTarget = true;
+        } else {
+            hasCachedTarget = false;
+        }
+    }
+    if (hasCachedTarget) {
+        aimPos = cachedTargetPos;
+        hasAim = true;
+    }
 
-    if (target) {
-        float desired = toDeg(angleTo(pos, target->pos));
+    if (hasAim) {
+        float desired = toDeg(angleTo(pos, aimPos));
 
         float diff = desired - angle;
         while (diff >  180.f) diff -= 360.f;
@@ -40,7 +56,7 @@ void Turret::update(float            dt,
 
     // ── Fire timer ────────────────────────────────────────
     fireTimer -= dt;
-    if (fireTimer > 0.f || !target) return;
+    if (fireTimer > 0.f || !hasCachedTarget) return;
     fireTimer = fireInterval;
 
     // ── Crit roll ─────────────────────────────────────────
@@ -54,7 +70,7 @@ void Turret::update(float            dt,
         pos.y + std::sin(rad) * BARREL_LEN
     };
 
-    sf::Vector2f dir = normalize(target->pos - tip);
+    sf::Vector2f dir = normalize(cachedTargetPos - tip);
     bullets.fire(tip, dir, finalDmg, isCrit, splitShot, bulletLifetimeSec,
                  particles);
     gSfx.play(Sfx::Shot);

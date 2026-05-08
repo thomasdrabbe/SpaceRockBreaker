@@ -1,9 +1,6 @@
 #include "UnlockSystem.h"
 #include "GameState.h"
 #include "NotificationSystem.h"
-#include "Game.h"
-#include "Shop.h"
-#include "MiningScreen.h"
 #include <algorithm>
 #include <cmath>
 #include <sstream>
@@ -11,56 +8,57 @@
 namespace {
 
 constexpr int kPhaseCount = 9;
+constexpr int toIndex(UnlockPhase p) {
+    return static_cast<int>(p);
+}
 
-void applyPhaseVisibility(int                    phase,
+void applyPhaseVisibility(UnlockPhase            phase,
                           GameState&             state,
-                          Game&                  game,
-                          Shop&                  shop,
-                          MiningScreen& /*mining*/) {
+                          IUnlockEffects&        effects) {
     switch (phase) {
-        case 1:
-            game.setTabVisible(Tab::PLINKO, true);
+        case UnlockPhase::PLINKO_TAB:
+            effects.setTabVisible(Tab::PLINKO, true);
             break;
-        case 2:
-            game.setTabVisible(Tab::SHOP, true);
-            shop.setCategoryVisible(ShopCategory::MINING, true);
+        case UnlockPhase::SHOP_TAB:
+            effects.setTabVisible(Tab::SHOP, true);
+            effects.setShopCategoryVisible(ShopCategory::MINING, true);
             // Alleen verbergen zolang latere fases die categorieën nog niet
             // vrijgegeven hebben. Anders: elke frame opnieuw `setVisible(...,
             // false)` → `ensureActiveCategoryVisible()` springt de actieve shop-tab
             // terug naar de eerste zichtbare (Weapons), ook al zijn Plinko/Economy
             // daarna weer true door fase 5/7.
-            if (!state.unlockPhaseDone[5])
-                shop.setCategoryVisible(ShopCategory::PLINKO, false);
-            if (!state.unlockPhaseDone[7]) {
-                shop.setCategoryVisible(ShopCategory::ECONOMY, false);
-                shop.setCategoryVisible(ShopCategory::ORE_TIERS, false);
+            if (!state.unlockPhaseDone[toIndex(UnlockPhase::AUTO_PLINKO)])
+                effects.setShopCategoryVisible(ShopCategory::PLINKO, false);
+            if (!state.unlockPhaseDone[toIndex(UnlockPhase::ECONOMY)]) {
+                effects.setShopCategoryVisible(ShopCategory::ECONOMY, false);
+                effects.setShopCategoryVisible(ShopCategory::ORE_TIERS, false);
             }
-            shop.setMiningShowsWarpOnly(true);
+            effects.setShopMiningWarpOnly(true);
             break;
-        case 3:
-            shop.setCategoryVisible(ShopCategory::WEAPONS, true);
+        case UnlockPhase::WEAPONS:
+            effects.setShopCategoryVisible(ShopCategory::WEAPONS, true);
             break;
-        case 4:
-            shop.setMiningShowsWarpOnly(false);
-            shop.setCategoryVisible(ShopCategory::MINING, true);
+        case UnlockPhase::MINING:
+            effects.setShopMiningWarpOnly(false);
+            effects.setShopCategoryVisible(ShopCategory::MINING, true);
             break;
-        case 5:
+        case UnlockPhase::AUTO_PLINKO:
             // Auto-Plinko melding: Plinko-shop moet zichtbaar zijn (fase 2 zette die uit).
-            shop.setCategoryVisible(ShopCategory::PLINKO, true);
-            shop.setPlinkoShopAutoOnly(true);
+            effects.setShopCategoryVisible(ShopCategory::PLINKO, true);
+            effects.setShopPlinkoAutoOnly(true);
             break;
-        case 6:
-            game.setTabVisible(Tab::CHESTS, true);
+        case UnlockPhase::CHESTS:
+            effects.setTabVisible(Tab::CHESTS, true);
             state.keyAsteroidsEnabled = true;
             break;
-        case 7:
-            shop.setCategoryVisible(ShopCategory::PLINKO, true);
-            shop.setCategoryVisible(ShopCategory::ECONOMY, true);
-            shop.setCategoryVisible(ShopCategory::ORE_TIERS, true);
-            shop.setPlinkoShopAutoOnly(false);
+        case UnlockPhase::ECONOMY:
+            effects.setShopCategoryVisible(ShopCategory::PLINKO, true);
+            effects.setShopCategoryVisible(ShopCategory::ECONOMY, true);
+            effects.setShopCategoryVisible(ShopCategory::ORE_TIERS, true);
+            effects.setShopPlinkoAutoOnly(false);
             break;
-        case 8:
-            game.setTabVisible(Tab::PRESTIGE, true);
+        case UnlockPhase::PRESTIGE:
+            effects.setTabVisible(Tab::PRESTIGE, true);
             break;
         default:
             break;
@@ -187,23 +185,22 @@ UnlockNextHint computeUnlockNextHint(const GameState& s) {
 
 void UnlockSystem::update(GameState&           state,
                           NotificationSystem&  notifications,
-                          Game&                game,
-                          Shop&                shop,
-                          MiningScreen&        mining) {
+                          IUnlockEffects&      effects) {
     const bool firstBossIncoming =
         (state.nextBossMilestone == 3 && state.currentLevel >= 2);
 
     for (int p = 1; p < kPhaseCount; ++p) {
         if (state.unlockPhaseDone[static_cast<std::size_t>(p)])
-            applyPhaseVisibility(p, state, game, shop, mining);
+            applyPhaseVisibility(static_cast<UnlockPhase>(p), state, effects);
     }
 
-    auto markDone = [&](int p) {
+    auto markDone = [&](UnlockPhase p) {
         state.unlockPhaseDone[static_cast<std::size_t>(p)] = true;
-        applyPhaseVisibility(p, state, game, shop, mining);
+        applyPhaseVisibility(p, state, effects);
     };
 
-    if (!state.unlockPhaseDone[1] && state.totalOre >= 5.0) {
+    if (!state.unlockPhaseDone[toIndex(UnlockPhase::PLINKO_TAB)]
+        && state.totalOre >= 5.0) {
         if (state.upgradeLevels[static_cast<int>(UpgradeID::PLINKO_BALLS)] == 0)
             state.upgradeLevels[static_cast<int>(UpgradeID::PLINKO_BALLS)] = 15;
         notifications.push(
@@ -211,75 +208,80 @@ void UnlockSystem::update(GameState&           state,
             sf::Color(255, 230, 120),
             4.f,
             -1);
-        markDone(1);
+        markDone(UnlockPhase::PLINKO_TAB);
     }
 
-    if (!state.unlockPhaseDone[2]
+    if (!state.unlockPhaseDone[toIndex(UnlockPhase::SHOP_TAB)]
         && (state.totalOre >= 25.0 || firstBossIncoming)) {
         notifications.push(
             "Shop unlocked! Koop Warp Drive om naar de volgende zone te gaan.",
             sf::Color(120, 200, 255),
             4.f,
             -1);
-        markDone(2);
+        markDone(UnlockPhase::SHOP_TAB);
     }
 
-    if (!state.unlockPhaseDone[3]
+    if (!state.unlockPhaseDone[toIndex(UnlockPhase::WEAPONS)]
         && (state.currentLevel >= 2 || firstBossIncoming)) {
         notifications.push(
             "Zone 2 bereikt! Weapons upgrades beschikbaar.",
             sf::Color(255, 180, 140),
             4.f,
             -1);
-        markDone(3);
-        game.focusShopCategory(ShopCategory::WEAPONS);
+        markDone(UnlockPhase::WEAPONS);
+        effects.focusShopCategory(ShopCategory::WEAPONS);
     }
 
-    if (!state.unlockPhaseDone[4] && state.credits >= 50.0) {
+    if (!state.unlockPhaseDone[toIndex(UnlockPhase::MINING)]
+        && state.credits >= 50.0) {
         notifications.push(
             "Mining upgrades beschikbaar!",
             sf::Color(160, 220, 255),
             4.f,
             -1);
-        markDone(4);
+        markDone(UnlockPhase::MINING);
     }
 
-    if (!state.unlockPhaseDone[5] && state.credits >= 100.0) {
+    if (!state.unlockPhaseDone[toIndex(UnlockPhase::AUTO_PLINKO)]
+        && state.credits >= 100.0) {
         notifications.push(
             "Auto-Plinko beschikbaar! Ga naar Shop (tab 3), categorie Plinko, "
             "en koop Auto-Plinko om tegelijk te minen en Plinko te laten lopen.",
             sf::Color(255, 200, 120),
             4.f,
             static_cast<int>(Tab::SHOP));
-        markDone(5);
-        game.focusShopCategory(ShopCategory::PLINKO);
+        markDone(UnlockPhase::AUTO_PLINKO);
+        effects.focusShopCategory(ShopCategory::PLINKO);
     }
 
-    if (!state.unlockPhaseDone[6] && state.currentLevel >= 3) {
+    if (!state.unlockPhaseDone[toIndex(UnlockPhase::CHESTS)]
+        && state.currentLevel >= 3) {
         notifications.push(
             "Chests unlocked! Schiet Key Asteroids neer voor sleutels.",
             sf::Color(255, 220, 160),
             4.f,
             -1);
-        markDone(6);
+        markDone(UnlockPhase::CHESTS);
     }
 
-    if (!state.unlockPhaseDone[7] && state.currentLevel >= 3) {
+    if (!state.unlockPhaseDone[toIndex(UnlockPhase::ECONOMY)]
+        && state.currentLevel >= 3) {
         notifications.push(
             "Plinko, Economy en Ore Tier upgrades beschikbaar!",
             sf::Color(220, 180, 255),
             4.f,
             -1);
-        markDone(7);
+        markDone(UnlockPhase::ECONOMY);
     }
 
-    if (!state.unlockPhaseDone[8] && state.currentLevel >= 5) {
+    if (!state.unlockPhaseDone[toIndex(UnlockPhase::PRESTIGE)]
+        && state.currentLevel >= 5) {
         notifications.push(
             "Prestige beschikbaar! Reset voor permanente crystal bonussen.",
             sf::Color(200, 160, 255),
             4.f,
             -1);
-        markDone(8);
+        markDone(UnlockPhase::PRESTIGE);
     }
 
     // Eerste boss staat in zone 3: eerste Gun Damage-level gratis (geen credits).
@@ -291,13 +293,13 @@ void UnlockSystem::update(GameState&           state,
             sf::Color(255, 180, 140),
             4.5f,
             static_cast<int>(Tab::SHOP));
-        game.focusShopCategory(ShopCategory::WEAPONS);
+        effects.focusShopCategory(ShopCategory::WEAPONS);
     }
 
     // Zone 2+: Weapons hoort altijd in de shop (phase 3). Zonder dit kan phase 2
     // (elke frame WEAPONS uit) phase 3 "winnen" alleen als unlockPhaseDone[3] gezet is;
     // een haperende flag laat dan geen wapen-tab zien tijdens de eerste boss.
-    shop.setCategoryVisible(ShopCategory::WEAPONS, state.currentLevel >= 2);
-
-    mining.setKeyAsteroidsEnabled(state.keyAsteroidsEnabled);
+    effects.setShopCategoryVisible(ShopCategory::WEAPONS,
+                                   state.currentLevel >= 2);
+    effects.setKeyAsteroidsEnabled(state.keyAsteroidsEnabled);
 }

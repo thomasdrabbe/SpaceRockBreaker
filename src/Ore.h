@@ -18,6 +18,7 @@ struct Ore {
     bool         collecting  = false;
     sf::Vector2f collectTarget;
     double       value       = 1.0;  // vaste waarde per ore tier
+    OreTier      tier        = OreTier::IRON;
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -31,6 +32,7 @@ public:
               sf::Color       color,
               double          value,
               int             count,
+              OreTier         tier,
               float           oreLuckBonus,
               ParticleSystem& particles);
 
@@ -38,6 +40,7 @@ public:
                 sf::Vector2f    collectorPos,
                 float           collectRadius,
                 double&         oreOut,
+                std::array<double, ORE_TIER_COUNT>* oreByTierOut,
                 int             bulkMultiplier,
                 ParticleSystem& particles);
 
@@ -45,7 +48,9 @@ public:
 
     int  aliveCount() const { return m_alive; }
 
-    void collectAll(double& oreOut, int bulkMultiplier);
+    void collectAll(double& oreOut,
+                    std::array<double, ORE_TIER_COUNT>* oreByTierOut,
+                    int bulkMultiplier);
     void clearAll();
 
 private:
