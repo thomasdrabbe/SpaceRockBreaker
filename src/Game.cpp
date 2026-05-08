@@ -546,7 +546,7 @@ void Game::update(float dt) {
                 }
                 m_warpCharge += dt / m_state.warpDurationSec();
                 if (m_warpCharge >= 1.f) {
-                    m_audio->stopWarpSound();
+                    // Bij succesvolle warp niet hard afkappen: laat de clip natuurlijk eindigen.
                     m_warpCharge = 0.f;
                     m_state.doWarp();
                     syncMiningSystemsFromState(false);
