@@ -599,9 +599,15 @@ constexpr int kZoneSuffixCount = 19;
 std::string GameState::zoneNameFor(int zone) const {
     const unsigned uz =
         static_cast<unsigned>(std::max(1, zone));
+    // Alleen unsigned modulo: cast naar `int` vóór `%` kan negatief worden
+    // (unsigned → signed overflow), dan is `i % n` in C++ negatief en wordt
+    // `(size_t)i` een enorme index → UB / crashes in string-ops — sinds bonus
+    // zones + zoneNameFor zichtbaar op veel paden (HUD, warp, notificaties).
     auto pick = [&](int arraySize, unsigned salt) -> int {
-        return static_cast<int>((uz * 2654435761u) ^ (salt * 2246822519u))
-               % arraySize;
+        if (arraySize <= 0)
+            return 0;
+        const unsigned mix = (uz * 2654435761u) ^ (salt * 2246822519u);
+        return static_cast<int>(mix % static_cast<unsigned>(arraySize));
     };
 
     std::string prefix;
