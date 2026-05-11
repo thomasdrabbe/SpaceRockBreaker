@@ -25,6 +25,12 @@ const TierData TIER_TABLE[4] = {
 
 const float TIER_WEIGHTS[4] = { 0.50f, 0.30f, 0.15f, 0.05f };
 
+/// `std::uniform_real_distribution` vereist lo <= hi; bij smalle playfield en
+/// grote asteroid-radius is dat soms false — dan UB (crash) op Windows/MSVC.
+inline float randSpanOrMid(float lo, float hi) {
+    return (lo <= hi) ? randFloat(lo, hi) : (lo + hi) * 0.5f;
+}
+
 AsteroidTier pickTier() {
     float r   = randFloat(0.f, 1.f);
     float cum = 0.f;
@@ -603,18 +609,18 @@ void AsteroidManager::spawnRandom(float ox, float oy, float areaW,
 
     switch (side) {
         case 0:
-            spawnPos = { randFloat(ox + r, ox + areaW - r), oy - r };
+            spawnPos = { randSpanOrMid(ox + r, ox + areaW - r), oy - r };
             break;
         case 1:
-            spawnPos = { randFloat(ox + r, ox + areaW - r),
+            spawnPos = { randSpanOrMid(ox + r, ox + areaW - r),
                          oy + areaH + r };
             break;
         case 2:
-            spawnPos = { ox - r, randFloat(oy + r, oy + areaH - r) };
+            spawnPos = { ox - r, randSpanOrMid(oy + r, oy + areaH - r) };
             break;
         default:
             spawnPos = { ox + areaW + r,
-                         randFloat(oy + r, oy + areaH - r) };
+                         randSpanOrMid(oy + r, oy + areaH - r) };
             break;
     }
 
@@ -871,18 +877,18 @@ bool AsteroidManager::trySpawnKey(float ox, float oy, float areaW,
 
     switch (side) {
         case 0:
-            spawnPos = { randFloat(ox + r, ox + areaW - r), oy - r };
+            spawnPos = { randSpanOrMid(ox + r, ox + areaW - r), oy - r };
             break;
         case 1:
-            spawnPos = { randFloat(ox + r, ox + areaW - r),
+            spawnPos = { randSpanOrMid(ox + r, ox + areaW - r),
                          oy + areaH + r };
             break;
         case 2:
-            spawnPos = { ox - r, randFloat(oy + r, oy + areaH - r) };
+            spawnPos = { ox - r, randSpanOrMid(oy + r, oy + areaH - r) };
             break;
         default:
             spawnPos = { ox + areaW + r,
-                         randFloat(oy + r, oy + areaH - r) };
+                         randSpanOrMid(oy + r, oy + areaH - r) };
             break;
     }
 
@@ -918,18 +924,18 @@ void AsteroidManager::spawnBonusKeyAsteroid(float ox, float oy, float areaW,
 
     switch (side) {
         case 0:
-            spawnPos = { randFloat(ox + r, ox + areaW - r), oy - r };
+            spawnPos = { randSpanOrMid(ox + r, ox + areaW - r), oy - r };
             break;
         case 1:
-            spawnPos = { randFloat(ox + r, ox + areaW - r),
+            spawnPos = { randSpanOrMid(ox + r, ox + areaW - r),
                          oy + areaH + r };
             break;
         case 2:
-            spawnPos = { ox - r, randFloat(oy + r, oy + areaH - r) };
+            spawnPos = { ox - r, randSpanOrMid(oy + r, oy + areaH - r) };
             break;
         default:
             spawnPos = { ox + areaW + r,
-                         randFloat(oy + r, oy + areaH - r) };
+                         randSpanOrMid(oy + r, oy + areaH - r) };
             break;
     }
 

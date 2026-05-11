@@ -24,6 +24,33 @@ void migrateLegacySaveIfNeeded() {
     out << in.rdbuf();
 }
 
+/// `Game::update` vergelijkt plinko-layout met deze cache om rebuilds te batchen.
+/// Na nieuw spel / laden moet de cache gereset: anders kan `rebuildPlinko()` uitblijven
+/// wanneer oude en nieuwe layout toevallig gelijk zijn terwijl de board-staat wél verschilt.
+struct PlinkoLayoutWatchState {
+    int   lastRows       = -1;
+    float lastBonus      = -1.f;
+    float lastLuck       = -1.f;
+    int   lastPegUp      = -1;
+    float lastSlotChest  = -1.f;
+    int   lastDupRolls   = -1;
+};
+
+PlinkoLayoutWatchState& plinkoLayoutWatch() {
+    static PlinkoLayoutWatchState s;
+    return s;
+}
+
+void resetPlinkoLayoutWatch() {
+    PlinkoLayoutWatchState& w = plinkoLayoutWatch();
+    w.lastRows      = -1;
+    w.lastBonus     = -1.f;
+    w.lastLuck      = -1.f;
+    w.lastPegUp     = -1;
+    w.lastSlotChest = -1.f;
+    w.lastDupRolls  = -1;
+}
+
 std::string readRuntimeVersionTag() {
     auto firstLineTrimmed = [](const std::string& p) -> std::string {
         std::ifstream in(p);
@@ -575,6 +602,7 @@ void Game::update(float dt) {
                             sf::Color(255, 170, 0));
                     }
                     if (m_state.isBonusZone) {
+                        // Indices 0..5 = COMMON .. LEGENDARY (6 entries each).
                         static const char* const msgs[] = {
                             "Bonus Zone!",
                             "Bonus Zone!",
@@ -670,28 +698,23 @@ void Game::update(float dt) {
         invalidateSaveSlotPreviewCache();
     }
 
-    static int   lastRows    = -1;
-    static float lastBonus   = -1.f;
-    static float lastLuck    = -1.f;
-    static int   lastPegUp   = -1;
-    static float lastSlotChest = -1.f;
-    static int   lastDupRolls  = -1;
+    PlinkoLayoutWatchState& plw = plinkoLayoutWatch();
     int   rows  = m_state.plinkoRows();
     float bonus = m_state.plinkoMultBonus();
     float luck  = m_state.plinkoLuck();
     int   pegUp = m_state.chestPegUpgradeCount();
     int   dupUp = m_state.chestDuplicatorRollCount();
     float slotChest = m_state.chestPlinkoSlotMult();
-    if (rows != lastRows || bonus != lastBonus || luck != lastLuck
-        || pegUp != lastPegUp || slotChest != lastSlotChest
-        || dupUp != lastDupRolls) {
+    if (rows != plw.lastRows || bonus != plw.lastBonus || luck != plw.lastLuck
+        || pegUp != plw.lastPegUp || slotChest != plw.lastSlotChest
+        || dupUp != plw.lastDupRolls) {
         rebuildPlinko();
-        lastRows  = rows;
-        lastBonus = bonus;
-        lastLuck  = luck;
-        lastPegUp = pegUp;
-        lastSlotChest = slotChest;
-        lastDupRolls  = dupUp;
+        plw.lastRows      = rows;
+        plw.lastBonus     = bonus;
+        plw.lastLuck       = luck;
+        plw.lastPegUp      = pegUp;
+        plw.lastSlotChest  = slotChest;
+        plw.lastDupRolls   = dupUp;
     }
 }
 
@@ -1750,6 +1773,7 @@ void Game::handleMainMenuClick(sf::Vector2f pos) {
             m_state.lives = m_state.maxLives();
             m_plinko.resetGoldenPegRarityState();
             syncMiningSystemsFromState(true);
+            resetPlinkoLayoutWatch();
             resetZoneKeyState();
             m_runMode              = RunMode::BASE;
             m_mainMenuPickDifficulty = false;
@@ -1798,6 +1822,7 @@ void Game::handleMainMenuClick(sf::Vector2f pos) {
                     m_showMainMenu        = false;
                     invalidateSaveSlotPreviewCache();
                     syncMiningSystemsFromState(false);
+                    resetPlinkoLayoutWatch();
                     GameUnlockEffects unlockFx(*this, m_shop, m_mining);
                     m_unlockSystem.update(m_state, m_notifications, unlockFx);
                     clampActiveTabToVisibility();
