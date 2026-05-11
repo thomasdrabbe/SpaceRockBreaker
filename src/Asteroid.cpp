@@ -2,6 +2,7 @@
 #include "Utils.h"
 #include <cmath>
 #include <algorithm>
+#include <filesystem>
 
 // ═════════════════════════════════════════════════════════════
 //  Anonieme namespace — alle tabellen en helpers
@@ -433,7 +434,8 @@ void Asteroid::update(float dt, sf::Vector2f playerPos) {
 void Asteroid::draw(sf::RenderTarget& target,
                      float               animTime,
                      const sf::Font*     labelFont,
-                     const sf::Texture*  keyIconTex) const {
+                     const sf::Texture*  keyIconTex,
+                     const sf::Texture*  bossTex) const {
     if (!alive) return;
 
     sf::Transform tf;
@@ -452,29 +454,25 @@ void Asteroid::draw(sf::RenderTarget& target,
             halo.setOutlineThickness(2.5f + pulse);
             target.draw(halo);
         }
-        sf::ConvexShape drawShape = shape;
-        drawShape.setOutlineColor(sf::Color(
-            static_cast<uint8_t>(255),
-            static_cast<uint8_t>(100 + 80 * pulse),
-            static_cast<uint8_t>(160 + 95 * pulse),
-            245));
-        drawShape.setOutlineThickness(4.f + 2.f * pulse);
-        target.draw(drawShape, tf);
-
-        if (labelFont) {
-            sf::Text tag(*labelFont);
-            tag.setString("BOSS");
-            tag.setCharacterSize(static_cast<unsigned>(
-                std::max(14.f, radius * 0.28f)));
-            tag.setStyle(sf::Text::Bold);
-            tag.setFillColor(sf::Color(255, 200, 220, 250));
-            tag.setOutlineColor(sf::Color(60, 10, 40, 200));
-            tag.setOutlineThickness(2.f);
-            sf::FloatRect b = tag.getLocalBounds();
-            tag.setOrigin({ b.position.x + b.size.x * 0.5f,
-                            b.position.y + b.size.y * 0.5f });
-            tag.setPosition(pos);
-            target.draw(tag);
+        if (bossTex && bossTex->getSize().x > 0u) {
+            sf::Sprite spr(*bossTex);
+            const sf::Vector2u tsz = bossTex->getSize();
+            const float          side = radius * 2.15f;
+            const float          sc =
+                side / std::max(1.f, static_cast<float>(std::max(tsz.x, tsz.y)));
+            spr.setOrigin({ tsz.x * 0.5f, tsz.y * 0.5f });
+            spr.setScale({ sc, sc });
+            spr.setColor(sf::Color(255, 255, 255, 250));
+            target.draw(spr, tf);
+        } else {
+            sf::ConvexShape drawShape = shape;
+            drawShape.setOutlineColor(sf::Color(
+                static_cast<uint8_t>(255),
+                static_cast<uint8_t>(100 + 80 * pulse),
+                static_cast<uint8_t>(160 + 95 * pulse),
+                245));
+            drawShape.setOutlineThickness(4.f + 2.f * pulse);
+            target.draw(drawShape, tf);
         }
     } else if (isKeyAsteroid) {
         float pulse = 0.5f + 0.5f * std::sin(animTime * 2.8f);
@@ -560,7 +558,12 @@ void Asteroid::bounceWalls(float left, float top,
 // ═════════════════════════════════════════════════════════════
 //  AsteroidManager
 // ═════════════════════════════════════════════════════════════
-AsteroidManager::AsteroidManager() {}
+AsteroidManager::AsteroidManager() {
+    namespace fs = std::filesystem;
+    const fs::path p(resolveAssetPath("assets/boss.png"));
+    std::error_code ec;
+    m_bossTexOk = fs::is_regular_file(p, ec) && m_bossTex.loadFromFile(p);
+}
 
 void AsteroidManager::refreshAliveCount() {
     m_alive = 0;
@@ -833,8 +836,9 @@ void AsteroidManager::draw(sf::RenderTarget& target,
                             float               animTime,
                             const sf::Font*     labelFont,
                             const sf::Texture*  keyIconTex) const {
+    const sf::Texture* bossPtr = m_bossTexOk ? &m_bossTex : nullptr;
     for (const auto& a : m_pool)
-        if (a.alive) a.draw(target, animTime, labelFont, keyIconTex);
+        if (a.alive) a.draw(target, animTime, labelFont, keyIconTex, bossPtr);
 }
 
 bool AsteroidManager::trySpawnKey(float ox, float oy, float areaW,

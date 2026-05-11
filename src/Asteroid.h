@@ -58,7 +58,8 @@ public:
     void draw(sf::RenderTarget& target,
                float               animTime   = 0.f,
                const sf::Font*     labelFont  = nullptr,
-               const sf::Texture*  keyIconTex = nullptr) const;
+               const sf::Texture*  keyIconTex = nullptr,
+               const sf::Texture*  bossTex    = nullptr) const;
     void bounceWalls(float left, float top,
                      float right, float bottom);
 
@@ -122,6 +123,9 @@ public:
 private:
     std::array<Asteroid, MAX_ASTEROIDS> m_pool;
     int                                  m_alive = 0;
+
+    sf::Texture m_bossTex;
+    bool        m_bossTexOk = false;
 
     bool m_keyAsteroidsEnabled = false;
 

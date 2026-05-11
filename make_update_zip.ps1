@@ -67,21 +67,41 @@ Get-ChildItem -Path (Join-Path $releaseDir "*.dll") -File -ErrorAction SilentlyC
 
 Copy-Item -LiteralPath $assetsDir -Destination (Join-Path $stageDir "assets") -Recurse -Force
 
-if (Test-Path -LiteralPath $zipRoot) {
-    Remove-Item -LiteralPath $zipRoot -Force
+# Schrijf eerst naar een temp-zip: sommige omgevingen houden `SpaceRockBreaker.zip`
+# open (explorer/antivirus) waardoor Compress-Archive direct naar de root faalt.
+$tempZip = Join-Path $env:TEMP ("SpaceRockBreaker_pack_{0}.zip" -f [guid]::NewGuid().ToString("N"))
+if (Test-Path -LiteralPath $tempZip) {
+    Remove-Item -LiteralPath $tempZip -Force
 }
-Compress-Archive -Path (Join-Path $stageDir "*") -DestinationPath $zipRoot -Force
+Compress-Archive -Path (Join-Path $stageDir "*") -DestinationPath $tempZip -Force
+
+function Copy-ZipReplace([string]$sourceZip, [string]$destZip) {
+    $destDir = Split-Path -Parent $destZip
+    if (-not (Test-Path -LiteralPath $destDir -PathType Container)) {
+        New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+    }
+    $destTmp = Join-Path $env:TEMP ("SpaceRockBreaker_dest_{0}.zip" -f [guid]::NewGuid().ToString("N"))
+    Copy-Item -LiteralPath $sourceZip -Destination $destTmp -Force
+    if (Test-Path -LiteralPath $destZip) {
+        Remove-Item -LiteralPath $destZip -Force -ErrorAction SilentlyContinue
+    }
+    Move-Item -LiteralPath $destTmp -Destination $destZip -Force
+}
+
+Copy-ZipReplace $tempZip $zipRoot
 
 if (-not (Test-Path -LiteralPath $zipOutDir -PathType Container)) {
-    New-Item -ItemType Directory -Path $zipOutDir | Out-Null
+    New-Item -ItemType Directory -Path $zipOutDir -Force | Out-Null
 }
-Copy-Item -LiteralPath $zipRoot -Destination $zipOut -Force
+Copy-ZipReplace $tempZip $zipOut
 
 $currentVersion = (Get-Content -LiteralPath $versionFile -Raw).Trim()
 $zipRootVersioned = Join-Path $repoRoot ("SpaceRockBreaker_{0}.zip" -f $currentVersion)
 $zipOutVersioned  = Join-Path $zipOutDir ("SpaceRockBreaker_{0}.zip" -f $currentVersion)
-Copy-Item -LiteralPath $zipRoot -Destination $zipRootVersioned -Force
-Copy-Item -LiteralPath $zipRoot -Destination $zipOutVersioned -Force
+Copy-ZipReplace $tempZip $zipRootVersioned
+Copy-ZipReplace $tempZip $zipOutVersioned
+
+Remove-Item -LiteralPath $tempZip -Force -ErrorAction SilentlyContinue
 
 $zipA = Get-Item -LiteralPath $zipRoot
 $zipB = Get-Item -LiteralPath $zipOut
