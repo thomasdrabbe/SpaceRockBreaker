@@ -213,6 +213,11 @@ Game::Game()
                sf::State::Fullscreen)
 {
     m_window.setFramerateLimit(TARGET_FPS);
+    {
+        const std::string ver = readRuntimeVersionTag();
+        m_window.setTitle(
+            sf::String(std::string("Space Rock Breaker — v") + ver));
+    }
 
     // Zelfde padlogica als textures; voorkomt mislukte loads bij andere cwd.
     const std::string fontNoto = resolveAssetPath("assets/NotoSans-Regular.ttf");

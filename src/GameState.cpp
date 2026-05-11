@@ -6,6 +6,27 @@
 #include <cstddef>
 #include <fstream>
 #include <limits>
+
+namespace {
+
+[[nodiscard]] bool upgradeIdInRange(UpgradeID id) noexcept {
+    const int i = static_cast<int>(id);
+    return i >= 0 && i < static_cast<int>(UpgradeID::UPGRADE_COUNT);
+}
+
+[[nodiscard]] bool prestigeIdInRange(PrestigeUpgradeID id) noexcept {
+    const int i = static_cast<int>(id);
+    return i >= 0
+           && i < static_cast<int>(PrestigeUpgradeID::PRESTIGE_UPGRADE_COUNT);
+}
+
+[[nodiscard]] bool chestIdInRange(ChestUpgradeID id) noexcept {
+    const int i = static_cast<int>(id);
+    return i >= 0 && i < static_cast<int>(ChestUpgradeID::CHEST_UPGRADE_COUNT);
+}
+
+} // namespace
+
 // ═════════════════════════════════════════════════════════════
 //  Static catalogs
 // ═════════════════════════════════════════════════════════════
@@ -135,7 +156,9 @@ float GameState::chestPlinkoSlotMult() const {
 }
 
 int GameState::levelOfChest(ChestUpgradeID id) const {
-    return chestLevels[static_cast<int>(id)];
+    if (!chestIdInRange(id))
+        return 0;
+    return chestLevels[static_cast<std::size_t>(static_cast<int>(id))];
 }
 
 int GameState::maxLives() const {
@@ -343,7 +366,9 @@ bool GameState::openOneChest(ChestUpgradeID* outChosen) {
     for (int i = 0; i < static_cast<int>(ChestUpgradeID::CHEST_UPGRADE_COUNT);
          ++i) {
         auto          id = static_cast<ChestUpgradeID>(i);
-        const auto&   d  = chestCatalog[static_cast<int>(id)];
+        if (!chestIdInRange(id))
+            continue;
+        const auto& d = chestCatalog[static_cast<std::size_t>(i)];
         const int     lv = levelOfChest(id);
         if (d.maxLevel > 0 && lv >= d.maxLevel)
             continue;
@@ -631,14 +656,20 @@ OreRarity GameState::rollBonusZoneRarity() {
 //  Upgrade helpers
 // ═════════════════════════════════════════════════════════════
 int GameState::levelOf(UpgradeID id) const {
-    return upgradeLevels[static_cast<int>(id)];
+    if (!upgradeIdInRange(id))
+        return 0;
+    return upgradeLevels[static_cast<std::size_t>(static_cast<int>(id))];
 }
 int GameState::levelOf(PrestigeUpgradeID id) const {
-    return prestigeLevels[static_cast<int>(id)];
+    if (!prestigeIdInRange(id))
+        return 0;
+    return prestigeLevels[static_cast<std::size_t>(static_cast<int>(id))];
 }
 
 double GameState::costOf(UpgradeID id) const {
-    const auto& def = upgradeCatalog[static_cast<int>(id)];
+    if (!upgradeIdInRange(id))
+        return std::numeric_limits<double>::infinity();
+    const auto& def = upgradeCatalog[static_cast<std::size_t>(static_cast<int>(id))];
     const int   lv  = levelOf(id);
     if (id == UpgradeID::PLINKO_BALLS) {
         if (lv < 20)
@@ -648,17 +679,25 @@ double GameState::costOf(UpgradeID id) const {
     return upgradeCost(def.baseCost, def.costMult, lv);
 }
 double GameState::costOf(PrestigeUpgradeID id) const {
-    const auto& def = prestigeCatalog[static_cast<int>(id)];
+    if (!prestigeIdInRange(id))
+        return std::numeric_limits<double>::infinity();
+    const auto& def =
+        prestigeCatalog[static_cast<std::size_t>(static_cast<int>(id))];
     return upgradeCost(def.baseCost, def.costMult, levelOf(id));
 }
 
 bool GameState::canBuy(UpgradeID id) const {
-    const auto& def = upgradeCatalog[static_cast<int>(id)];
+    if (!upgradeIdInRange(id))
+        return false;
+    const auto& def = upgradeCatalog[static_cast<std::size_t>(static_cast<int>(id))];
     if (def.maxLevel > 0 && levelOf(id) >= def.maxLevel) return false;
     return credits >= costOf(id);
 }
 bool GameState::canBuy(PrestigeUpgradeID id) const {
-    const auto& def = prestigeCatalog[static_cast<int>(id)];
+    if (!prestigeIdInRange(id))
+        return false;
+    const auto& def =
+        prestigeCatalog[static_cast<std::size_t>(static_cast<int>(id))];
     if (def.maxLevel > 0 && levelOf(id) >= def.maxLevel) return false;
     return crystals >= costOf(id);
 }
@@ -728,14 +767,14 @@ void GameState::registerBossDefeated() {
 }
 
 void GameState::buy(UpgradeID id) {
-    if (!canBuy(id)) return;
+    if (!upgradeIdInRange(id) || !canBuy(id)) return;
     spendCredits(costOf(id));
-    upgradeLevels[static_cast<int>(id)]++;
+    upgradeLevels[static_cast<std::size_t>(static_cast<int>(id))]++;
 }
 void GameState::buy(PrestigeUpgradeID id) {
-    if (!canBuy(id)) return;
+    if (!prestigeIdInRange(id) || !canBuy(id)) return;
     crystals = std::max(0.0, crystals - costOf(id));
-    prestigeLevels[static_cast<int>(id)]++;
+    prestigeLevels[static_cast<std::size_t>(static_cast<int>(id))]++;
 }
 
 // ═════════════════════════════════════════════════════════════

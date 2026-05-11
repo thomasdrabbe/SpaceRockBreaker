@@ -438,9 +438,11 @@ void Shop::drawCard(sf::RenderTarget&  target,
     float tx = card.bounds.position.x + m_cardPad;
     float ty = card.bounds.position.y + m_cardPad;
 
-    int         idx = static_cast<int>(card.id);
-    const auto& def = GameState::upgradeCatalog[idx];
-    int         lv  = state.upgradeLevels[idx];
+    const int idx = static_cast<int>(card.id);
+    if (idx < 0 || idx >= static_cast<int>(UpgradeID::UPGRADE_COUNT))
+        return;
+    const auto& def = GameState::upgradeCatalog[static_cast<std::size_t>(idx)];
+    const int   lv  = state.upgradeLevels[static_cast<std::size_t>(idx)];
 
     // Naam
     sf::Text name(*m_font);

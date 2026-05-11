@@ -48,33 +48,6 @@ if (-not (Test-Path -LiteralPath $assetsDir -PathType Container)) {
     throw "Assets folder not found: $assetsDir"
 }
 
-$stageDir = Join-Path $repoRoot ".update_package"
-$zipRoot  = Join-Path $repoRoot "SpaceRockBreaker.zip"
-$zipOutDir = Join-Path $repoRoot "installer_output"
-$zipOut   = Join-Path $zipOutDir "SpaceRockBreaker.zip"
-
-if (Test-Path -LiteralPath $stageDir) {
-    Remove-Item -LiteralPath $stageDir -Recurse -Force
-}
-New-Item -ItemType Directory -Path $stageDir | Out-Null
-
-Copy-Item -LiteralPath $gameExe -Destination $stageDir -Force
-Copy-Item -LiteralPath $launcherExe -Destination $stageDir -Force
-Copy-Item -LiteralPath $versionFile -Destination (Join-Path $stageDir "version.txt") -Force
-
-Get-ChildItem -Path (Join-Path $releaseDir "*.dll") -File -ErrorAction SilentlyContinue |
-    ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $stageDir -Force }
-
-Copy-Item -LiteralPath $assetsDir -Destination (Join-Path $stageDir "assets") -Recurse -Force
-
-# Schrijf eerst naar een temp-zip: sommige omgevingen houden `SpaceRockBreaker.zip`
-# open (explorer/antivirus) waardoor Compress-Archive direct naar de root faalt.
-$tempZip = Join-Path $env:TEMP ("SpaceRockBreaker_pack_{0}.zip" -f [guid]::NewGuid().ToString("N"))
-if (Test-Path -LiteralPath $tempZip) {
-    Remove-Item -LiteralPath $tempZip -Force
-}
-Compress-Archive -Path (Join-Path $stageDir "*") -DestinationPath $tempZip -Force
-
 function Copy-ZipReplace([string]$sourceZip, [string]$destZip) {
     $destDir = Split-Path -Parent $destZip
     if (-not (Test-Path -LiteralPath $destDir -PathType Container)) {
@@ -88,20 +61,55 @@ function Copy-ZipReplace([string]$sourceZip, [string]$destZip) {
     Move-Item -LiteralPath $destTmp -Destination $destZip -Force
 }
 
-Copy-ZipReplace $tempZip $zipRoot
+# Staging onder %TEMP%: inpakken vanaf `.update_package` in de repo gaf vaak file-locks
+# (Explorer indexering / AV) op fonts/png in `assets\`.
+$stageDir = Join-Path $env:TEMP ("SRB_update_stage_" + [guid]::NewGuid().ToString("N"))
+$zipRoot  = Join-Path $repoRoot "SpaceRockBreaker.zip"
+$zipOutDir = Join-Path $repoRoot "installer_output"
+$zipOut   = Join-Path $zipOutDir "SpaceRockBreaker.zip"
 
-if (-not (Test-Path -LiteralPath $zipOutDir -PathType Container)) {
-    New-Item -ItemType Directory -Path $zipOutDir -Force | Out-Null
+try {
+    New-Item -ItemType Directory -Path $stageDir | Out-Null
+
+    Copy-Item -LiteralPath $gameExe -Destination $stageDir -Force
+    Copy-Item -LiteralPath $launcherExe -Destination $stageDir -Force
+    Copy-Item -LiteralPath $versionFile -Destination (Join-Path $stageDir "version.txt") -Force
+
+    Get-ChildItem -Path (Join-Path $releaseDir "*.dll") -File -ErrorAction SilentlyContinue |
+        ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $stageDir -Force }
+
+    Copy-Item -LiteralPath $assetsDir -Destination (Join-Path $stageDir "assets") -Recurse -Force
+
+    # Schrijf eerst naar een temp-zip: sommige omgevingen houden `SpaceRockBreaker.zip`
+    # open (explorer/antivirus) waardoor Compress-Archive direct naar de root faalt.
+    $tempZip = Join-Path $env:TEMP ("SpaceRockBreaker_pack_{0}.zip" -f [guid]::NewGuid().ToString("N"))
+    if (Test-Path -LiteralPath $tempZip) {
+        Remove-Item -LiteralPath $tempZip -Force
+    }
+    Compress-Archive -Path (Join-Path $stageDir "*") -DestinationPath $tempZip -Force
+
+    Copy-ZipReplace $tempZip $zipRoot
+
+    if (-not (Test-Path -LiteralPath $zipOutDir -PathType Container)) {
+        New-Item -ItemType Directory -Path $zipOutDir -Force | Out-Null
+    }
+    Copy-ZipReplace $tempZip $zipOut
+
+    $zipCurrentVersion = (Get-Content -LiteralPath $versionFile -Raw).Trim()
+    $zipRootVersioned = Join-Path $repoRoot ("SpaceRockBreaker_{0}.zip" -f $zipCurrentVersion)
+    $zipOutVersioned  = Join-Path $zipOutDir ("SpaceRockBreaker_{0}.zip" -f $zipCurrentVersion)
+    Copy-ZipReplace $tempZip $zipRootVersioned
+    Copy-ZipReplace $tempZip $zipOutVersioned
+
+    Remove-Item -LiteralPath $tempZip -Force -ErrorAction SilentlyContinue
 }
-Copy-ZipReplace $tempZip $zipOut
+finally {
+    if (Test-Path -LiteralPath $stageDir) {
+        Remove-Item -LiteralPath $stageDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+}
 
 $currentVersion = (Get-Content -LiteralPath $versionFile -Raw).Trim()
-$zipRootVersioned = Join-Path $repoRoot ("SpaceRockBreaker_{0}.zip" -f $currentVersion)
-$zipOutVersioned  = Join-Path $zipOutDir ("SpaceRockBreaker_{0}.zip" -f $currentVersion)
-Copy-ZipReplace $tempZip $zipRootVersioned
-Copy-ZipReplace $tempZip $zipOutVersioned
-
-Remove-Item -LiteralPath $tempZip -Force -ErrorAction SilentlyContinue
 
 $zipA = Get-Item -LiteralPath $zipRoot
 $zipB = Get-Item -LiteralPath $zipOut
