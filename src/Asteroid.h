@@ -36,6 +36,8 @@ public:
     bool          isBoss         = false;
     bool          isMeteor       = false;
     float         bossPhase      = 0.f;
+    /// Sleutel-asteroïde: >=0 = vast aantal keys bij vernietiging; -1 = willekeur 1–3.
+    int           keyPickupCount = -1;
 
     int rarityDropMult() const;
 
@@ -45,7 +47,9 @@ public:
                float        hpMult = 1.f,
                OreTier      ot     = OreTier::IRON);
 
-    void spawnKey(sf::Vector2f pos, sf::Vector2f vel, float hpMult);
+    void spawnKey(sf::Vector2f pos, sf::Vector2f vel, float hpMult,
+                   OreTier keyOreTier = OreTier::GOLD,
+                   int     forcedKeys = -1);
 
     void spawnBoss(float ox, float oy, float areaW, float areaH,
                    float hpMult, OreTier lootTier);
@@ -85,7 +89,9 @@ public:
     void setKeyAsteroidsEnabled(bool enabled) { m_keyAsteroidsEnabled = enabled; }
 
     bool trySpawnKey(float ox, float oy, float areaW, float areaH,
-                     float hpMult);
+                     float hpMult, OreTier keyOreTier, int forcedKeyCount = -1);
+    void spawnBonusKeyAsteroid(float ox, float oy, float areaW, float areaH,
+                               float hpMult, OreTier keyOreTier, int forcedKeyCount);
     bool trySpawnBoss(float ox, float oy, float areaW, float areaH,
                        float hpMult, OreTier lootTier);
     void spawnMeteorSwarm(float ox, float oy, float areaW, float areaH,

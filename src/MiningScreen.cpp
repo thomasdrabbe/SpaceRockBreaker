@@ -174,6 +174,15 @@ void MiningScreen::update(float      dt,
     }
 
     // ── Particles ─────────────────────────────────────────
+    if (state.isBonusZone
+        && state.bonusZoneRarity == OreRarity::LEGENDARY) {
+        for (int i = 0; i < 4; ++i) {
+            const float x = randFloat(m_x + 24.f, m_x + m_w - 24.f);
+            m_particles.emitOrePieces(
+                sf::Vector2f(x, m_y + randFloat(-6.f, 18.f)),
+                sf::Color(255, 215, 120, 235), 1);
+        }
+    }
     m_particles.update(dt);
 
     // ── Sterren scrollen (warp opladen; steeds sneller naar einde) ───
@@ -234,17 +243,23 @@ void MiningScreen::resolveCollisions(GameState& state) {
 
             bool destroyed = asteroid.hit(bullet.damage, m_particles);
             if (destroyed) {
+                const double bzMult =
+                    state.isBonusZone
+                        ? static_cast<double>(state.bonusZoneOreValueMult())
+                        : 1.0;
                 if (asteroid.isBoss)
                     m_audio->play(Sfx::BossExplode);
                 else
                     m_audio->play(Sfx::Explosion);
                 if (asteroid.isKeyAsteroid) {
-                    int nk = randInt(1, 3);
+                    const int nk = asteroid.keyPickupCount >= 0
+                        ? asteroid.keyPickupCount
+                        : randInt(1, 3);
                     m_keyPickups.drop(asteroid.pos, nk, m_particles);
                     m_ores.drop(
                         asteroid.pos,
                         asteroid.oreDrop.color,
-                        asteroid.oreDrop.value,
+                        asteroid.oreDrop.value * bzMult,
                         asteroid.oreDrop.count,
                         asteroid.oreTier,
                         state.oreLuckBonus(),
@@ -255,7 +270,7 @@ void MiningScreen::resolveCollisions(GameState& state) {
                     m_ores.drop(
                         asteroid.pos,
                         asteroid.oreDrop.color,
-                        asteroid.oreDrop.value,
+                        asteroid.oreDrop.value * bzMult,
                         count,
                         asteroid.oreTier,
                         state.oreLuckBonus(),
@@ -265,7 +280,7 @@ void MiningScreen::resolveCollisions(GameState& state) {
                         m_ores.drop(
                             asteroid.pos,
                             sf::Color(255, 215, 50),
-                            20.0,
+                            20.0 * bzMult,
                             26,
                             OreTier::GOLD,
                             state.oreLuckBonus(),
@@ -276,7 +291,7 @@ void MiningScreen::resolveCollisions(GameState& state) {
                         m_ores.drop(
                             asteroid.pos,
                             sf::Color(210, 215, 225),
-                            8.0,
+                            8.0 * bzMult,
                             20,
                             OreTier::SILVER,
                             state.oreLuckBonus(),
@@ -290,7 +305,7 @@ void MiningScreen::resolveCollisions(GameState& state) {
                     m_ores.drop(
                         asteroid.pos,
                         asteroid.oreDrop.color,
-                        asteroid.oreDrop.value,
+                        asteroid.oreDrop.value * bzMult,
                         count,
                         asteroid.oreTier,
                         state.oreLuckBonus(),
@@ -348,7 +363,54 @@ bool MiningScreen::trySpawnKeyAsteroid(GameState& state) {
     float hpMult = std::max(0.1f,
         1.f - state.levelOf(UpgradeID::ASTEROID_HP) * 0.1f);
     hpMult *= state.levelHpMult();
-    return m_asteroids.trySpawnKey(m_x, m_y, m_w, m_h, hpMult);
+    hpMult *= state.difficultyAsteroidHpMult();
+    const OreTier kt =
+        GameState::clampKeyOreTier(OreTier::GOLD, state.maxOreTier());
+    return m_asteroids.trySpawnKey(m_x, m_y, m_w, m_h, hpMult, kt, -1);
+}
+
+void MiningScreen::spawnBonusZoneKeys(const GameState& state) {
+    if (!state.isBonusZone || !state.keyAsteroidsEnabled)
+        return;
+    float hpMult = std::max(0.1f,
+        1.f - state.levelOf(UpgradeID::ASTEROID_HP) * 0.1f);
+    hpMult *= state.levelHpMult();
+    hpMult *= state.difficultyAsteroidHpMult();
+    const OreTier ot = GameState::clampKeyOreTier(state.bonusZoneMinOreTier(),
+                                                  state.maxOreTier());
+
+    auto one = [&](int keys) {
+        m_asteroids.spawnBonusKeyAsteroid(m_x, m_y, m_w, m_h, hpMult, ot, keys);
+    };
+
+    switch (state.bonusZoneRarity) {
+        case OreRarity::COMMON:
+            one(1);
+            break;
+        case OreRarity::UNCOMMON:
+            one(randInt(1, 2));
+            break;
+        case OreRarity::RARE:
+            one(randInt(1, 2));
+            one(randInt(1, 2));
+            break;
+        case OreRarity::EPIC:
+            one(randInt(2, 3));
+            one(randInt(2, 3));
+            break;
+        case OreRarity::MYTHIC:
+            one(randInt(2, 3));
+            one(randInt(2, 3));
+            one(randInt(2, 3));
+            break;
+        case OreRarity::LEGENDARY:
+            one(3);
+            one(3);
+            one(3);
+            break;
+        default:
+            break;
+    }
 }
 
 bool MiningScreen::hasLivingBoss() const {
@@ -409,6 +471,7 @@ void MiningScreen::draw(sf::RenderTarget& target,
     target.draw(bg);
 
     drawStarfield(target, warpCharge);
+    drawZoneBackground(target, state, animTime);
     drawCollectRing(target, state);
     drawCollector(target);
 
@@ -453,6 +516,40 @@ void MiningScreen::drawStarfield(sf::RenderTarget& target,
         star.setFillColor(sf::Color(bb, bb, bb, alpha));
         target.draw(star);
     }
+}
+
+void MiningScreen::drawZoneBackground(sf::RenderTarget& target,
+                                      const GameState&  state,
+                                      float /*animTime*/) const {
+    if (!state.isBonusZone)
+        return;
+    sf::RectangleShape tint(sf::Vector2f{ m_w, m_h });
+    tint.setPosition({ m_x, m_y });
+    sf::Color fill(255, 240, 160, 20);
+    switch (state.bonusZoneRarity) {
+        case OreRarity::COMMON:
+            fill = sf::Color(255, 240, 160, 20);
+            break;
+        case OreRarity::UNCOMMON:
+            fill = sf::Color(255, 230, 100, 35);
+            break;
+        case OreRarity::RARE:
+            fill = sf::Color(255, 210, 70, 50);
+            break;
+        case OreRarity::EPIC:
+            fill = sf::Color(255, 160, 60, 65);
+            break;
+        case OreRarity::MYTHIC:
+            fill = sf::Color(255, 120, 40, 80);
+            break;
+        case OreRarity::LEGENDARY:
+            fill = sf::Color(255, 190, 80, 100);
+            break;
+        default:
+            break;
+    }
+    tint.setFillColor(fill);
+    target.draw(tint);
 }
 
 void MiningScreen::drawWarpFlashOverlay(sf::RenderTarget& target,
@@ -575,7 +672,36 @@ void MiningScreen::drawHUD(sf::RenderTarget& target,
     zoneLabel.setStyle(sf::Text::Bold);
     zoneLabel.setFillColor(sf::Color(180, 210, 255));
     zoneLabel.setPosition({ m_x + 8.f, m_y + 8.f });
-    target.draw(zoneLabel);    // HUD achtergrond
+    target.draw(zoneLabel);
+
+    if (state.isBonusZone) {
+        static const char* const rNames[] = {
+            "COMMON", "UNCOMMON", "RARE", "EPIC", "MYTHIC", "LEGENDARY",
+        };
+        static const sf::Color rCols[] = {
+            sf::Color(220, 220, 220),
+            sf::Color(80, 200, 80),
+            sf::Color(70, 130, 255),
+            sf::Color(185, 60, 255),
+            sf::Color(220, 50, 50),
+            sf::Color(255, 170, 0),
+        };
+        const int ri =
+            std::clamp(static_cast<int>(state.bonusZoneRarity), 0, 5);
+        const std::string ban = std::string(rNames[ri]) + " BONUS ZONE";
+        sf::Text banT(*m_font);
+        banT.setString(ban);
+        banT.setCharacterSize(18);
+        banT.setStyle(sf::Text::Bold);
+        banT.setFillColor(rCols[ri]);
+        banT.setOutlineColor(sf::Color(0, 0, 0, 180));
+        banT.setOutlineThickness(2.f);
+        const sf::FloatRect lb = banT.getLocalBounds();
+        banT.setOrigin({ lb.position.x + lb.size.x * 0.5f, lb.position.y });
+        banT.setPosition({ m_x + m_w * 0.5f, m_y + 12.f });
+        target.draw(banT);
+    }
+    // HUD achtergrond
     sf::RectangleShape hudBg(sf::Vector2f{ 220.f, 96.f });
     hudBg.setPosition({ m_x + 5.f, m_y + 4.f });
     hudBg.setFillColor(sf::Color(4, 6, 16, 170));

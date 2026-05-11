@@ -548,12 +548,58 @@ void Game::update(float dt) {
                 if (m_warpCharge >= 1.f) {
                     // Bij succesvolle warp niet hard afkappen: laat de clip natuurlijk eindigen.
                     m_warpCharge = 0.f;
+                    const int    preWarpLevel = m_state.currentLevel;
+                    const bool   leavingLegBonus =
+                        m_state.isBonusZone
+                        && m_state.bonusZoneRarity == OreRarity::LEGENDARY;
                     m_state.doWarp();
                     syncMiningSystemsFromState(false);
+                    if (m_state.isBonusZone) {
+                        m_mining.spawnBonusZoneKeys(m_state);
+                        m_keySpawnedThisZone = true;
+                        m_zonePlayTime       = 0.f;
+                    }
                     m_warpFlashRemain = WARP_FLASH_DURATION_SEC;
                     m_warpSfxArmed    = true;
-                    pushNotif("Zone " + std::to_string(m_state.currentLevel) + "!",
-                              sf::Color(120, 220, 255));
+
+                    if (leavingLegBonus) {
+                        const double crystalBonus =
+                            3.0
+                            + std::floor(
+                                std::sqrt(static_cast<double>(preWarpLevel)));
+                        m_state.addCrystals(crystalBonus);
+                        pushNotif(
+                            "Legendary bonus: +"
+                                + std::to_string(static_cast<int>(crystalBonus))
+                                + " crystals!",
+                            sf::Color(255, 170, 0));
+                    }
+                    if (m_state.isBonusZone) {
+                        static const char* const msgs[] = {
+                            "Bonus Zone!",
+                            "Bonus Zone!",
+                            "Rare Bonus Zone!",
+                            "EPIC BONUS ZONE!",
+                            "MYTHIC BONUS ZONE!",
+                            "** LEGENDARY BONUS ZONE **",
+                        };
+                        static const sf::Color cols[] = {
+                            sf::Color(220, 220, 220),
+                            sf::Color(80, 200, 80),
+                            sf::Color(70, 130, 255),
+                            sf::Color(185, 60, 255),
+                            sf::Color(220, 50, 50),
+                            sf::Color(255, 170, 0),
+                        };
+                        const int idx = static_cast<int>(m_state.bonusZoneRarity);
+                        pushNotif(std::string(msgs[idx]) + " — "
+                                      + m_state.currentZoneName(),
+                                  cols[idx]);
+                    } else {
+                        pushNotif("Zone " + std::to_string(m_state.currentLevel)
+                                      + " — " + m_state.currentZoneName(),
+                                  sf::Color(120, 220, 255));
+                    }
                 }
             } else {
                 if (m_warpCharge > 0.001f)
@@ -927,8 +973,7 @@ void Game::onMouseClick(sf::Vector2f pos, sf::Mouse::Button btn) {
             m_audio->stopGameOverMusic();
             if (m_runFlow)
                 m_runFlow->startRun();
-            pushNotif("Run gestart - zone " +
-                      std::to_string(m_state.currentLevel),
+            pushNotif(std::string("Run gestart — ") + m_state.levelLabel(),
                       sf::Color(120, 220, 255));
             return;
         }
@@ -2264,8 +2309,8 @@ void Game::drawPlinkoUnlockHintBelowDrop(bool seeThroughMiningBackdrop) const {
     float          ty  = panelT + std::round(6.f * m_scale);
     const float    tx  = drop.position.x + padIn;
 
-    std::string zoneLine = "Zone " + std::to_string(m_state.currentLevel);
-    zoneLine += (m_runMode == RunMode::RUNNING) ? " - run" : " - basis";
+    std::string zoneLine = m_state.levelLabel();
+    zoneLine += (m_runMode == RunMode::RUNNING) ? " — run" : " — basis";
     drawText(zoneLine, tx, ty, fsZ, sf::Color(140, 200, 255));
     ty += static_cast<float>(fsZ) + 2.f;
     drawText(hint.heading, tx, ty, fsZ, sf::Color(160, 165, 190));

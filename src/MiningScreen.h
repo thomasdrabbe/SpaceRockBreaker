@@ -55,6 +55,7 @@ public:
               float            animTime) const;
 
     bool trySpawnKeyAsteroid(GameState& state);
+    void spawnBonusZoneKeys(const GameState& state);
     void setKeyAsteroidsEnabled(bool enabled) {
         m_asteroids.setKeyAsteroidsEnabled(enabled);
     }
@@ -127,6 +128,9 @@ private:
 
     // ── Draw helpers ──────────────────────────────────────
     void drawStarfield(sf::RenderTarget& target, float warpCharge) const;
+    void drawZoneBackground(sf::RenderTarget& target,
+                             const GameState&  state,
+                             float             animTime) const;
     void drawWarpFlashOverlay(sf::RenderTarget& target,
                                float            warpFlashRemain) const;
     void drawCollector  (sf::RenderTarget& target) const;

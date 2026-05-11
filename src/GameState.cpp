@@ -386,7 +386,7 @@ float GameState::bulletLifetimeSec() const {
 
 float GameState::oreValueMult() const {
     return (1.f + levelOf(UpgradeID::ORE_VALUE) * 0.2f)
-           * _crystalMiningBonus();
+           * _crystalMiningBonus() * bonusZoneOreValueMult();
 }
 
 float GameState::autoCollectRadius() const {
@@ -474,7 +474,123 @@ int GameState::levelSpawnBonus() const {
 }
 
 std::string GameState::levelLabel() const {
-    return "Zone " + std::to_string(currentLevel);
+    return "Zone " + std::to_string(currentLevel) + " — " + currentZoneName();
+}
+
+OreTier GameState::bonusZoneMinOreTier() const {
+    switch (bonusZoneRarity) {
+        case OreRarity::EPIC:
+            return OreTier::GOLD;
+        case OreRarity::MYTHIC:
+            return OreTier::DIAMOND;
+        case OreRarity::LEGENDARY:
+            return OreTier::IRIDIUM;
+        default:
+            return OreTier::IRON;
+    }
+}
+
+float GameState::bonusZoneOreValueMult() const {
+    if (!isBonusZone)
+        return 1.0f;
+    switch (bonusZoneRarity) {
+        case OreRarity::UNCOMMON:
+            return 1.5f;
+        case OreRarity::RARE:
+        case OreRarity::EPIC:
+        case OreRarity::MYTHIC:
+        case OreRarity::LEGENDARY:
+            return 2.0f;
+        default:
+            return 1.0f;
+    }
+}
+
+OreTier GameState::clampKeyOreTier(OreTier preferred, OreTier maxUnlocked) {
+    return static_cast<OreTier>(
+        std::clamp(static_cast<int>(preferred), static_cast<int>(OreTier::IRON),
+                   static_cast<int>(maxUnlocked)));
+}
+
+namespace {
+
+const char* const ZONE_PREFIXES[] = {
+    "Nebula",        "Asteroid Belt", "Void",       "Sector",     "Expanse",
+    "Cluster",       "Rift",          "Drift",      "Remnant",    "Frontier",
+    "Abyss",         "Cradle",        "Forge",      "Storm",      "Silence",
+    "Pulsar",        "Quasar",        "Corona",     "Veil",       "Shroud",
+    "Reach",         "Basin",         "Hollow",     "Tempest",    "Cascade",
+};
+const char* const ZONE_PLANETS[] = {
+    "Valdris",  "Korrath",  "Zephyra",  "Thunex",   "Calyx",
+    "Myndor",   "Errath",   "Solven",   "Kaelthas", "Vorryn",
+    "Duskara",  "Nhelox",   "Pyreth",   "Caelum",   "Zorvan",
+    "Ulthar",   "Xyndra",   "Beldrox",  "Tyrannis", "Ossian",
+    "Quelith",  "Ravorn",   "Solvex",   "Tharyn",   "Uxelos",
+    "Vryndal",  "Wethyx",   "Xarkon",   "Ysolde",   "Zanthos",
+};
+const char* const ZONE_SUFFIXES[] = {
+    "Prime",    "Minor",    "Major",    "IX",       "VII",
+    "IV",       "II",       "Zero",     "Alpha",    "Omega",
+    "Core",     "Rim",      "Deep",     "Reach",    "Far",
+    "Lost",     "Ancient",  "Forgotten", "End",
+};
+
+constexpr int kZonePrefixCount = 25;
+constexpr int kZonePlanetCount = 30;
+constexpr int kZoneSuffixCount = 19;
+
+} // namespace
+
+std::string GameState::zoneNameFor(int zone) const {
+    const unsigned uz =
+        static_cast<unsigned>(std::max(1, zone));
+    auto pick = [&](int arraySize, unsigned salt) -> int {
+        return static_cast<int>((uz * 2654435761u) ^ (salt * 2246822519u))
+               % arraySize;
+    };
+
+    std::string prefix;
+    if (isBonusZone) {
+        static const char* const rarityPrefixes[] = {
+            "",         "Rich ",      "Fertile ",   "Bountiful ",
+            "Sacred ",  "Legendary ",
+        };
+        const int ri =
+            std::clamp(static_cast<int>(bonusZoneRarity), 0,
+                       static_cast<int>(OreRarity::LEGENDARY));
+        prefix = rarityPrefixes[ri];
+    }
+
+    const std::string type =
+        ZONE_PREFIXES[pick(kZonePrefixCount, 1u)];
+    const std::string planet =
+        ZONE_PLANETS[pick(kZonePlanetCount, 2u)];
+    const std::string suffix =
+        ZONE_SUFFIXES[pick(kZoneSuffixCount, 3u)];
+
+    return prefix + type + " " + planet + "-" + suffix;
+}
+
+std::string GameState::currentZoneName() const {
+    return zoneNameFor(currentLevel);
+}
+
+OreRarity GameState::rollBonusZoneRarity() {
+    constexpr float weights[] = {
+        50.0f, 25.0f, 14.0f, 7.5f, 2.8f, 0.7f,
+    };
+    float total = 0.f;
+    for (float w : weights)
+        total += w;
+    float roll = randFloat(0.f, total);
+    float cum  = 0.f;
+    for (int i = 0; i < 6; ++i) {
+        cum += weights[i];
+        if (roll < cum)
+            return static_cast<OreRarity>(i);
+    }
+    return OreRarity::COMMON;
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -530,8 +646,25 @@ bool GameState::canWarp() const {
 }
 
 void GameState::doWarp() {
-    currentLevel++;
+    if (isBonusZone) {
+        currentLevel++;
+        isBonusZone     = false;
+        bonusZoneRarity = OreRarity::COMMON;
+        oreThisLevel    = 0.0;
+        return;
+    }
+
     oreThisLevel = 0.0;
+
+    const float bonusChance = 0.20f + oreLuckBonus() * 0.05f;
+    if (randFloat(0.f, 1.f) < bonusChance) {
+        isBonusZone     = true;
+        bonusZoneRarity = rollBonusZoneRarity();
+    } else {
+        currentLevel++;
+        isBonusZone     = false;
+        bonusZoneRarity = OreRarity::COMMON;
+    }
 }
 
 namespace {
@@ -636,6 +769,8 @@ void GameState::reset() {
     bossCrystalPopup  = 0.0;
     unlockPhaseDone.fill(false);
     keyAsteroidsEnabled = false;
+    isBonusZone        = false;
+    bonusZoneRarity     = OreRarity::COMMON;
 }
 
 void GameState::migrateUnlockProgressFromLegacyState() {
@@ -696,6 +831,10 @@ bool GameState::save(const std::string& path) const {
     }
     const uint8_t keyAst = keyAsteroidsEnabled ? 1u : 0u;
     f.write(reinterpret_cast<const char*>(&keyAst), sizeof(keyAst));
+    const uint8_t bonusB = isBonusZone ? 1u : 0u;
+    f.write(reinterpret_cast<const char*>(&bonusB), sizeof(bonusB));
+    const uint8_t bonusR = static_cast<uint8_t>(bonusZoneRarity);
+    f.write(reinterpret_cast<const char*>(&bonusR), sizeof(bonusR));
     return f.good();
 }
 
@@ -820,6 +959,17 @@ bool GameState::load(const std::string& path) {
         keyAsteroidsEnabled = (keyAst != 0);
     } else
         migrateUnlockProgressFromLegacyState();
+    isBonusZone     = false;
+    bonusZoneRarity = OreRarity::COMMON;
+    if (ver >= 16) {
+        uint8_t bonusB = 0;
+        f.read(reinterpret_cast<char*>(&bonusB), sizeof(bonusB));
+        uint8_t bonusR = 0;
+        f.read(reinterpret_cast<char*>(&bonusR), sizeof(bonusR));
+        isBonusZone = (bonusB != 0);
+        if (bonusR <= static_cast<uint8_t>(OreRarity::LEGENDARY))
+            bonusZoneRarity = static_cast<OreRarity>(bonusR);
+    }
     if (lives > maxLives())
         lives = maxLives();
     return f.good();
@@ -838,5 +988,7 @@ void GameState::gameOver() {
     oreThisLevel = 0.0;
     currentLevel = 1;
     lives        = maxLives();
+    isBonusZone     = false;
+    bonusZoneRarity = OreRarity::COMMON;
     // upgrades blijven staan
 }

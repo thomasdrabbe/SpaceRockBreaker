@@ -44,8 +44,20 @@ public:
     double oreThisLevel  = 0.0;   // ore verzameld in huidig level
     bool warpDriveUnlocked() const;
     bool canWarp()           const;   // warpDrive + oreThisLevel >= 10
-    void doWarp();                    // level++ + reset
+    void doWarp();                    // normale warp / bonus-zone logica
     float warpDurationSec() const;
+
+    /// Optionele bonus-zone (zelfde `currentLevel`, extra loot).
+    bool        isBonusZone     = false;
+    OreRarity   bonusZoneRarity = OreRarity::COMMON;
+
+    OreTier bonusZoneMinOreTier() const;
+    float   bonusZoneOreValueMult() const;
+    /// Sleutel-asteroïde ore-tier: `preferred` maar nooit boven `maxUnlocked`.
+    static OreTier clampKeyOreTier(OreTier preferred, OreTier maxUnlocked);
+
+    std::string zoneNameFor(int zone) const;
+    std::string currentZoneName() const;
     // ── Currencies ────────────────────────────────────────
     double credits       = 0.0;
     double ore           = 0.0;
@@ -104,7 +116,7 @@ public:
     double lastOreValue = 1.0;   // waarde van meest recent gecollecte ore
     float   levelHpMult()   const;   // asteroid HP scale per level
     int     levelSpawnBonus() const; // extra asteroids per level
-    std::string levelLabel() const;  // "Zone 1", "Zone 2" …
+    std::string levelLabel() const;  // "Zone N — …" met procedurele naam
     int oreWarpRequirement() const;  // ores nodig voor warp in huidig level
 
         // ── Lives ─────────────────────────────────────────────
@@ -204,6 +216,8 @@ public:
     void migrateUnlockProgressFromLegacyState();
 
 private:
+    OreRarity rollBonusZoneRarity();
+
     float _crystalDamageBonus()  const;
     float _crystalMiningBonus()  const;
     float _crystalEconomyBonus() const;

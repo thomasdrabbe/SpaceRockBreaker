@@ -178,6 +178,7 @@ void Asteroid::spawn(AsteroidTier t,
     isBoss        = false;
     isMeteor      = false;
     bossPhase     = 0.f;
+    keyPickupCount = -1;
     tier         = t;
     oreTier      = ot;
     rarity       = rollAsteroidRarity();
@@ -201,18 +202,20 @@ void Asteroid::spawn(AsteroidTier t,
 // ═════════════════════════════════════════════════════════════
 //  Asteroid::spawnKey  — één per zone, 2× HP vs gelijk grootte-tier
 // ═════════════════════════════════════════════════════════════
-void Asteroid::spawnKey(sf::Vector2f p, sf::Vector2f v, float hpMult) {
+void Asteroid::spawnKey(sf::Vector2f p, sf::Vector2f v, float hpMult,
+                        OreTier keyOreTier, int forcedKeys) {
     AsteroidTier t = AsteroidTier::LARGE;
     const auto& td  = TIER_TABLE[static_cast<int>(t)];
-    const auto& otd = ORE_TIER_TABLE[static_cast<int>(OreTier::GOLD)];
+    const auto& otd = ORE_TIER_TABLE[static_cast<int>(keyOreTier)];
 
     isKeyAsteroid = true;
     isBoss        = false;
     isMeteor      = false;
     bossPhase     = 0.f;
     tier          = t;
-    oreTier       = OreTier::GOLD;
+    oreTier       = keyOreTier;
     rarity        = OreRarity::COMMON;
+    keyPickupCount = forcedKeys;
     pos           = p;
     vel           = v;
     radius        = randFloat(td.radiusMin, td.radiusMax);
@@ -243,6 +246,7 @@ void Asteroid::spawnBoss(float ox, float oy, float areaW, float areaH,
     isBoss        = true;
     isKeyAsteroid = false;
     isMeteor      = false;
+    keyPickupCount = -1;
     bossPhase     = randFloat(0.f, 2.f * PI);
     tier          = t;
     oreTier       = lootTier;
@@ -275,6 +279,7 @@ void Asteroid::spawnMeteor(sf::Vector2f p, sf::Vector2f v,
     isMeteor      = true;
     isKeyAsteroid = false;
     isBoss        = false;
+    keyPickupCount = -1;
     bossPhase     = 0.f;
     tier          = AsteroidTier::SMALL;
     oreTier       = ot;
@@ -842,7 +847,8 @@ void AsteroidManager::draw(sf::RenderTarget& target,
 }
 
 bool AsteroidManager::trySpawnKey(float ox, float oy, float areaW,
-                                   float areaH, float hpMult) {
+                                   float areaH, float hpMult, OreTier keyOreTier,
+                                   int forcedKeyCount) {
     if (!m_keyAsteroidsEnabled)
         return false;
     for (const auto& a : m_pool)
@@ -885,8 +891,54 @@ bool AsteroidManager::trySpawnKey(float ox, float oy, float areaW,
         cy - spawnPos.y + randFloat(-areaH * 0.3f, areaH * 0.3f)
     });
 
-    ast->spawnKey(spawnPos, dir * speed, hpMult);
+    ast->spawnKey(spawnPos, dir * speed, hpMult, keyOreTier, forcedKeyCount);
     return true;
+}
+
+void AsteroidManager::spawnBonusKeyAsteroid(float ox, float oy, float areaW,
+                                            float areaH, float hpMult,
+                                            OreTier keyOreTier,
+                                            int     forcedKeyCount) {
+    if (!m_keyAsteroidsEnabled)
+        return;
+
+    Asteroid* ast = claim();
+    if (!ast)
+        return;
+
+    AsteroidTier t = AsteroidTier::LARGE;
+    const auto& td = TIER_TABLE[static_cast<int>(t)];
+    float r        = td.radiusMax;
+    float speed    = randFloat(td.speedMin, td.speedMax);
+
+    int side = randInt(0, 3);
+    sf::Vector2f spawnPos;
+    float cx = ox + areaW * 0.5f;
+    float cy = oy + areaH * 0.5f;
+
+    switch (side) {
+        case 0:
+            spawnPos = { randFloat(ox + r, ox + areaW - r), oy - r };
+            break;
+        case 1:
+            spawnPos = { randFloat(ox + r, ox + areaW - r),
+                         oy + areaH + r };
+            break;
+        case 2:
+            spawnPos = { ox - r, randFloat(oy + r, oy + areaH - r) };
+            break;
+        default:
+            spawnPos = { ox + areaW + r,
+                         randFloat(oy + r, oy + areaH - r) };
+            break;
+    }
+
+    sf::Vector2f dir = normalize({
+        cx - spawnPos.x + randFloat(-areaW * 0.3f, areaW * 0.3f),
+        cy - spawnPos.y + randFloat(-areaH * 0.3f, areaH * 0.3f)
+    });
+
+    ast->spawnKey(spawnPos, dir * speed, hpMult, keyOreTier, forcedKeyCount);
 }
 
 bool AsteroidManager::trySpawnBoss(float ox, float oy, float areaW,
