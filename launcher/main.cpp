@@ -1,5 +1,6 @@
 #include <SFML/Graphics.hpp>
 #include <windows.h>
+#include <shellapi.h>
 #include <winhttp.h>
 
 #include <atomic>
@@ -538,19 +539,53 @@ static bool applyStagedUpdateInProcess(const fs::path& installDir,
     return allOk;
 }
 
-static void startGame(const fs::path& exe) {
-    std::wstring p = exe.wstring();
-    std::vector<wchar_t> args(p.begin(), p.end());
-    args.push_back(L'\0');
+static bool startGame(const fs::path& exe) {
+    const std::wstring& appPath = exe.native();
     STARTUPINFOW si{};
-    si.cb = sizeof(si);
+    si.cb          = sizeof(si);
+    si.dwFlags     = STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_SHOWNORMAL;
     PROCESS_INFORMATION pi{};
-    CreateProcessW(exe.c_str(), args.data(), nullptr, nullptr, FALSE, 0,
-                   nullptr, exeDir().c_str(), &si, &pi);
-    if (pi.hThread)
-        CloseHandle(pi.hThread);
-    if (pi.hProcess)
-        CloseHandle(pi.hProcess);
+    // With a full path in lpApplicationName, lpCommandLine must be NULL or a
+    // writable buffer; NULL avoids quoting/space issues on the command line.
+    if (CreateProcessW(appPath.c_str(),
+                       nullptr,
+                       nullptr,
+                       nullptr,
+                       FALSE,
+                       CREATE_DEFAULT_ERROR_MODE,
+                       nullptr,
+                       exeDir().c_str(),
+                       &si,
+                       &pi)) {
+        if (pi.hThread)
+            CloseHandle(pi.hThread);
+        if (pi.hProcess)
+            CloseHandle(pi.hProcess);
+        return true;
+    }
+
+    const DWORD cpErr = GetLastError();
+    {
+        std::ostringstream oss;
+        oss << "CreateProcess SpaceRockBreaker failed: GetLastError="
+            << cpErr << " path=" << narrowAscii(appPath);
+        logLine(oss.str());
+    }
+
+    SHELLEXECUTEINFOW sei{};
+    sei.cbSize       = sizeof(sei);
+    sei.lpVerb       = L"open";
+    sei.lpFile       = appPath.c_str();
+    sei.lpDirectory  = exeDir().c_str();
+    sei.nShow        = SW_SHOWNORMAL;
+    sei.fMask        = SEE_MASK_FLAG_NO_UI;
+    if (ShellExecuteExW(&sei)) {
+        logLine("startGame: ShellExecuteEx open fallback succeeded.");
+        return true;
+    }
+    logLine("startGame: ShellExecuteEx fallback failed.");
+    return false;
 }
 
 int main() {

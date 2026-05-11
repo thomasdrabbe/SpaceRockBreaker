@@ -1,8 +1,10 @@
 #include "GameState.h"
 #include "Utils.h"
-#include <fstream>
-#include <cmath>
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <fstream>
+#include <limits>
 // ═════════════════════════════════════════════════════════════
 //  Static catalogs
 // ═════════════════════════════════════════════════════════════
@@ -348,7 +350,13 @@ bool GameState::openOneChest(ChestUpgradeID* outChosen) {
 //  warp drive requirments
 // ═════════════════════════════════════════════════════════════
 int GameState::oreWarpRequirement() const {
-    return 5 * currentLevel * (currentLevel + 1);
+    const std::int64_t z = static_cast<std::int64_t>(currentLevel);
+    const std::int64_t p = 5 * z * (z + 1);
+    if (p > std::numeric_limits<int>::max())
+        return std::numeric_limits<int>::max();
+    if (p < 1)
+        return 1;
+    return static_cast<int>(p);
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -470,7 +478,14 @@ float GameState::levelHpMult() const {
 
 int GameState::levelSpawnBonus() const {
     // +2 extra target asteroids per zone level
-    return (currentLevel - 1) * 2;
+    const std::int64_t z = static_cast<std::int64_t>(currentLevel);
+    const std::int64_t b = (z - 1) * 2;
+    constexpr int        kCap = 500;
+    if (b >= kCap)
+        return kCap;
+    if (b <= 0)
+        return 0;
+    return static_cast<int>(b);
 }
 
 std::string GameState::levelLabel() const {
@@ -873,6 +888,51 @@ bool GameState::peekSaveSlot(const std::string& path,
     return true;
 }
 
+namespace {
+
+void sanitizeLoadedState(GameState& s) {
+    if (s.currentLevel < 1)
+        s.currentLevel = 1;
+    constexpr int kMaxZone = 500'000;
+    if (s.currentLevel > kMaxZone)
+        s.currentLevel = kMaxZone;
+
+    if (s.keys < 0)
+        s.keys = 0;
+
+    if (s.nextBossMilestone < 3)
+        s.nextBossMilestone = 3;
+    if (s.nextBossMilestone > s.currentLevel + 5000)
+        s.nextBossMilestone = std::max(3, s.currentLevel);
+
+    auto fixNonNegFinite = [](double& v) {
+        if (!std::isfinite(v) || v < 0.0)
+            v = 0.0;
+    };
+    fixNonNegFinite(s.credits);
+    fixNonNegFinite(s.ore);
+    fixNonNegFinite(s.crystals);
+    fixNonNegFinite(s.totalCredits);
+    fixNonNegFinite(s.totalOre);
+    fixNonNegFinite(s.oreThisLevel);
+    fixNonNegFinite(s.bossCrystalPopup);
+    for (double& t : s.orePerTier)
+        fixNonNegFinite(t);
+
+    if (s.prestigeCount < 0)
+        s.prestigeCount = 0;
+
+    if (s.isBonusZone) {
+        const int br = static_cast<int>(s.bonusZoneRarity);
+        if (br < 0 || br > static_cast<int>(OreRarity::LEGENDARY)) {
+            s.isBonusZone     = false;
+            s.bonusZoneRarity = OreRarity::COMMON;
+        }
+    }
+}
+
+} // namespace
+
 bool GameState::load(const std::string& path) {
     std::ifstream f(path, std::ios::binary);
     if (!f) return false;
@@ -970,6 +1030,7 @@ bool GameState::load(const std::string& path) {
         if (bonusR <= static_cast<uint8_t>(OreRarity::LEGENDARY))
             bonusZoneRarity = static_cast<OreRarity>(bonusR);
     }
+    sanitizeLoadedState(*this);
     if (lives > maxLives())
         lives = maxLives();
     return f.good();

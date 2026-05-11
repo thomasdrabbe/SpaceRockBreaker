@@ -31,7 +31,7 @@ target_link_libraries(SpaceRockLauncher PRIVATE
 )
 
 if(WIN32)
-    target_link_libraries(SpaceRockLauncher PRIVATE winhttp)
+    target_link_libraries(SpaceRockLauncher PRIVATE winhttp shell32)
 endif()
 
 if(MSVC)
