@@ -693,7 +693,8 @@ void MiningScreen::drawHUD(sf::RenderTarget& target,
         };
         const int ri =
             std::clamp(static_cast<int>(state.bonusZoneRarity), 0, 5);
-        const std::string ban = std::string(rNames[ri]) + " BONUS ZONE";
+        const std::string ban =
+            strFromNullableUtf8(rNames[ri]) + " BONUS ZONE";
         sf::Text banT(*m_font);
         banT.setString(ban);
         banT.setCharacterSize(18);

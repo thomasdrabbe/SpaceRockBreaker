@@ -1,6 +1,7 @@
 #include "Game.h"
 #include "SoundHub.h"
 #include "Utils.h"
+#include <cstdlib>
 #include <fstream>
 #include <sstream>
 #include <iomanip>
@@ -149,10 +150,15 @@ void drawPanelKey(sf::RenderTarget& rw, float cx, float cy, float s,
 }
 
 // Bold label centered in a rectangle (origin-based; avoids drawText style order).
+// `str` by value: avoids reference-to-temporary edge cases when callers pass
+// `const char*` / `std::string` (implicit sf::String) — can otherwise crash in
+// MSVC debug CRT inside string / strlen paths.
 void drawBoldTextCenteredInRect(sf::RenderTarget& target, const sf::Font& font,
-                                const sf::String& str, float bx, float by, float w,
+                                sf::String str, float bx, float by, float w,
                                 float h, unsigned charSize, sf::Color color,
                                 float yNudgePx = 0.f) {
+    if (str.isEmpty())
+        return;
     sf::Text text(font);
     text.setCharacterSize(charSize);
     text.setString(str);
@@ -208,24 +214,27 @@ Game::Game()
 {
     m_window.setFramerateLimit(TARGET_FPS);
 
-    const bool notoOk =
-        m_font.openFromFile("assets/NotoSans-Regular.ttf");
-    if (!notoOk) {
-        bool ok = m_font.openFromFile("assets/font.ttf");
-        if (!ok)
-            ok = m_font.openFromFile("C:/Windows/Fonts/arial.ttf");
-        (void)ok;
+    // Zelfde padlogica als textures; voorkomt mislukte loads bij andere cwd.
+    const std::string fontNoto = resolveAssetPath("assets/NotoSans-Regular.ttf");
+    const std::string fontAlt  = resolveAssetPath("assets/font.ttf");
+    const bool        mainOk =
+        m_font.openFromFile(fontNoto) || m_font.openFromFile(fontAlt)
+        || m_font.openFromFile("C:/Windows/Fonts/arial.ttf");
+    const bool fbOk = m_fontFallback.openFromFile(fontAlt)
+                      || m_fontFallback.openFromFile(
+                          "C:/Windows/Fonts/arial.ttf");
+    if (!mainOk && fbOk)
+        m_font = m_fontFallback;
+#if defined(_WIN32)
+    if (!mainOk && !fbOk) {
+        MessageBoxA(nullptr,
+                    "Geen lettertype geladen. Zorg dat de map 'assets' naast "
+                    "SpaceRockBreaker.exe staat (of start vanuit de build-map).",
+                    "Space Rock Breaker",
+                    MB_ICONERROR);
+        std::exit(1);
     }
-    if (notoOk) {
-        bool fb = m_fontFallback.openFromFile("assets/font.ttf");
-        if (!fb)
-            fb = m_fontFallback.openFromFile("C:/Windows/Fonts/arial.ttf");
-        (void)fb;
-    } else {
-        (void)m_fontFallback.openFromFile("C:/Windows/Fonts/arial.ttf");
-    }
-    (void)m_fontFallback.getInfo().family.size();
-    (void)notoOk;
+#endif
 
     initLayout();
 
@@ -622,7 +631,7 @@ void Game::update(float dt) {
                         const int idx = std::clamp(
                             static_cast<int>(m_state.bonusZoneRarity), 0,
                             static_cast<int>(OreRarity::LEGENDARY));
-                        pushNotif(std::string(msgs[idx]) + " - "
+                        pushNotif(strFromNullableUtf8(msgs[idx]) + " - "
                                       + m_state.currentZoneName(),
                                   cols[idx]);
                     } else {

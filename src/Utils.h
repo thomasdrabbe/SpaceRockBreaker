@@ -88,6 +88,12 @@ inline float lerp(float a, float b, float t) {
 // ─────────────────────────────────────────────────────────────
 //  Number formatting
 // ─────────────────────────────────────────────────────────────
+/// Bouwt `std::string` van een C-string; `nullptr` wordt lege string (MSVC-debug
+/// crasht op `std::string(nullptr)` / `strlen`).
+[[nodiscard]] inline std::string strFromNullableUtf8(const char* p) {
+    return p != nullptr ? std::string(p) : std::string();
+}
+
 inline std::string formatBig(double val) {
     const double T = 1e12, B = 1e9, M = 1e6, K = 1e3;
     std::ostringstream ss;

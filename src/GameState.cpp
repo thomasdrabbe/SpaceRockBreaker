@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstddef>
 #include <fstream>
 #include <limits>
 // ═════════════════════════════════════════════════════════════
@@ -52,6 +53,10 @@ GameState::upgradeCatalog = {{
       5 },
     { "Bullet Range", "+8% bullet travel time / range", 88.0, 1.50, 0 },
 }};
+static_assert(
+    GameState::upgradeCatalog.size()
+        == static_cast<std::size_t>(UpgradeID::UPGRADE_COUNT),
+    "upgradeCatalog must have exactly one entry per UpgradeID value");
 
 const std::array<PrestigeUpgradeDef,
     static_cast<int>(PrestigeUpgradeID::PRESTIGE_UPGRADE_COUNT)>
@@ -62,6 +67,10 @@ GameState::prestigeCatalog = {{
     { "Crystal Plinko",  "+15% plinko multipliers",      1.0, 1.80, 0 },
     { "Deep Retention",  "Keep 2 extra upgrades/level",  3.0, 2.50, 0 },
 }};
+static_assert(GameState::prestigeCatalog.size()
+                  == static_cast<std::size_t>(
+                      PrestigeUpgradeID::PRESTIGE_UPGRADE_COUNT),
+              "prestigeCatalog must match PrestigeUpgradeID count");
 
 const std::array<ChestDef, static_cast<int>(ChestUpgradeID::CHEST_UPGRADE_COUNT)>
 GameState::chestCatalog = {{
@@ -76,6 +85,10 @@ GameState::chestCatalog = {{
       "meer niveaus = meer duplicator-pegs (rolls)",
       0 },
 }};
+static_assert(
+    GameState::chestCatalog.size()
+        == static_cast<std::size_t>(ChestUpgradeID::CHEST_UPGRADE_COUNT),
+    "chestCatalog must match ChestUpgradeID count");
 
 // ═════════════════════════════════════════════════════════════
 //  Crystal bonuses
@@ -572,18 +585,23 @@ std::string GameState::zoneNameFor(int zone) const {
             "",         "Rich ",      "Fertile ",   "Bountiful ",
             "Sacred ",  "Legendary ",
         };
+        static_assert(
+            std::size(rarityPrefixes)
+                == static_cast<std::size_t>(OreRarity::LEGENDARY) + 1u,
+            "rarityPrefixes must align with OreRarity COMMON..LEGENDARY");
         const int ri =
             std::clamp(static_cast<int>(bonusZoneRarity), 0,
                        static_cast<int>(OreRarity::LEGENDARY));
-        prefix = rarityPrefixes[ri];
+        prefix = strFromNullableUtf8(
+            rarityPrefixes[static_cast<std::size_t>(ri)]);
     }
 
-    const std::string type =
-        ZONE_PREFIXES[pick(kZonePrefixCount, 1u)];
-    const std::string planet =
-        ZONE_PLANETS[pick(kZonePlanetCount, 2u)];
-    const std::string suffix =
-        ZONE_SUFFIXES[pick(kZoneSuffixCount, 3u)];
+    const std::string type = strFromNullableUtf8(
+        ZONE_PREFIXES[static_cast<std::size_t>(pick(kZonePrefixCount, 1u))]);
+    const std::string planet = strFromNullableUtf8(
+        ZONE_PLANETS[static_cast<std::size_t>(pick(kZonePlanetCount, 2u))]);
+    const std::string suffix = strFromNullableUtf8(
+        ZONE_SUFFIXES[static_cast<std::size_t>(pick(kZoneSuffixCount, 3u))]);
 
     return prefix + type + " " + planet + "-" + suffix;
 }

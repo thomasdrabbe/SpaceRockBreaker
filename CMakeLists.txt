@@ -1,5 +1,22 @@
-set(CMAKE_TOOLCHAIN_FILE "C:/vcpkg/scripts/buildsystems/vcpkg.cmake"
-    CACHE STRING "")
+# vcpkg-toolchain kiezen vóór project():
+# - Visual Studio zet vaak VCPKG_ROOT naar ...\VC\vcpkg (ingebed), terwijl je packages
+#   op C:\vcpkg hebt staan — daarom eerst standalone C:\vcpkg als die bestaat.
+# - Of: zelf -DCMAKE_TOOLCHAIN_FILE=... meegeven.
+if(NOT CMAKE_TOOLCHAIN_FILE)
+    set(_SRB_STANDALONE_TOOLCHAIN "C:/vcpkg/scripts/buildsystems/vcpkg.cmake")
+    if(EXISTS "${_SRB_STANDALONE_TOOLCHAIN}")
+        set(CMAKE_TOOLCHAIN_FILE "${_SRB_STANDALONE_TOOLCHAIN}"
+            CACHE FILEPATH "vcpkg toolchain")
+    elseif(DEFINED ENV{VCPKG_ROOT} AND NOT "$ENV{VCPKG_ROOT}" STREQUAL "")
+        file(TO_CMAKE_PATH "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+             _SRB_VCPKG_TOOLCHAIN)
+        set(CMAKE_TOOLCHAIN_FILE "${_SRB_VCPKG_TOOLCHAIN}"
+            CACHE FILEPATH "vcpkg toolchain")
+    else()
+        set(CMAKE_TOOLCHAIN_FILE "${_SRB_STANDALONE_TOOLCHAIN}"
+            CACHE FILEPATH "vcpkg toolchain")
+    endif()
+endif()
 cmake_minimum_required(VERSION 3.16)
 project(SpaceRockBreaker LANGUAGES CXX)
 
