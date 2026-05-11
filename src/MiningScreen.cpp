@@ -453,10 +453,12 @@ void MiningScreen::draw(sf::RenderTarget& target,
     const auto   pxSz = target.getSize();
     const float  rw   = std::max(1.f, static_cast<float>(pxSz.x));
     const float  rh   = std::max(1.f, static_cast<float>(pxSz.y));
-    const float  vpX  = m_x / rw;
-    const float  vpY  = m_y / rh;
-    const float  vpW  = m_w / rw;
-    const float  vpH  = m_h / rh;
+    float vpX = std::clamp(m_x / rw, 0.f, 1.f);
+    float vpY = std::clamp(m_y / rh, 0.f, 1.f);
+    float vpW = std::clamp(m_w / rw, 0.001f, 1.f);
+    float vpH = std::clamp(m_h / rh, 0.001f, 1.f);
+    vpW        = std::min(vpW, 1.f - vpX);
+    vpH        = std::min(vpH, 1.f - vpY);
 
     sf::View mineView(sf::FloatRect(
         { m_x, m_y }, { m_w, m_h }));
@@ -482,7 +484,8 @@ void MiningScreen::draw(sf::RenderTarget& target,
     m_bullets.draw(target);
     m_turrets.draw(target);
     m_player.draw(target);
-    m_particles.draw(target, *m_font);
+    if (m_font)
+        m_particles.draw(target, *m_font);
 
     drawWarpFlashOverlay(target, warpFlashRemain);
 
@@ -615,55 +618,57 @@ void MiningScreen::drawCollectRing(sf::RenderTarget& target,
 void MiningScreen::drawHUD(sf::RenderTarget& target,
                              const GameState&  state,
                              float             warpCharge) const {
+    if (!m_font)
+        return;
 
     // ── Warp UI ───────────────────────────────────────────────
     if (state.warpDriveUnlocked()) {
-    float barW = m_w * 0.25f;                        // 25% van schermbreed
-    float barH = m_h * 0.014f;                       // ~1.4% van schermhoog
-    float barX = m_x + m_w * 0.5f - barW * 0.5f;
-    float barY = m_y + m_h - barH - m_h * 0.02f;
-    unsigned fontSize = static_cast<unsigned>(
-        std::max(10.f, m_h * 0.016f));
+        float barW = m_w * 0.25f;                        // 25% van schermbreed
+        float barH = m_h * 0.014f;                       // ~1.4% van schermhoog
+        float barX = m_x + m_w * 0.5f - barW * 0.5f;
+        float barY = m_y + m_h - barH - m_h * 0.02f;
+        unsigned fontSize = static_cast<unsigned>(
+            std::max(10.f, m_h * 0.016f));
 
-    // Achtergrond
-    sf::RectangleShape bg(sf::Vector2f(barW, barH));
-    bg.setPosition(sf::Vector2f(barX, barY));
-    bg.setFillColor(sf::Color(20, 20, 40, 200));
-    bg.setOutlineColor(sf::Color(80, 140, 255, 160));
-    bg.setOutlineThickness(1.f);
-    target.draw(bg);
+        // Achtergrond
+        sf::RectangleShape bg(sf::Vector2f(barW, barH));
+        bg.setPosition(sf::Vector2f(barX, barY));
+        bg.setFillColor(sf::Color(20, 20, 40, 200));
+        bg.setOutlineColor(sf::Color(80, 140, 255, 160));
+        bg.setOutlineThickness(1.f);
+        target.draw(bg);
 
-    // Charge fill
-    if (warpCharge > 0.f) {
-        sf::RectangleShape fill(sf::Vector2f(
-            barW * warpCharge, barH));
-        fill.setPosition(sf::Vector2f(barX, barY));
-        uint8_t g = static_cast<uint8_t>(120 + 135 * warpCharge);
-        fill.setFillColor(sf::Color(60, g, 255, 220));
-        target.draw(fill);
+        // Charge fill
+        if (warpCharge > 0.f) {
+            sf::RectangleShape fill(sf::Vector2f(
+                barW * warpCharge, barH));
+            fill.setPosition(sf::Vector2f(barX, barY));
+            uint8_t g = static_cast<uint8_t>(120 + 135 * warpCharge);
+            fill.setFillColor(sf::Color(60, g, 255, 220));
+            target.draw(fill);
+        }
+
+        // Label
+        sf::Text lbl(*m_font);
+        lbl.setCharacterSize(fontSize);
+        lbl.setFillColor(sf::Color(160, 200, 255));
+        if (!state.canWarp())
+            lbl.setString("Warp: " +
+                std::to_string(static_cast<int>(state.oreThisLevel))
+                + " / " +
+                std::to_string(state.oreWarpRequirement()) +
+                " ore");
+        else if (warpCharge <= 0.f)
+            lbl.setString("Warp ready - hold Space");
+        else
+            lbl.setString("Warping...");
+
+        float lw = lbl.getLocalBounds().size.x;
+        lbl.setPosition(sf::Vector2f(
+            barX + (barW - lw) * 0.5f,
+            barY - barH - fontSize * 1.2f));
+        target.draw(lbl);
     }
-
-    // Label
-    sf::Text lbl(*m_font);
-    lbl.setCharacterSize(fontSize);
-    lbl.setFillColor(sf::Color(160, 200, 255));
-    if (!state.canWarp())
-        lbl.setString("Warp: " +
-            std::to_string(static_cast<int>(state.oreThisLevel))
-            + " / " +
-            std::to_string(state.oreWarpRequirement()) +
-            " ore");
-    else if (warpCharge <= 0.f)
-        lbl.setString("Warp ready - hold Space");
-    else
-        lbl.setString("Warping...");
-
-    float lw = lbl.getLocalBounds().size.x;
-    lbl.setPosition(sf::Vector2f(
-        barX + (barW - lw) * 0.5f,
-        barY - barH - fontSize * 1.2f));
-    target.draw(lbl);
-}
 
     // Zone label — linksboven
     sf::Text zoneLabel(*m_font);

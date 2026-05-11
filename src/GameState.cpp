@@ -489,7 +489,8 @@ int GameState::levelSpawnBonus() const {
 }
 
 std::string GameState::levelLabel() const {
-    return "Zone " + std::to_string(currentLevel) + " — " + currentZoneName();
+    // ASCII separator: sommige systemen/fonts crashen of falen op U+2014 (em dash).
+    return "Zone " + std::to_string(currentLevel) + " - " + currentZoneName();
 }
 
 OreTier GameState::bonusZoneMinOreTier() const {
@@ -770,11 +771,14 @@ void GameState::doPrestige() {
 void GameState::reset() {
     credits      = 0.0;
     ore          = 0.0;
+    crystals     = 0.0;
     totalCredits = 0.0;
     totalOre     = 0.0;
     orePerTier.fill(0.0);
     currentLevel = 1;          // ← nieuw
     upgradeLevels.fill(0);
+    prestigeLevels.fill(0);
+    prestigeCount = 0;
     oreThisLevel = 0.0;
     difficulty   = Difficulty::Medium;
     lives        = maxLives();

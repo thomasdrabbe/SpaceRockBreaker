@@ -269,8 +269,8 @@ void Game::initLayout() {
 
     m_cntX   = 0.f;
     m_cntY   = m_tabH;
-    m_cntW   = m_scrW - m_sideW;
-    m_cntH   = m_scrH - m_tabH;
+    m_cntW   = std::max(64.f, m_scrW - m_sideW);
+    m_cntH   = std::max(64.f, m_scrH - m_tabH);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -591,13 +591,15 @@ void Game::update(float dt) {
                             sf::Color(220, 50, 50),
                             sf::Color(255, 170, 0),
                         };
-                        const int idx = static_cast<int>(m_state.bonusZoneRarity);
-                        pushNotif(std::string(msgs[idx]) + " — "
+                        const int idx = std::clamp(
+                            static_cast<int>(m_state.bonusZoneRarity), 0,
+                            static_cast<int>(OreRarity::LEGENDARY));
+                        pushNotif(std::string(msgs[idx]) + " - "
                                       + m_state.currentZoneName(),
                                   cols[idx]);
                     } else {
                         pushNotif("Zone " + std::to_string(m_state.currentLevel)
-                                      + " — " + m_state.currentZoneName(),
+                                      + " - " + m_state.currentZoneName(),
                                   sf::Color(120, 220, 255));
                     }
                 }
@@ -973,7 +975,7 @@ void Game::onMouseClick(sf::Vector2f pos, sf::Mouse::Button btn) {
             m_audio->stopGameOverMusic();
             if (m_runFlow)
                 m_runFlow->startRun();
-            pushNotif(std::string("Run gestart — ") + m_state.levelLabel(),
+            pushNotif(std::string("Run gestart - ") + m_state.levelLabel(),
                       sf::Color(120, 220, 255));
             return;
         }
@@ -1755,6 +1757,11 @@ void Game::handleMainMenuClick(sf::Vector2f pos) {
             invalidateSaveSlotPreviewCache();
             m_diskSessionActive    = true;
             m_showMainMenu         = false;
+            {
+                GameUnlockEffects unlockFx(*this, m_shop, m_mining);
+                m_unlockSystem.update(m_state, m_notifications, unlockFx);
+                clampActiveTabToVisibility();
+            }
             pushNotif("Nieuw spel - slot " +
                           std::to_string(m_saveSlot + 1) + ".",
                       sf::Color(180, 180, 180));
@@ -2310,7 +2317,7 @@ void Game::drawPlinkoUnlockHintBelowDrop(bool seeThroughMiningBackdrop) const {
     const float    tx  = drop.position.x + padIn;
 
     std::string zoneLine = m_state.levelLabel();
-    zoneLine += (m_runMode == RunMode::RUNNING) ? " — run" : " — basis";
+    zoneLine += (m_runMode == RunMode::RUNNING) ? " - run" : " - basis";
     drawText(zoneLine, tx, ty, fsZ, sf::Color(140, 200, 255));
     ty += static_cast<float>(fsZ) + 2.f;
     drawText(hint.heading, tx, ty, fsZ, sf::Color(160, 165, 190));
