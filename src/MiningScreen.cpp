@@ -4,6 +4,60 @@
 #include <cmath>
 #include <sstream>
 #include <algorithm>
+#include <array>
+
+namespace {
+
+/// Zelfde hash-truc als `GameState::zoneNameFor`: per zone een vaste, donkere
+/// kleur (unsigned modulo — nooit negatieve index).
+[[nodiscard]] sf::Color normalMiningBackdrop(int zone) {
+    const unsigned uz = static_cast<unsigned>(std::max(1, zone));
+    auto             ch = [&](unsigned salt, int lo, unsigned span) -> uint8_t {
+        const unsigned mix = (uz * 2654435761u) ^ (salt * 2246822519u);
+        const int      v   = lo + static_cast<int>(mix % span);
+        return static_cast<uint8_t>(std::clamp(v, 0, 255));
+    };
+    // Iets hogere basis + bredere span → zones duidelijker van elkaar te onderscheiden.
+    return sf::Color(ch(1u, 5, 40u), ch(2u, 7, 46u), ch(3u, 12, 54u));
+}
+
+[[nodiscard]] sf::Color bonusMiningBackdrop(OreRarity r) {
+    switch (r) {
+        case OreRarity::COMMON:
+            return sf::Color(22, 14, 36);
+        case OreRarity::UNCOMMON:
+            return sf::Color(14, 26, 38);
+        case OreRarity::RARE:
+            return sf::Color(12, 16, 48);
+        case OreRarity::EPIC:
+            return sf::Color(40, 12, 52);
+        case OreRarity::MYTHIC:
+            return sf::Color(48, 10, 30);
+        case OreRarity::LEGENDARY:
+            return sf::Color(44, 24, 10);
+        default:
+            return sf::Color(18, 12, 32);
+    }
+}
+
+[[nodiscard]] sf::Color miningBackdropBase(const GameState& state) {
+    if (state.isBonusZone)
+        return bonusMiningBackdrop(state.bonusZoneRarity);
+    return normalMiningBackdrop(state.currentLevel);
+}
+
+/// Lichte RGB-nudge voor sterren in gewone zones (past bij zone-tint).
+[[nodiscard]] std::array<int, 3> normalZoneStarRgbBias(int zone) {
+    const unsigned uz = static_cast<unsigned>(std::max(1, zone));
+    auto             d = [&](unsigned salt, unsigned span) -> int {
+        const unsigned mix = (uz * 2654435761u) ^ (salt * 2246822519u);
+        return static_cast<int>(mix % span) - static_cast<int>(span / 2u);
+    };
+    // Sterkere tint op sterren (ongeveer ±6 i.p.v. ±3).
+    return { d(19u, 13u), d(29u, 13u), d(41u, 13u) };
+}
+
+} // namespace
 
 // ═════════════════════════════════════════════════════════════
 //  Constructor
@@ -469,10 +523,10 @@ void MiningScreen::draw(sf::RenderTarget& target,
     // ── Background ────────────────────────────────────────
     sf::RectangleShape bg(sf::Vector2f{ m_w, m_h });
     bg.setPosition({ m_x, m_y });
-    bg.setFillColor(sf::Color(4, 6, 16));
+    bg.setFillColor(miningBackdropBase(state));
     target.draw(bg);
 
-    drawStarfield(target, warpCharge);
+    drawStarfield(target, warpCharge, state);
     drawZoneBackground(target, state, animTime);
     drawCollectRing(target, state);
     drawCollector(target);
@@ -500,7 +554,8 @@ void MiningScreen::draw(sf::RenderTarget& target,
 //  drawStarfield
 // ─────────────────────────────────────────────────────────────
 void MiningScreen::drawStarfield(sf::RenderTarget& target,
-                                 float             warpCharge) const {
+                                 float             warpCharge,
+                                 const GameState& state) const {
     const float w  = std::clamp(warpCharge, 0.f, 1.f);
     const float we = std::pow(w, WARP_STAR_STREAK_POW);
     const float glow =
@@ -510,43 +565,120 @@ void MiningScreen::drawStarfield(sf::RenderTarget& target,
         star.setRadius(s.radius);
         star.setOrigin({ s.radius, s.radius });
         star.setPosition(s.pos);
-        const int b = std::min(
+        const int base = std::min(
             255,
             static_cast<int>(static_cast<float>(s.brightness) * glow));
-        const uint8_t bb = static_cast<uint8_t>(b);
+        uint8_t cr = static_cast<uint8_t>(base);
+        uint8_t cg = static_cast<uint8_t>(base);
+        uint8_t cb = static_cast<uint8_t>(base);
+        if (state.isBonusZone) {
+            switch (state.bonusZoneRarity) {
+                case OreRarity::COMMON:
+                    cr = static_cast<uint8_t>(std::min(255, base + 8));
+                    cg = static_cast<uint8_t>(std::min(255, base + 10));
+                    break;
+                case OreRarity::UNCOMMON:
+                    cg = static_cast<uint8_t>(
+                        std::min(255, base + 20));
+                    break;
+                case OreRarity::RARE:
+                    cb = static_cast<uint8_t>(
+                        std::min(255, base + 28));
+                    break;
+                case OreRarity::EPIC:
+                    cr = static_cast<uint8_t>(
+                        std::min(255, base + 24));
+                    cb = static_cast<uint8_t>(
+                        std::min(255, base + 16));
+                    break;
+                case OreRarity::MYTHIC:
+                    cr = static_cast<uint8_t>(
+                        std::min(255, base + 30));
+                    break;
+                case OreRarity::LEGENDARY:
+                    cr = static_cast<uint8_t>(
+                        std::min(255, base + 28));
+                    cg = static_cast<uint8_t>(
+                        std::min(255, base + 18));
+                    cb = static_cast<uint8_t>(
+                        std::max(0, base - 4)); // warme “goud”-sterren
+                    break;
+                default:
+                    break;
+            }
+        } else {
+            const std::array<int, 3> bias =
+                normalZoneStarRgbBias(state.currentLevel);
+            cr = static_cast<uint8_t>(std::clamp(base + bias[0], 0, 255));
+            cg = static_cast<uint8_t>(std::clamp(base + bias[1], 0, 255));
+            cb = static_cast<uint8_t>(std::clamp(base + bias[2], 0, 255));
+        }
         const uint8_t alpha = static_cast<uint8_t>(
             std::min(255, 165 + static_cast<int>(95.f * we)));
-        star.setFillColor(sf::Color(bb, bb, bb, alpha));
+        star.setFillColor(sf::Color(cr, cg, cb, alpha));
         target.draw(star);
     }
 }
 
 void MiningScreen::drawZoneBackground(sf::RenderTarget& target,
                                       const GameState&  state,
-                                      float /*animTime*/) const {
-    if (!state.isBonusZone)
+                                      float             animTime) const {
+    if (!state.isBonusZone) {
+        // Gewone zone: diepte + zone-tint (hoeken donkerder, midden open),
+        // licht pulserend zodat de ruimte niet statisch aanvoelt.
+        const sf::Color base = normalMiningBackdrop(state.currentLevel);
+        const float     cx   = m_x + m_w * 0.5f;
+        const float     cy   = m_y + m_h * 0.5f;
+        const float breathe =
+            0.5f + 0.5f * std::sin(animTime * 0.28f);
+        const auto edgeA = static_cast<std::uint8_t>(58 + breathe * 48);
+
+        auto darkCh = [&](std::uint8_t u) {
+            return static_cast<std::uint8_t>(
+                std::clamp(static_cast<int>(u) * 13 / 25, 0, 255));
+        };
+        const sf::Color corner(darkCh(base.r), darkCh(base.g), darkCh(base.b),
+                             edgeA);
+
+        sf::VertexArray va(sf::PrimitiveType::TriangleFan, 6);
+        va[0].position = { cx, cy };
+        va[0].color    = sf::Color(base.r, base.g, base.b, 0);
+        va[1].position = { m_x, m_y };
+        va[1].color    = corner;
+        va[2].position = { m_x + m_w, m_y };
+        va[2].color    = corner;
+        va[3].position = { m_x + m_w, m_y + m_h };
+        va[3].color    = corner;
+        va[4].position = { m_x, m_y + m_h };
+        va[4].color    = corner;
+        va[5].position = { m_x, m_y };
+        va[5].color    = corner;
+        target.draw(va);
         return;
+    }
     sf::RectangleShape tint(sf::Vector2f{ m_w, m_h });
     tint.setPosition({ m_x, m_y });
-    sf::Color fill(255, 240, 160, 20);
+    // Iets sterkere tint dan vroeger: anders leek de bonus-zone visueel
+    // bijna gelijk aan een normale zone (alleen HUD-tekst viel op).
+    sf::Color fill(255, 240, 160, 68);
     switch (state.bonusZoneRarity) {
         case OreRarity::COMMON:
-            fill = sf::Color(255, 240, 160, 20);
+            fill = sf::Color(255, 240, 160, 68);
             break;
         case OreRarity::UNCOMMON:
-            fill = sf::Color(255, 230, 100, 35);
+            fill = sf::Color(255, 230, 100, 96);
             break;
         case OreRarity::RARE:
-            fill = sf::Color(255, 210, 70, 50);
+            fill = sf::Color(255, 210, 70, 122);
             break;
         case OreRarity::EPIC:
-            fill = sf::Color(255, 160, 60, 65);
+            fill = sf::Color(255, 160, 60, 148);
             break;
         case OreRarity::MYTHIC:
-            fill = sf::Color(255, 120, 40, 80);
+            fill = sf::Color(255, 120, 40, 168);
             break;
         case OreRarity::LEGENDARY:
-            fill = sf::Color(255, 190, 80, 100);
+            fill = sf::Color(255, 210, 90, 188);
             break;
         default:
             break;

@@ -127,7 +127,8 @@ private:
     void resolveCollisions(GameState& state);
 
     // ── Draw helpers ──────────────────────────────────────
-    void drawStarfield(sf::RenderTarget& target, float warpCharge) const;
+    void drawStarfield(sf::RenderTarget& target, float warpCharge,
+                       const GameState& state) const;
     void drawZoneBackground(sf::RenderTarget& target,
                              const GameState&  state,
                              float             animTime) const;
