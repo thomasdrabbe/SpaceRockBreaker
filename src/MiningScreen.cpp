@@ -18,8 +18,8 @@ namespace {
         const int      v   = lo + static_cast<int>(mix % span);
         return static_cast<uint8_t>(std::clamp(v, 0, 255));
     };
-    // Iets hogere basis + bredere span → zones duidelijker van elkaar te onderscheiden.
-    return sf::Color(ch(1u, 5, 40u), ch(2u, 7, 46u), ch(3u, 12, 54u));
+    // Iets helderder bodem zodat halftransparante nevelkleur beter leesbaar is.
+    return sf::Color(ch(1u, 10, 48u), ch(2u, 14, 56u), ch(3u, 22, 64u));
 }
 
 [[nodiscard]] sf::Color bonusMiningBackdrop(OreRarity r) {
@@ -96,11 +96,61 @@ void MiningScreen::init(sf::Font& font,
 
     buildStarfield();
 
+    loadNebulaPngTextures();
+
     if (m_playerShipTex.loadFromFile(resolveAssetPath("assets/player_ship.png"))) {
         m_playerShipTex.setSmooth(true);
         m_player.setShipSprite(&m_playerShipTex);
     } else
         m_player.setShipSprite(nullptr);
+}
+
+void MiningScreen::loadNebulaPngTextures() {
+    // Volgorde = indices van `nebulaPngIndex()` (zie tabel zone ↔ bestand).
+    static constexpr const char* kRel[NEBULA_PNG_COUNT] = {
+        "assets/nebula/nebula_empty.png",
+        "assets/nebula/nebula_blue.png",
+        "assets/nebula/nebula_red.png",
+        "assets/nebula/nebula_green.png",
+        "assets/nebula/nebula_purple.png",
+        "assets/nebula/nebula_dark.png",
+        "assets/nebula/nebula_deep.png",
+        "assets/nebula/nebula_bonus_gold.png",
+        "assets/nebula/nebula_legendary.png",
+    };
+    for (int i = 0; i < NEBULA_PNG_COUNT; ++i) {
+        sf::Texture& t = m_nebulaPngTex[static_cast<std::size_t>(i)];
+        if (t.loadFromFile(resolveAssetPath(kRel[i])))
+            t.setSmooth(true);
+        else if (i == 0) {
+            // Tijdelijke fallback tot `nebula_empty.png` bestaat.
+            if (t.loadFromFile(resolveAssetPath("assets/nebula/nebula_black.png")))
+                t.setSmooth(true);
+        }
+    }
+}
+
+int MiningScreen::nebulaPngIndex(int zone, bool isBonusZone, OreRarity bonusRarity) {
+    if (isBonusZone) {
+        // Common–Rare: goud; Epic+ (incl. Mythic/Legendary): legendarische plaat.
+        if (bonusRarity >= OreRarity::EPIC)
+            return 8;
+        return 7;
+    }
+    const int z = std::max(1, zone);
+    if (z < 5)
+        return 0;
+    if (z < 10)
+        return 1;
+    if (z < 15)
+        return 2;
+    if (z < 20)
+        return 3;
+    if (z < 30)
+        return 4;
+    if (z < 50)
+        return 5;
+    return 6;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -161,9 +211,6 @@ void nebulaDrawFilaments(sf::RenderTarget& target,
                          float             intensity,
                          const sf::Color&  prim,
                          const sf::Color&  sec) {
-    if (!isBonusZone && zone < 5)
-        return;
-
     const sf::RenderStates rsAdd(sf::BlendAdd);
     uint32_t              seed =
         static_cast<uint32_t>(std::max(1, zone)) * 2654435761u;
@@ -212,7 +259,7 @@ void nebulaDrawFilaments(sf::RenderTarget& target,
             const float   boost =
                 (isBonusZone && bonusRarity >= OreRarity::LEGENDARY) ? 1.35f : 1.f;
             const auto alpha = static_cast<std::uint8_t>(std::clamp(
-                22.f * intensity * pulse * boost, 5.f, 115.f));
+                40.f * intensity * pulse * boost, 6.f, 145.f));
             c.a = alpha;
             seg.setFillColor(c);
             target.draw(seg, rsAdd);
@@ -229,17 +276,14 @@ float MiningScreen::nebulaIntensityForZone(int      zone,
                                            OreRarity bonusRarity) {
     if (isBonusZone) {
         const int ri = std::clamp(static_cast<int>(bonusRarity), 0, 5);
-        return 0.7f + (static_cast<float>(ri) / 5.f) * 0.3f;
+        return 0.82f + (static_cast<float>(ri) / 5.f) * 0.18f;
     }
+    // Vanaf zone 1 al subtiele nevel; hogere zones duidelijker (was te laag → onzichtbaar).
     if (zone < 5)
-        return 0.f;
+        return 0.48f;
     if (zone < 10)
-        return 0.4f;
-    if (zone < 20)
-        return 0.6f;
-    if (zone < 30)
-        return 0.75f;
-    return 0.85f;
+        return 0.95f;
+    return 1.f;
 }
 
 sf::Color MiningScreen::nebulaColorForZone(int      zone,
@@ -265,8 +309,10 @@ sf::Color MiningScreen::nebulaColorForZone(int      zone,
             return { kBonSecR[ri], kBonSecG[ri], kBonSecB[ri] };
         return { kBonPriR[ri], kBonPriG[ri], kBonPriB[ri] };
     }
-    if (zone < 5)
-        return sf::Color(0, 0, 0, 0);
+    if (zone < 5) {
+        // Vroege zones: zachte blauw-grijze nevel (eerder alpha 0 → niets zichtbaar).
+        return secondary ? sf::Color(22, 32, 58) : sf::Color(72, 118, 188);
+    }
     // Zone 5–9: cyan kern / diep blauw volume (blauwe nevel-referentie).
     if (zone < 10) {
         return secondary ? sf::Color(18, 52, 105)
@@ -310,7 +356,7 @@ void MiningScreen::buildNebulaClouds(int      zone,
         c.radiusX   = (0.15f + uf() * 0.30f) * m_w;
         c.radiusY   = c.radiusX * (0.4f + uf() * 0.5f);
         c.rotation  = uf() * 360.f;
-        c.alpha       = (15.f + uf() * 25.f) * (0.88f + 0.12f * intensity);
+        c.alpha       = (38.f + uf() * 58.f) * (0.88f + 0.12f * intensity);
         c.driftX      = uf() * 16.f - 8.f;
         c.driftY      = uf() * 16.f - 8.f;
         c.phase       = uf() * 6.2831853f;
@@ -323,7 +369,7 @@ void MiningScreen::buildNebulaClouds(int      zone,
         c.radiusX   = (0.034f + uf() * 0.086f) * m_w;
         c.radiusY   = c.radiusX * (0.45f + uf() * 0.45f);
         c.rotation  = uf() * 360.f;
-        c.alpha     = 48.f + uf() * 52.f;
+        c.alpha     = 88.f + uf() * 95.f;
         c.driftX    = uf() * 12.f - 6.f;
         c.driftY    = uf() * 12.f - 6.f;
         c.phase     = uf() * 6.2831853f;
@@ -392,7 +438,7 @@ void MiningScreen::drawNebula(sf::RenderTarget& target,
                         m_y, m_w, m_h, intensity, prim, sec);
 
     for (int i = 0; i < NEBULA_HIGHLIGHT_COUNT; ++i)
-        drawSoftCloud(m_nebulaHighlights[static_cast<std::size_t>(i)], 0.42f,
+        drawSoftCloud(m_nebulaHighlights[static_cast<std::size_t>(i)], 0.72f,
                       rsAdd);
 
     if (isBonusZone && bonusRarity >= OreRarity::LEGENDARY) {
@@ -424,98 +470,13 @@ void MiningScreen::drawNebula(sf::RenderTarget& target,
     }
 }
 
-void MiningScreen::rebuildNebulaBaseTexture(int      zone,
-                                            bool     isBonusZone,
-                                            OreRarity bonusRarity) {
-    const float intensity =
-        nebulaIntensityForZone(zone, isBonusZone, bonusRarity);
-    const unsigned uw =
-        std::max(1u, static_cast<unsigned>(std::ceil(std::max(1.f, m_w))));
-    const unsigned uh =
-        std::max(1u, static_cast<unsigned>(std::ceil(std::max(1.f, m_h))));
-
-    if (m_nebulaBaseRtt.getSize().x != uw || m_nebulaBaseRtt.getSize().y != uh) {
-        if (!m_nebulaBaseRtt.resize({ uw, uh })) {
-            m_nebulaBaseRttReady = false;
-            return;
-        }
-        m_nebulaBaseRtt.setSmooth(true);
-    }
-
-    m_nebulaBaseRtt.setView(sf::View(sf::FloatRect({ 0.f, 0.f }, { m_w, m_h })));
-    m_nebulaBaseRtt.clear(sf::Color(0, 0, 0, 0));
-
-    const sf::Color prim = nebulaColorForZone(zone, isBonusZone, bonusRarity, false);
-    const sf::Color sec  = nebulaColorForZone(zone, isBonusZone, bonusRarity, true);
-
-    if (intensity > 0.f) {
-        sf::VertexArray grad(sf::PrimitiveType::TriangleStrip, 4);
-        const auto aCorn = static_cast<std::uint8_t>(std::clamp(
-            55.f * intensity, 18.f, 125.f));
-        const auto aMid = static_cast<std::uint8_t>(std::clamp(
-            82.f * intensity, 22.f, 145.f));
-        grad[0] = { { 0.f, 0.f }, sf::Color(sec.r, sec.g, sec.b, aCorn) };
-        grad[1] = { { m_w, 0.f },
-                    sf::Color(prim.r, prim.g, prim.b,
-                              static_cast<std::uint8_t>(aMid * 0.88f)) };
-        grad[2] = { { 0.f, m_h },
-                    sf::Color(prim.r, prim.g, prim.b,
-                              static_cast<std::uint8_t>(aMid * 0.88f)) };
-        grad[3] = { { m_w, m_h }, sf::Color(sec.r, sec.g, sec.b, aCorn) };
-        m_nebulaBaseRtt.draw(grad);
-
-        uint32_t rng = static_cast<uint32_t>(std::max(1, zone)) * 2654435761u;
-        if (isBonusZone)
-            rng ^= 0x91EC0Eu;
-        rng ^= static_cast<uint32_t>(bonusRarity) * 1597334677u;
-        auto uf = [&]() -> float {
-            nebulaStir(rng);
-            return (rng & 0xFFFFFFu) / float(0x1000000u);
-        };
-
-        const float maxDim = std::max(m_w, m_h);
-        for (int k = 0; k < 5; ++k) {
-            const float cx = uf() * m_w;
-            const float cy = uf() * m_h;
-            const float rMax = maxDim * (0.40f + uf() * 0.42f);
-            const float ryS  = 0.48f + uf() * 0.48f;
-            const float rot  = uf() * 360.f;
-            for (int li = NEBULA_SOFT_LAYER_COUNT - 1; li >= 0; --li) {
-                const float     t = static_cast<float>(li) / 5.f;
-                const sf::Color rgb = lerpRgb(prim, sec, t);
-                const float     rad = rMax * NEBULA_LAYER_RAD[li];
-                if (rad < 8.f)
-                    continue;
-                const float a = std::clamp(
-                    30.f * NEBULA_LAYER_AMUL[li] * intensity, 8.f, 130.f);
-                sf::CircleShape blob(rad);
-                blob.setOrigin({ rad, rad });
-                blob.setPosition({ cx, cy });
-                blob.setScale({ 1.f, ryS });
-                blob.setRotation(sf::degrees(rot));
-                blob.setFillColor(sf::Color(
-                    rgb.r, rgb.g, rgb.b, static_cast<std::uint8_t>(a)));
-                blob.setOutlineThickness(0.f);
-                m_nebulaBaseRtt.draw(blob);
-            }
-        }
-    }
-
-    m_nebulaBaseRtt.display();
-    m_nebulaBaseRttReady = true;
-}
-
 void MiningScreen::drawNebulaTexture(sf::RenderTarget& target,
                                       const GameState&  state) const {
-    if (!m_nebulaBaseRttReady)
-        return;
-    if (nebulaIntensityForZone(state.currentLevel, state.isBonusZone,
-                               state.bonusZoneRarity)
-        <= 0.f)
-        return;
-
-    const sf::Texture& tex = m_nebulaBaseRtt.getTexture();
-    const auto         tsz = tex.getSize();
+    const int        idx = nebulaPngIndex(state.currentLevel, state.isBonusZone,
+                                   state.bonusZoneRarity);
+    const sf::Texture& tex =
+        m_nebulaPngTex[static_cast<std::size_t>(idx)];
+    const auto tsz = tex.getSize();
     if (tsz.x == 0u || tsz.y == 0u)
         return;
 
@@ -523,6 +484,7 @@ void MiningScreen::drawNebulaTexture(sf::RenderTarget& target,
     spr.setPosition({ m_x, m_y });
     spr.setScale({ m_w / static_cast<float>(tsz.x),
                    m_h / static_cast<float>(tsz.y) });
+    spr.setColor(sf::Color::White);
     target.draw(spr);
 }
 
@@ -569,7 +531,6 @@ void MiningScreen::update(float      dt,
         || state.bonusZoneRarity != m_lastNebulaRarity || iw != m_nebulaCachedIw
         || ih != m_nebulaCachedIh) {
         buildNebulaClouds(z, state.isBonusZone, state.bonusZoneRarity);
-        rebuildNebulaBaseTexture(z, state.isBonusZone, state.bonusZoneRarity);
         m_lastNebulaZone    = z;
         m_lastNebulaBonus   = state.isBonusZone;
         m_lastNebulaRarity  = state.bonusZoneRarity;
@@ -833,7 +794,6 @@ void MiningScreen::prepareNewRun() {
     m_lastNebulaRarity = OreRarity::COMMON;
     m_nebulaCachedIw   = -1;
     m_nebulaCachedIh   = -1;
-    m_nebulaBaseRttReady = false;
 }
 
 bool MiningScreen::pullBossReturnToBase() {

@@ -131,11 +131,14 @@ private:
     int       m_nebulaCachedIw = -1;
     int       m_nebulaCachedIh = -1;
 
-    sf::RenderTexture m_nebulaBaseRtt;
-    bool               m_nebulaBaseRttReady = false;
+    /// PNG-volgorde moet gelijk blijven aan `nebulaPngIndex()`.
+    static constexpr int NEBULA_PNG_COUNT = 9;
+    std::array<sf::Texture, NEBULA_PNG_COUNT> m_nebulaPngTex{};
+
+    void loadNebulaPngTextures();
+    static int nebulaPngIndex(int zone, bool isBonusZone, OreRarity bonusRarity);
 
     void buildNebulaClouds(int zone, bool isBonusZone, OreRarity bonusRarity);
-    void rebuildNebulaBaseTexture(int zone, bool isBonusZone, OreRarity bonusRarity);
     void drawNebulaTexture(sf::RenderTarget& target, const GameState& state) const;
     void drawNebula(sf::RenderTarget& target,
                     float            animTime,
