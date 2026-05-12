@@ -128,8 +128,15 @@ private:
     int       m_lastNebulaZone   = -1;
     bool      m_lastNebulaBonus  = false;
     OreRarity m_lastNebulaRarity = OreRarity::COMMON;
+    int       m_nebulaCachedIw = -1;
+    int       m_nebulaCachedIh = -1;
+
+    sf::RenderTexture m_nebulaBaseRtt;
+    bool               m_nebulaBaseRttReady = false;
 
     void buildNebulaClouds(int zone, bool isBonusZone, OreRarity bonusRarity);
+    void rebuildNebulaBaseTexture(int zone, bool isBonusZone, OreRarity bonusRarity);
+    void drawNebulaTexture(sf::RenderTarget& target, const GameState& state) const;
     void drawNebula(sf::RenderTarget& target,
                     float            animTime,
                     int              zone,
