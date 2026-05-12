@@ -1066,7 +1066,8 @@ void MiningScreen::drawZoneBackground(sf::RenderTarget& target,
         const float     cy   = m_y + m_h * 0.5f;
         const float breathe =
             0.5f + 0.5f * std::sin(animTime * 0.28f);
-        const auto edgeA = static_cast<std::uint8_t>(58 + breathe * 48);
+        // Lage alpha zodat pre-render + procedurele nevel beter zichtbaar blijven.
+        const auto edgeA = static_cast<std::uint8_t>(14 + breathe * 18);
 
         auto darkCh = [&](std::uint8_t u) {
             return static_cast<std::uint8_t>(
@@ -1093,27 +1094,26 @@ void MiningScreen::drawZoneBackground(sf::RenderTarget& target,
     }
     sf::RectangleShape tint(sf::Vector2f{ m_w, m_h });
     tint.setPosition({ m_x, m_y });
-    // Iets sterkere tint dan vroeger: anders leek de bonus-zone visueel
-    // bijna gelijk aan een normale zone (alleen HUD-tekst viel op).
-    sf::Color fill(255, 240, 160, 68);
+    // Lichte tint: genoeg om bonus te lezen, zonder de nevel te overdekken.
+    sf::Color fill(255, 240, 160, 22);
     switch (state.bonusZoneRarity) {
         case OreRarity::COMMON:
-            fill = sf::Color(255, 240, 160, 68);
+            fill = sf::Color(255, 240, 160, 22);
             break;
         case OreRarity::UNCOMMON:
-            fill = sf::Color(255, 230, 100, 96);
+            fill = sf::Color(255, 230, 100, 30);
             break;
         case OreRarity::RARE:
-            fill = sf::Color(255, 210, 70, 122);
+            fill = sf::Color(255, 210, 70, 38);
             break;
         case OreRarity::EPIC:
-            fill = sf::Color(255, 160, 60, 148);
+            fill = sf::Color(255, 160, 60, 46);
             break;
         case OreRarity::MYTHIC:
-            fill = sf::Color(255, 120, 40, 168);
+            fill = sf::Color(255, 120, 40, 52);
             break;
         case OreRarity::LEGENDARY:
-            fill = sf::Color(255, 210, 90, 188);
+            fill = sf::Color(255, 210, 90, 58);
             break;
         default:
             break;
