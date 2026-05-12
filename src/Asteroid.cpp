@@ -485,15 +485,18 @@ void Asteroid::drawHalosBehindBody(sf::RenderTarget& target,
 }
 
 // ═════════════════════════════════════════════════════════════
-//  Asteroid::drawTintedBodyGlow — additieve “aura” achter PNG-sprite
+//  Asteroid::drawTintedBodyGlow — additieve gloed in vorm van `shape` (achter PNG)
 // ═════════════════════════════════════════════════════════════
 void Asteroid::drawTintedBodyGlow(sf::RenderTarget& target,
                                    float               animTime) const {
     if (!alive)
         return;
+    const std::size_t nPts = shape.getPointCount();
+    if (nPts < 3u)
+        return;
 
     const sf::RenderStates rsAdd(sf::BlendAdd);
-    const float             pulse =
+    const float            pulse =
         0.88f + 0.12f * std::sin(animTime * 1.65f + pos.x * 0.017f + pos.y * 0.013f);
 
     sf::Color baseRgb;
@@ -507,41 +510,49 @@ void Asteroid::drawTintedBodyGlow(sf::RenderTarget& target,
                             static_cast<std::uint8_t>(70 + 55 * p),
                             static_cast<std::uint8_t>(150 + 70 * p));
         layers    = 5;
-        maxExpand = 1.34f;
-        alphaMul  = 1.15f;
+        maxExpand = 1.12f;
+        alphaMul  = 1.1f;
     } else if (isKeyAsteroid) {
         const float p = 0.5f + 0.5f * std::sin(animTime * 2.8f);
         baseRgb = sf::Color(static_cast<std::uint8_t>(255),
                             static_cast<std::uint8_t>(210 + 30 * p),
                             static_cast<std::uint8_t>(110 + 50 * p));
         layers    = 5;
-        maxExpand = 1.28f;
-        alphaMul  = 1.05f;
+        maxExpand = 1.10f;
+        alphaMul  = 1.f;
     } else {
         const auto& rd = ASTEROID_RARITY[isMeteor ? 0 : static_cast<int>(rarity)];
         baseRgb   = rd.outlineColor;
         layers    = isMeteor ? 4 : 6;
-        maxExpand = isMeteor ? 1.20f : 1.27f;
-        alphaMul  = isMeteor ? 0.52f : 1.f;
+        maxExpand = isMeteor ? 1.08f : 1.11f;
+        alphaMul  = isMeteor ? 0.5f : 1.f;
     }
 
+    sf::Transform tf;
+    tf.translate(pos).rotate(sf::degrees(rotation));
+
+    // Buitenste lagen eerst: zachte rand; kleinere expand volgt (zelfde silhouet).
     for (int li = layers - 1; li >= 0; --li) {
         const float t = (layers <= 1)
                             ? 1.f
                             : static_cast<float>(li) / static_cast<float>(layers - 1);
-        const float rad = radius * (1.02f + (maxExpand - 1.02f) * t);
-        const float falloff =
-            0.35f + 0.65f * (1.f - t); // buitenste ringen zachter
-        const float aFloat = std::clamp(
-            (10.f + 22.f * falloff) * pulse * alphaMul, 3.f, 72.f);
-        const auto a = static_cast<std::uint8_t>(aFloat);
+        const float expand =
+            1.01f + (maxExpand - 1.01f) * t; // ~1% … maxExpand rond oorsprong
+        const float falloff = 0.25f + 0.75f * (1.f - t);
+        const float aFloat  = std::clamp(
+            (8.f + 18.f * falloff) * pulse * alphaMul, 2.f, 58.f);
+        const auto  a = static_cast<std::uint8_t>(aFloat);
 
-        sf::CircleShape ring(rad);
-        ring.setOrigin({ rad, rad });
-        ring.setPosition(pos);
-        ring.setFillColor(sf::Color(baseRgb.r, baseRgb.g, baseRgb.b, a));
-        ring.setOutlineThickness(0.f);
-        target.draw(ring, rsAdd);
+        sf::ConvexShape g = shape;
+        for (std::size_t i = 0; i < nPts; ++i) {
+            const sf::Vector2f p = g.getPoint(i);
+            g.setPoint(i, { p.x * expand, p.y * expand });
+        }
+        g.setOutlineThickness(0.f);
+        g.setFillColor(sf::Color(baseRgb.r, baseRgb.g, baseRgb.b, a));
+        sf::RenderStates rs = rsAdd;
+        rs.transform = tf;
+        target.draw(g, rs);
     }
 }
 

@@ -63,7 +63,7 @@ public:
     void update(float dt, sf::Vector2f playerPos = { 0.f, 0.f });
     /// Boss-/sleutel-halo’s achter het lichaam (zelfde volgorde als sprite-pipeline).
     void drawHalosBehindBody(sf::RenderTarget& target, float animTime) const;
-    /// Zachte additieve gloed achter getinte PNG-sprite (alleen sprite-pipeline).
+    /// Zachte additieve gloed achter getinte PNG — volgt `shape` (zelfde polygon als collision).
     void drawTintedBodyGlow(sf::RenderTarget& target, float animTime) const;
     void drawShape(sf::RenderTarget& target,
                    float               animTime,
