@@ -186,6 +186,7 @@ void MiningScreen::drawAsteroidsWithSprites(sf::RenderTarget& target,
             continue;
 
         a.drawHalosBehindBody(target, animTime);
+        a.drawTintedBodyGlow(target, animTime);
 
         const int          idx = std::clamp(a.spriteVariant, 0, ASTEROID_TEX_COUNT - 1);
         const sf::Texture& tex =

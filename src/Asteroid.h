@@ -63,12 +63,14 @@ public:
     void update(float dt, sf::Vector2f playerPos = { 0.f, 0.f });
     /// Boss-/sleutel-halo’s achter het lichaam (zelfde volgorde als sprite-pipeline).
     void drawHalosBehindBody(sf::RenderTarget& target, float animTime) const;
+    /// Zachte additieve gloed achter getinte PNG-sprite (alleen sprite-pipeline).
+    void drawTintedBodyGlow(sf::RenderTarget& target, float animTime) const;
     void drawShape(sf::RenderTarget& target,
                    float               animTime,
                    const sf::Texture*  keyIconTex = nullptr,
                    const sf::Texture*  bossTex    = nullptr) const;
-    /// `tintedSpriteBody`: lichaam komt als getinte PNG vanuit MiningScreen — zeldzaam-
-    /// outline opnieuw tekenen + sleutel-icoon / HP-balk.
+    /// `tintedSpriteBody`: lichaam is PNG vanuit MiningScreen — sleutel-icoon / HP-balk;
+    /// gloed gebeurt via `drawTintedBodyGlow` vóór de sprite.
     void drawOverlays(sf::RenderTarget& target,
                       float               animTime,
                       const sf::Font*     labelFont          = nullptr,

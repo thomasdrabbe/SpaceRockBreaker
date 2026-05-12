@@ -485,6 +485,67 @@ void Asteroid::drawHalosBehindBody(sf::RenderTarget& target,
 }
 
 // ═════════════════════════════════════════════════════════════
+//  Asteroid::drawTintedBodyGlow — additieve “aura” achter PNG-sprite
+// ═════════════════════════════════════════════════════════════
+void Asteroid::drawTintedBodyGlow(sf::RenderTarget& target,
+                                   float               animTime) const {
+    if (!alive)
+        return;
+
+    const sf::RenderStates rsAdd(sf::BlendAdd);
+    const float             pulse =
+        0.88f + 0.12f * std::sin(animTime * 1.65f + pos.x * 0.017f + pos.y * 0.013f);
+
+    sf::Color baseRgb;
+    int       layers;
+    float     maxExpand;
+    float     alphaMul;
+
+    if (isBoss) {
+        const float p = 0.5f + 0.5f * std::sin(animTime * 2.2f);
+        baseRgb = sf::Color(static_cast<std::uint8_t>(255),
+                            static_cast<std::uint8_t>(70 + 55 * p),
+                            static_cast<std::uint8_t>(150 + 70 * p));
+        layers    = 5;
+        maxExpand = 1.34f;
+        alphaMul  = 1.15f;
+    } else if (isKeyAsteroid) {
+        const float p = 0.5f + 0.5f * std::sin(animTime * 2.8f);
+        baseRgb = sf::Color(static_cast<std::uint8_t>(255),
+                            static_cast<std::uint8_t>(210 + 30 * p),
+                            static_cast<std::uint8_t>(110 + 50 * p));
+        layers    = 5;
+        maxExpand = 1.28f;
+        alphaMul  = 1.05f;
+    } else {
+        const auto& rd = ASTEROID_RARITY[isMeteor ? 0 : static_cast<int>(rarity)];
+        baseRgb   = rd.outlineColor;
+        layers    = isMeteor ? 4 : 6;
+        maxExpand = isMeteor ? 1.20f : 1.27f;
+        alphaMul  = isMeteor ? 0.52f : 1.f;
+    }
+
+    for (int li = layers - 1; li >= 0; --li) {
+        const float t = (layers <= 1)
+                            ? 1.f
+                            : static_cast<float>(li) / static_cast<float>(layers - 1);
+        const float rad = radius * (1.02f + (maxExpand - 1.02f) * t);
+        const float falloff =
+            0.35f + 0.65f * (1.f - t); // buitenste ringen zachter
+        const float aFloat = std::clamp(
+            (10.f + 22.f * falloff) * pulse * alphaMul, 3.f, 72.f);
+        const auto a = static_cast<std::uint8_t>(aFloat);
+
+        sf::CircleShape ring(rad);
+        ring.setOrigin({ rad, rad });
+        ring.setPosition(pos);
+        ring.setFillColor(sf::Color(baseRgb.r, baseRgb.g, baseRgb.b, a));
+        ring.setOutlineThickness(0.f);
+        target.draw(ring, rsAdd);
+    }
+}
+
+// ═════════════════════════════════════════════════════════════
 //  Asteroid::drawShape
 // ═════════════════════════════════════════════════════════════
 void Asteroid::drawShape(sf::RenderTarget& target,
@@ -544,6 +605,7 @@ void Asteroid::drawOverlays(sf::RenderTarget& target,
                             const sf::Texture*  keyIconTex,
                             const sf::Texture*  bossTex,
                             bool                tintedSpriteBody) const {
+    (void)tintedSpriteBody;
     (void)labelFont;
     (void)bossTex;
     if (!alive)
@@ -551,55 +613,6 @@ void Asteroid::drawOverlays(sf::RenderTarget& target,
 
     sf::Transform tf;
     tf.translate(pos).rotate(sf::degrees(rotation));
-
-    // PNG-sprite vult een vierkant op de diameter; de collision-convex ligt typisch
-    // binnen die quad — outline zonder uitbreiding valt volledig onder de pixels.
-    auto drawExpandedRim = [&](sf::ConvexShape base, const sf::Color& outlineCol,
-                               float thick, float expand) {
-        for (std::size_t i = 0; i < base.getPointCount(); ++i) {
-            const sf::Vector2f p = base.getPoint(i);
-            base.setPoint(i, p * expand);
-        }
-        base.setFillColor(sf::Color(0, 0, 0, 0));
-        base.setOutlineColor(outlineCol);
-        base.setOutlineThickness(thick);
-        target.draw(base, tf);
-    };
-
-    if (tintedSpriteBody) {
-        if (isBoss) {
-            float pulse = 0.5f + 0.5f * std::sin(animTime * 2.2f);
-            sf::ConvexShape rim = shape;
-            drawExpandedRim(
-                rim,
-                sf::Color(static_cast<std::uint8_t>(255),
-                           static_cast<std::uint8_t>(85 + 70 * pulse),
-                           static_cast<std::uint8_t>(140 + 90 * pulse),
-                           235),
-                4.5f + 2.f * pulse,
-                1.07f);
-        } else if (isKeyAsteroid) {
-            float pulse  = 0.5f + 0.5f * std::sin(animTime * 2.8f);
-            float pulse2 = 0.5f + 0.5f * std::sin(animTime * 2.8f + 1.1f);
-            sf::ConvexShape rim = shape;
-            drawExpandedRim(
-                rim,
-                sf::Color(static_cast<std::uint8_t>(245 + 10 * pulse2),
-                           static_cast<std::uint8_t>(230 + 20 * pulse),
-                           static_cast<std::uint8_t>(160 + 50 * pulse2),
-                           238),
-                3.8f + 1.5f * pulse,
-                1.065f);
-        } else {
-            const auto& rd = ASTEROID_RARITY[isMeteor ? 0 : static_cast<int>(rarity)];
-            sf::ConvexShape outline = shape;
-            const float mult =
-                isMeteor ? 1.055f : 1.085f; // meteoren kleiner; normaal duidelijk buiten PNG
-            const float thick =
-                isMeteor ? (rd.outlineThick + 1.25f) : (rd.outlineThick * 1.75f);
-            drawExpandedRim(outline, rd.outlineColor, thick, mult);
-        }
-    }
 
     if (isKeyAsteroid) {
         float pulse = 0.5f + 0.5f * std::sin(animTime * 2.8f);
