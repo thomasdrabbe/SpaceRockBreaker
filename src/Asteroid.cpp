@@ -552,14 +552,52 @@ void Asteroid::drawOverlays(sf::RenderTarget& target,
     sf::Transform tf;
     tf.translate(pos).rotate(sf::degrees(rotation));
 
+    // PNG-sprite vult een vierkant op de diameter; de collision-convex ligt typisch
+    // binnen die quad — outline zonder uitbreiding valt volledig onder de pixels.
+    auto drawExpandedRim = [&](sf::ConvexShape base, const sf::Color& outlineCol,
+                               float thick, float expand) {
+        for (std::size_t i = 0; i < base.getPointCount(); ++i) {
+            const sf::Vector2f p = base.getPoint(i);
+            base.setPoint(i, p * expand);
+        }
+        base.setFillColor(sf::Color(0, 0, 0, 0));
+        base.setOutlineColor(outlineCol);
+        base.setOutlineThickness(thick);
+        target.draw(base, tf);
+    };
+
     if (tintedSpriteBody) {
-        if (!isBoss && !isKeyAsteroid && !isMeteor) {
+        if (isBoss) {
+            float pulse = 0.5f + 0.5f * std::sin(animTime * 2.2f);
+            sf::ConvexShape rim = shape;
+            drawExpandedRim(
+                rim,
+                sf::Color(static_cast<std::uint8_t>(255),
+                           static_cast<std::uint8_t>(85 + 70 * pulse),
+                           static_cast<std::uint8_t>(140 + 90 * pulse),
+                           235),
+                4.5f + 2.f * pulse,
+                1.07f);
+        } else if (isKeyAsteroid) {
+            float pulse  = 0.5f + 0.5f * std::sin(animTime * 2.8f);
+            float pulse2 = 0.5f + 0.5f * std::sin(animTime * 2.8f + 1.1f);
+            sf::ConvexShape rim = shape;
+            drawExpandedRim(
+                rim,
+                sf::Color(static_cast<std::uint8_t>(245 + 10 * pulse2),
+                           static_cast<std::uint8_t>(230 + 20 * pulse),
+                           static_cast<std::uint8_t>(160 + 50 * pulse2),
+                           238),
+                3.8f + 1.5f * pulse,
+                1.065f);
+        } else {
+            const auto& rd = ASTEROID_RARITY[isMeteor ? 0 : static_cast<int>(rarity)];
             sf::ConvexShape outline = shape;
-            outline.setFillColor(sf::Color::Transparent);
-            const auto& rd = ASTEROID_RARITY[static_cast<int>(rarity)];
-            outline.setOutlineColor(rd.outlineColor);
-            outline.setOutlineThickness(rd.outlineThick);
-            target.draw(outline, tf);
+            const float mult =
+                isMeteor ? 1.055f : 1.085f; // meteoren kleiner; normaal duidelijk buiten PNG
+            const float thick =
+                isMeteor ? (rd.outlineThick + 1.25f) : (rd.outlineThick * 1.75f);
+            drawExpandedRim(outline, rd.outlineColor, thick, mult);
         }
     }
 
