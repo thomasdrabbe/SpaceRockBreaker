@@ -35,6 +35,8 @@ public:
     bool          isKeyAsteroid = false;
     bool          isBoss         = false;
     bool          isMeteor       = false;
+    /// 0–3: normale sprite-variant; 4 = key; 5 = boss (`assets/asteroids/*.png`).
+    int           spriteVariant  = 0;
     float         bossPhase      = 0.f;
     /// Sleutel-asteroïde: >=0 = vast aantal keys bij vernietiging; -1 = willekeur 1–3.
     int           keyPickupCount = -1;
@@ -59,6 +61,20 @@ public:
 
     bool hit(float damage, ParticleSystem& particles);
     void update(float dt, sf::Vector2f playerPos = { 0.f, 0.f });
+    /// Boss-/sleutel-halo’s achter het lichaam (zelfde volgorde als sprite-pipeline).
+    void drawHalosBehindBody(sf::RenderTarget& target, float animTime) const;
+    void drawShape(sf::RenderTarget& target,
+                   float               animTime,
+                   const sf::Texture*  keyIconTex = nullptr,
+                   const sf::Texture*  bossTex    = nullptr) const;
+    /// `tintedSpriteBody`: lichaam komt als getinte PNG vanuit MiningScreen — zeldzaam-
+    /// outline opnieuw tekenen + sleutel-icoon / HP-balk.
+    void drawOverlays(sf::RenderTarget& target,
+                      float               animTime,
+                      const sf::Font*     labelFont          = nullptr,
+                      const sf::Texture*  keyIconTex         = nullptr,
+                      const sf::Texture*  bossTex            = nullptr,
+                      bool                tintedSpriteBody   = false) const;
     void draw(sf::RenderTarget& target,
                float               animTime   = 0.f,
                const sf::Font*     labelFont  = nullptr,
@@ -116,9 +132,8 @@ public:
                         float maxDist                 = 99999.f,
                         float meteorMinYToAcquire     = NEAREST_METEOR_Y_NO_FILTER);
 
-    std::array<Asteroid, MAX_ASTEROIDS>& all() {
-        return m_pool;
-    }
+    std::array<Asteroid, MAX_ASTEROIDS>& all() { return m_pool; }
+    const std::array<Asteroid, MAX_ASTEROIDS>& all() const { return m_pool; }
 
     int aliveCount() const { return m_alive; }
     void refreshAliveCount();

@@ -197,6 +197,7 @@ void Asteroid::spawn(AsteroidTier t,
     rotation     = randFloat(0.f, 360.f);
     rotationRate = randFloat(-40.f, 40.f);
     alive        = true;
+    spriteVariant = randInt(0, 3);
 
     oreDrop.color = otd.oreColor;
     oreDrop.value = otd.baseValue;
@@ -232,6 +233,7 @@ void Asteroid::spawnKey(sf::Vector2f p, sf::Vector2f v, float hpMult,
     rotation      = randFloat(0.f, 360.f);
     rotationRate  = randFloat(-25.f, 25.f);
     alive         = true;
+    spriteVariant = 4;
 
     oreDrop.color = otd.oreColor;
     oreDrop.value = otd.baseValue;
@@ -267,6 +269,7 @@ void Asteroid::spawnBoss(float ox, float oy, float areaW, float areaH,
     rotation      = randFloat(0.f, 360.f);
     rotationRate  = randFloat(-18.f, 18.f);
     alive         = true;
+    spriteVariant = 5;
 
     oreDrop.color = otd.oreColor;
     oreDrop.value = otd.baseValue;
@@ -302,7 +305,8 @@ void Asteroid::spawnMeteor(sf::Vector2f p, sf::Vector2f v,
         static_cast<std::uint8_t>(randInt(40, 80)));
     rotation      = randFloat(0.f, 360.f);
     rotationRate  = randFloat(-200.f, 200.f);
-    alive         = true;
+    alive          = true;
+    spriteVariant  = randInt(0, 3);
 
     const auto& otd = ORE_TIER_TABLE[static_cast<int>(ot)];
     oreDrop.color = otd.oreColor;
@@ -440,18 +444,12 @@ void Asteroid::update(float dt, sf::Vector2f playerPos) {
 }
 
 // ═════════════════════════════════════════════════════════════
-//  Asteroid::draw
+//  Asteroid::drawHalosBehindBody
 // ═════════════════════════════════════════════════════════════
-void Asteroid::draw(sf::RenderTarget& target,
-                     float               animTime,
-                     const sf::Font*     labelFont,
-                     const sf::Texture*  keyIconTex,
-                     const sf::Texture*  bossTex) const {
-    if (!alive) return;
-
-    sf::Transform tf;
-    tf.translate(pos).rotate(sf::degrees(rotation));
-
+void Asteroid::drawHalosBehindBody(sf::RenderTarget& target,
+                                    float               animTime) const {
+    if (!alive)
+        return;
     if (isBoss) {
         float pulse = 0.5f + 0.5f * std::sin(animTime * 2.2f);
         for (int ring = 3; ring >= 0; --ring) {
@@ -465,6 +463,42 @@ void Asteroid::draw(sf::RenderTarget& target,
             halo.setOutlineThickness(2.5f + pulse);
             target.draw(halo);
         }
+    } else if (isKeyAsteroid) {
+        float pulse  = 0.5f + 0.5f * std::sin(animTime * 2.8f);
+        float pulse2 = 0.5f + 0.5f * std::sin(animTime * 2.8f + 1.1f);
+        for (int ring = 2; ring >= 0; --ring) {
+            float extra = static_cast<float>(ring) * 10.f + pulse * 6.f;
+            sf::CircleShape halo(radius + extra);
+            halo.setOrigin({ radius + extra, radius + extra });
+            halo.setPosition(pos);
+            uint8_t a = static_cast<uint8_t>(35 + ring * 28 + pulse * 40);
+            halo.setFillColor(sf::Color::Transparent);
+            halo.setOutlineColor(sf::Color(
+                static_cast<uint8_t>(220 + 35 * pulse2),
+                static_cast<uint8_t>(210 + 45 * pulse),
+                static_cast<uint8_t>(120 + 80 * pulse2),
+                a));
+            halo.setOutlineThickness(2.f + pulse);
+            target.draw(halo);
+        }
+    }
+}
+
+// ═════════════════════════════════════════════════════════════
+//  Asteroid::drawShape
+// ═════════════════════════════════════════════════════════════
+void Asteroid::drawShape(sf::RenderTarget& target,
+                         float               animTime,
+                         const sf::Texture*  keyIconTex,
+                         const sf::Texture*  bossTex) const {
+    if (!alive)
+        return;
+
+    sf::Transform tf;
+    tf.translate(pos).rotate(sf::degrees(rotation));
+
+    if (isBoss) {
+        float pulse = 0.5f + 0.5f * std::sin(animTime * 2.2f);
         if (bossTex && bossTex->getSize().x > 0u) {
             sf::Sprite spr(*bossTex);
             const sf::Vector2u tsz = bossTex->getSize();
@@ -486,25 +520,8 @@ void Asteroid::draw(sf::RenderTarget& target,
             target.draw(drawShape, tf);
         }
     } else if (isKeyAsteroid) {
-        float pulse = 0.5f + 0.5f * std::sin(animTime * 2.8f);
+        float pulse  = 0.5f + 0.5f * std::sin(animTime * 2.8f);
         float pulse2 = 0.5f + 0.5f * std::sin(animTime * 2.8f + 1.1f);
-
-        for (int ring = 2; ring >= 0; --ring) {
-            float extra = static_cast<float>(ring) * 10.f + pulse * 6.f;
-            sf::CircleShape halo(radius + extra);
-            halo.setOrigin({ radius + extra, radius + extra });
-            halo.setPosition(pos);
-            uint8_t a = static_cast<uint8_t>(35 + ring * 28 + pulse * 40);
-            halo.setFillColor(sf::Color::Transparent);
-            halo.setOutlineColor(sf::Color(
-                static_cast<uint8_t>(220 + 35 * pulse2),
-                static_cast<uint8_t>(210 + 45 * pulse),
-                static_cast<uint8_t>(120 + 80 * pulse2),
-                a));
-            halo.setOutlineThickness(2.f + pulse);
-            target.draw(halo);
-        }
-
         sf::ConvexShape drawShape = shape;
         drawShape.setOutlineColor(sf::Color(
             static_cast<uint8_t>(245 + 10 * pulse2),
@@ -513,7 +530,41 @@ void Asteroid::draw(sf::RenderTarget& target,
             240));
         drawShape.setOutlineThickness(3.5f + 2.f * pulse);
         target.draw(drawShape, tf);
+    } else {
+        target.draw(shape, tf);
+    }
+}
 
+// ═════════════════════════════════════════════════════════════
+//  Asteroid::drawOverlays
+// ═════════════════════════════════════════════════════════════
+void Asteroid::drawOverlays(sf::RenderTarget& target,
+                            float               animTime,
+                            const sf::Font*     labelFont,
+                            const sf::Texture*  keyIconTex,
+                            const sf::Texture*  bossTex,
+                            bool                tintedSpriteBody) const {
+    (void)labelFont;
+    (void)bossTex;
+    if (!alive)
+        return;
+
+    sf::Transform tf;
+    tf.translate(pos).rotate(sf::degrees(rotation));
+
+    if (tintedSpriteBody) {
+        if (!isBoss && !isKeyAsteroid && !isMeteor) {
+            sf::ConvexShape outline = shape;
+            outline.setFillColor(sf::Color::Transparent);
+            const auto& rd = ASTEROID_RARITY[static_cast<int>(rarity)];
+            outline.setOutlineColor(rd.outlineColor);
+            outline.setOutlineThickness(rd.outlineThick);
+            target.draw(outline, tf);
+        }
+    }
+
+    if (isKeyAsteroid) {
+        float pulse = 0.5f + 0.5f * std::sin(animTime * 2.8f);
         if (keyIconTex && keyIconTex->getSize().x > 0u) {
             sf::Sprite spr(*keyIconTex);
             const sf::Vector2u tsz = keyIconTex->getSize();
@@ -529,11 +580,8 @@ void Asteroid::draw(sf::RenderTarget& target,
         } else {
             drawKeyAsteroidIcon(target, tf, radius, pulse);
         }
-    } else {
-        target.draw(shape, tf);
     }
 
-    // HP bar (meteoren: subtieler)
     if (hp < maxHp && !isMeteor) {
         float barW   = radius * 2.f;
         float filled = barW * (hp / maxHp);
@@ -556,6 +604,21 @@ void Asteroid::draw(sf::RenderTarget& target,
 }
 
 // ═════════════════════════════════════════════════════════════
+//  Asteroid::draw
+// ═════════════════════════════════════════════════════════════
+void Asteroid::draw(sf::RenderTarget& target,
+                    float               animTime,
+                    const sf::Font*     labelFont,
+                    const sf::Texture*  keyIconTex,
+                    const sf::Texture*  bossTex) const {
+    if (!alive)
+        return;
+    drawHalosBehindBody(target, animTime);
+    drawShape(target, animTime, keyIconTex, bossTex);
+    drawOverlays(target, animTime, labelFont, keyIconTex, bossTex, false);
+}
+
+// ═════════════════════════════════════════════════════════════
 //  Asteroid::bounceWalls
 // ═════════════════════════════════════════════════════════════
 void Asteroid::bounceWalls(float left, float top,
@@ -571,7 +634,7 @@ void Asteroid::bounceWalls(float left, float top,
 // ═════════════════════════════════════════════════════════════
 AsteroidManager::AsteroidManager() {
     namespace fs = std::filesystem;
-    const fs::path p(resolveAssetPath("assets/boss.png"));
+    const fs::path p(resolveAssetPath("assets/asteroids/asteroid_boss.png"));
     std::error_code ec;
     m_bossTexOk = fs::is_regular_file(p, ec) && m_bossTex.loadFromFile(p);
 }
