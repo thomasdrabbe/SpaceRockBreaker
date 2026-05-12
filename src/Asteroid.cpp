@@ -444,119 +444,6 @@ void Asteroid::update(float dt, sf::Vector2f playerPos) {
 }
 
 // ═════════════════════════════════════════════════════════════
-//  Asteroid::drawHalosBehindBody
-// ═════════════════════════════════════════════════════════════
-void Asteroid::drawHalosBehindBody(sf::RenderTarget& target,
-                                    float               animTime) const {
-    if (!alive)
-        return;
-    if (isBoss) {
-        float pulse = 0.5f + 0.5f * std::sin(animTime * 2.2f);
-        for (int ring = 3; ring >= 0; --ring) {
-            float extra = static_cast<float>(ring) * 14.f + pulse * 10.f;
-            sf::CircleShape halo(radius + extra);
-            halo.setOrigin({ radius + extra, radius + extra });
-            halo.setPosition(pos);
-            uint8_t a = static_cast<uint8_t>(28 + ring * 22 + pulse * 35);
-            halo.setFillColor(sf::Color::Transparent);
-            halo.setOutlineColor(sf::Color(255, 60, 120, a));
-            halo.setOutlineThickness(2.5f + pulse);
-            target.draw(halo);
-        }
-    } else if (isKeyAsteroid) {
-        float pulse  = 0.5f + 0.5f * std::sin(animTime * 2.8f);
-        float pulse2 = 0.5f + 0.5f * std::sin(animTime * 2.8f + 1.1f);
-        for (int ring = 2; ring >= 0; --ring) {
-            float extra = static_cast<float>(ring) * 10.f + pulse * 6.f;
-            sf::CircleShape halo(radius + extra);
-            halo.setOrigin({ radius + extra, radius + extra });
-            halo.setPosition(pos);
-            uint8_t a = static_cast<uint8_t>(35 + ring * 28 + pulse * 40);
-            halo.setFillColor(sf::Color::Transparent);
-            halo.setOutlineColor(sf::Color(
-                static_cast<uint8_t>(220 + 35 * pulse2),
-                static_cast<uint8_t>(210 + 45 * pulse),
-                static_cast<uint8_t>(120 + 80 * pulse2),
-                a));
-            halo.setOutlineThickness(2.f + pulse);
-            target.draw(halo);
-        }
-    }
-}
-
-// ═════════════════════════════════════════════════════════════
-//  Asteroid::drawTintedBodyGlow — additieve gloed in vorm van `shape` (achter PNG)
-// ═════════════════════════════════════════════════════════════
-void Asteroid::drawTintedBodyGlow(sf::RenderTarget& target,
-                                   float               animTime) const {
-    if (!alive)
-        return;
-    const std::size_t nPts = shape.getPointCount();
-    if (nPts < 3u)
-        return;
-
-    const sf::RenderStates rsAdd(sf::BlendAdd);
-    const float            pulse =
-        0.88f + 0.12f * std::sin(animTime * 1.65f + pos.x * 0.017f + pos.y * 0.013f);
-
-    sf::Color baseRgb;
-    int       layers;
-    float     maxExpand;
-    float     alphaMul;
-
-    if (isBoss) {
-        const float p = 0.5f + 0.5f * std::sin(animTime * 2.2f);
-        baseRgb = sf::Color(static_cast<std::uint8_t>(255),
-                            static_cast<std::uint8_t>(70 + 55 * p),
-                            static_cast<std::uint8_t>(150 + 70 * p));
-        layers    = 5;
-        maxExpand = 1.12f;
-        alphaMul  = 1.1f;
-    } else if (isKeyAsteroid) {
-        const float p = 0.5f + 0.5f * std::sin(animTime * 2.8f);
-        baseRgb = sf::Color(static_cast<std::uint8_t>(255),
-                            static_cast<std::uint8_t>(210 + 30 * p),
-                            static_cast<std::uint8_t>(110 + 50 * p));
-        layers    = 5;
-        maxExpand = 1.10f;
-        alphaMul  = 1.f;
-    } else {
-        const auto& rd = ASTEROID_RARITY[isMeteor ? 0 : static_cast<int>(rarity)];
-        baseRgb   = rd.outlineColor;
-        layers    = isMeteor ? 4 : 6;
-        maxExpand = isMeteor ? 1.08f : 1.11f;
-        alphaMul  = isMeteor ? 0.5f : 1.f;
-    }
-
-    sf::Transform tf;
-    tf.translate(pos).rotate(sf::degrees(rotation));
-
-    // Buitenste lagen eerst: zachte rand; kleinere expand volgt (zelfde silhouet).
-    for (int li = layers - 1; li >= 0; --li) {
-        const float t = (layers <= 1)
-                            ? 1.f
-                            : static_cast<float>(li) / static_cast<float>(layers - 1);
-        const float expand =
-            1.01f + (maxExpand - 1.01f) * t; // ~1% … maxExpand rond oorsprong
-        const float falloff = 0.25f + 0.75f * (1.f - t);
-        const float aFloat  = std::clamp(
-            (8.f + 18.f * falloff) * pulse * alphaMul, 2.f, 58.f);
-        const auto  a = static_cast<std::uint8_t>(aFloat);
-
-        sf::ConvexShape g = shape;
-        for (std::size_t i = 0; i < nPts; ++i) {
-            const sf::Vector2f p = g.getPoint(i);
-            g.setPoint(i, { p.x * expand, p.y * expand });
-        }
-        g.setOutlineThickness(0.f);
-        g.setFillColor(sf::Color(baseRgb.r, baseRgb.g, baseRgb.b, a));
-        sf::RenderStates rs = rsAdd;
-        rs.transform = tf;
-        target.draw(g, rs);
-    }
-}
-
-// ═════════════════════════════════════════════════════════════
 //  Asteroid::drawShape
 // ═════════════════════════════════════════════════════════════
 void Asteroid::drawShape(sf::RenderTarget& target,
@@ -675,7 +562,6 @@ void Asteroid::draw(sf::RenderTarget& target,
                     const sf::Texture*  bossTex) const {
     if (!alive)
         return;
-    drawHalosBehindBody(target, animTime);
     drawShape(target, animTime, keyIconTex, bossTex);
     drawOverlays(target, animTime, labelFont, keyIconTex, bossTex, false);
 }
