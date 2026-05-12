@@ -110,6 +110,39 @@ private:
     std::array<Star, STAR_COUNT> m_stars;
     void buildStarfield();
 
+    // ── Nebula (procedurele wolken achter sterren) ─────────
+    struct NebulaCloud {
+        sf::Vector2f basePos{};
+        float        radiusX   = 1.f;
+        float        radiusY   = 1.f;
+        float        rotation  = 0.f; // graden
+        float        alpha     = 40.f; // basis 0–80 schaal
+        float        driftX    = 0.f;
+        float        driftY    = 0.f;
+        float        phase     = 0.f;
+    };
+    static constexpr int NEBULA_CLOUD_COUNT      = 12;
+    static constexpr int NEBULA_HIGHLIGHT_COUNT  = 4;
+    std::array<NebulaCloud, NEBULA_CLOUD_COUNT>     m_nebulaClouds{};
+    std::array<NebulaCloud, NEBULA_HIGHLIGHT_COUNT> m_nebulaHighlights{};
+    int       m_lastNebulaZone   = -1;
+    bool      m_lastNebulaBonus  = false;
+    OreRarity m_lastNebulaRarity = OreRarity::COMMON;
+
+    void buildNebulaClouds(int zone, bool isBonusZone, OreRarity bonusRarity);
+    void drawNebula(sf::RenderTarget& target,
+                    float            animTime,
+                    int              zone,
+                    bool             isBonusZone,
+                    OreRarity        bonusRarity) const;
+    static sf::Color nebulaColorForZone(int         zone,
+                                        bool         isBonusZone,
+                                        OreRarity    bonusRarity,
+                                        bool         secondary);
+    static float nebulaIntensityForZone(int         zone,
+                                        bool         isBonusZone,
+                                        OreRarity    bonusRarity);
+
     // ── Collector volgt speler ────────────────────────────
     sf::Vector2f m_collectorPos;
 
