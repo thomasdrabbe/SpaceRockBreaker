@@ -73,6 +73,16 @@ GameState::upgradeCatalog = {{
       1.42,
       5 },
     { "Bullet Range", "+8% bullet travel time / range", 88.0, 1.50, 0 },
+    { "Meteor Damage",
+      "Meteors damage asteroids on impact (unlock: full shower via turrets)",
+      500.0,
+      1.80,
+      10 },
+    { "Meteor Size",
+      "Meteors +15% radius per level (unlock: full shower via turrets)",
+      400.0,
+      1.70,
+      10 },
 }};
 static_assert(
     GameState::upgradeCatalog.size()
@@ -678,9 +688,9 @@ double GameState::costOf(UpgradeID id) const {
     const auto& def = upgradeCatalog[static_cast<std::size_t>(static_cast<int>(id))];
     const int   lv  = levelOf(id);
     if (id == UpgradeID::PLINKO_BALLS) {
-        if (lv < 20)
-            return 4.0 * std::pow(1.24, static_cast<double>(lv));
-        return upgradeCost(def.baseCost, def.costMult, std::max(0, lv - 14));
+        if (lv < 30)
+            return 2.0 * std::pow(1.15, static_cast<double>(lv));
+        return upgradeCost(10.0, 1.20, std::max(0, lv - 20));
     }
     return upgradeCost(def.baseCost, def.costMult, lv);
 }
@@ -694,6 +704,9 @@ double GameState::costOf(PrestigeUpgradeID id) const {
 
 bool GameState::canBuy(UpgradeID id) const {
     if (!upgradeIdInRange(id))
+        return false;
+    if ((id == UpgradeID::METEOR_DAMAGE || id == UpgradeID::METEOR_SIZE)
+        && !meteorDestroyerUnlocked)
         return false;
     const auto& def = upgradeCatalog[static_cast<std::size_t>(static_cast<int>(id))];
     if (def.maxLevel > 0 && levelOf(id) >= def.maxLevel) return false;
@@ -800,6 +813,7 @@ void GameState::doPrestige() {
     const auto         savedChest = chestLevels;
     const auto         savedUnlock = unlockPhaseDone;
     const bool         savedKeyAst = keyAsteroidsEnabled;
+    const bool         savedMeteor = meteorDestroyerUnlocked;
 
     addCrystals(crystalsOnPrestige());
     prestigeCount++;
@@ -819,6 +833,7 @@ void GameState::doPrestige() {
     prestigeLevels      = savedPrestige;
     unlockPhaseDone     = savedUnlock;
     keyAsteroidsEnabled = savedKeyAst;
+    meteorDestroyerUnlocked = savedMeteor;
     lives               = maxLives();
 
     for (int i = 0; i < keep &&
@@ -853,6 +868,7 @@ void GameState::reset() {
     keyAsteroidsEnabled = false;
     isBonusZone        = false;
     bonusZoneRarity     = OreRarity::COMMON;
+    meteorDestroyerUnlocked = false;
 }
 
 void GameState::migrateUnlockProgressFromLegacyState() {
@@ -874,6 +890,44 @@ void GameState::migrateUnlockProgressFromLegacyState() {
     if (currentLevel >= 5)
         unlockPhaseDone[8] = true;
     keyAsteroidsEnabled = (currentLevel >= 3);
+}
+
+void GameState::processOreFusion() {
+    struct FusionRule {
+        OreTier from;
+        OreTier to;
+        double  cap;
+        int     ratio;
+    };
+    static constexpr FusionRule rules[] = {
+        { OreTier::IRON,     OreTier::BRONZE,   500.0, 10 },
+        { OreTier::BRONZE,   OreTier::SILVER,   300.0,  8 },
+        { OreTier::SILVER,   OreTier::GOLD,     200.0,  6 },
+        { OreTier::GOLD,     OreTier::DIAMOND,  150.0,  5 },
+        { OreTier::DIAMOND,  OreTier::PLATINUM, 100.0,  4 },
+        { OreTier::PLATINUM, OreTier::TITANIUM,  75.0,  3 },
+        { OreTier::TITANIUM, OreTier::IRIDIUM,   50.0,  2 },
+    };
+    for (const auto& r : rules) {
+        double& from = orePerTier[static_cast<int>(r.from)];
+        double& to   = orePerTier[static_cast<int>(r.to)];
+        if (from > r.cap) {
+            const double excess   = from - r.cap;
+            const double converted = std::floor(excess / static_cast<double>(r.ratio));
+            if (converted >= 1.0) {
+                from -= converted * static_cast<double>(r.ratio);
+                to += converted;
+            }
+        }
+    }
+    double& ir = orePerTier[static_cast<int>(OreTier::IRIDIUM)];
+    if (ir > 200.0)
+        ir = 200.0;
+
+    double sum = 0.0;
+    for (double v : orePerTier)
+        sum += v;
+    ore = sum;
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -917,6 +971,8 @@ bool GameState::save(const std::string& path) const {
     f.write(reinterpret_cast<const char*>(&bonusB), sizeof(bonusB));
     const uint8_t bonusR = static_cast<uint8_t>(bonusZoneRarity);
     f.write(reinterpret_cast<const char*>(&bonusR), sizeof(bonusR));
+    const uint8_t meteorB = meteorDestroyerUnlocked ? 1u : 0u;
+    f.write(reinterpret_cast<const char*>(&meteorB), sizeof(meteorB));
     return f.good();
 }
 
@@ -1028,11 +1084,18 @@ bool GameState::load(const std::string& path) {
         orePerTier[static_cast<int>(OreTier::IRON)] = std::max(0.0, ore);
     }
     if (ver < 13) {
-        constexpr int legacySlots =
-            static_cast<int>(UpgradeID::UPGRADE_COUNT) - 1;
+        constexpr int legacySlots = 25;
         f.read(reinterpret_cast<char*>(upgradeLevels.data()),
                legacySlots * sizeof(int));
-        upgradeLevels[legacySlots] = 0;
+        for (int i = legacySlots; i < static_cast<int>(UpgradeID::UPGRADE_COUNT); ++i)
+            upgradeLevels[static_cast<std::size_t>(i)] = 0;
+    } else if (ver < 17) {
+        for (int i = 0; i < LEGACY_UPGRADE_SAVE_COUNT_V16; ++i)
+            f.read(reinterpret_cast<char*>(&upgradeLevels[static_cast<std::size_t>(i)]),
+                   sizeof(int));
+        for (int i = LEGACY_UPGRADE_SAVE_COUNT_V16;
+             i < static_cast<int>(UpgradeID::UPGRADE_COUNT); ++i)
+            upgradeLevels[static_cast<std::size_t>(i)] = 0;
     } else {
         f.read(reinterpret_cast<char*>(upgradeLevels.data()),
                upgradeLevels.size() * sizeof(int));
@@ -1096,6 +1159,12 @@ bool GameState::load(const std::string& path) {
         isBonusZone = (bonusB != 0);
         if (bonusR <= static_cast<uint8_t>(OreRarity::LEGENDARY))
             bonusZoneRarity = static_cast<OreRarity>(bonusR);
+    }
+    meteorDestroyerUnlocked = false;
+    if (ver >= 17) {
+        uint8_t meteorB = 0;
+        f.read(reinterpret_cast<char*>(&meteorB), sizeof(meteorB));
+        meteorDestroyerUnlocked = (meteorB != 0);
     }
     sanitizeLoadedState(*this);
     if (lives > maxLives())

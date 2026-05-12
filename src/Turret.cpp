@@ -72,7 +72,7 @@ void Turret::update(float            dt,
 
     sf::Vector2f dir = normalize(cachedTargetPos - tip);
     bullets.fire(tip, dir, finalDmg, isCrit, splitShot, bulletLifetimeSec,
-                 particles);
+                 particles, true);
     gSfx.play(Sfx::Shot);
 
     if (isCrit)

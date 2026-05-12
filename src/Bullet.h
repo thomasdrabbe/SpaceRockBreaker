@@ -15,6 +15,7 @@ struct Bullet {
     float        radius   = 4.f;
     bool         isCrit   = false;
     bool         alive    = false;
+    bool         fromTurret = false;
     sf::Color    color;
 };
 
@@ -31,7 +32,8 @@ public:
               bool            isCrit,
               int             splitCount,
               float           lifetimeSec,
-              ParticleSystem& particles);
+              ParticleSystem& particles,
+              bool            fromTurret = false);
 
     void update(float dt, float ox, float oy, float areaW, float areaH);
     void draw(sf::RenderTarget& target) const;

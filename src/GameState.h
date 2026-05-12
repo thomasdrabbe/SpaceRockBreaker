@@ -84,6 +84,8 @@ public:
     /// Progressieve unlocks (index 1…8 gebruikt; 0 ongebruikt).
     std::array<bool, 9> unlockPhaseDone{};
     bool                keyAsteroidsEnabled = false;
+    /// Alle meteoren van één shower met torret-kogels vernietigd → koop Meteor-upgrades.
+    bool                meteorDestroyerUnlocked = false;
 
     Difficulty difficulty = Difficulty::Medium;
 
@@ -214,6 +216,9 @@ public:
     void reset();
 
     void migrateUnlockProgressFromLegacyState();
+
+    /// Ore per tier: caps + conversie naar hogere tier (1× per seconde vanuit Game).
+    void processOreFusion();
 
 private:
     OreRarity rollBonusZoneRarity();

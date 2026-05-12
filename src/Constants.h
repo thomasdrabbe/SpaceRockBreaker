@@ -55,6 +55,9 @@ enum class UpgradeID {
     UNLOCK_IRIDIUM,
     WARP_DRIVE,
     BULLET_RANGE,
+    /// Na easter egg (alle shower-meteoren door torret-kogels): asteroïden raken.
+    METEOR_DAMAGE,
+    METEOR_SIZE,
     UPGRADE_COUNT   // sentinel
 
 };
@@ -145,7 +148,9 @@ constexpr float TAB_BAR_H    = 46.f;
 // ─── Save ─────────────────────────────────────────────────────
 const std::string SAVE_FILE = "srb_save.bin"; // legacy (wordt naar slot 0 gemigreerd)
 constexpr int     SAVE_SLOT_COUNT = 3;
-constexpr int     SAVE_VERSION    = 16;
+constexpr int     SAVE_VERSION    = 17;
+/// Aantal `upgradeLevels`-entries in saves vóór METEOR_DAMAGE / METEOR_SIZE.
+constexpr int     LEGACY_UPGRADE_SAVE_COUNT_V16 = 26;
 
 // ─── Nieuwe spel-moeilijkheid ─────────────────────────────────
 enum class Difficulty {

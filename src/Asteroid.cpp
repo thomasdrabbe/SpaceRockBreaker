@@ -282,7 +282,8 @@ void Asteroid::spawnBoss(float ox, float oy, float areaW, float areaH,
 //  Asteroid::spawnMeteor  — shower: snel, klein, ore bij kill
 // ═════════════════════════════════════════════════════════════
 void Asteroid::spawnMeteor(sf::Vector2f p, sf::Vector2f v,
-                           float hpMult, OreTier maxOreTier) {
+                           float hpMult, OreTier maxOreTier,
+                           float radiusScale) {
     OreTier ot = pickOreTier(maxOreTier);
 
     isMeteor      = true;
@@ -295,7 +296,7 @@ void Asteroid::spawnMeteor(sf::Vector2f p, sf::Vector2f v,
     rarity        = OreRarity::COMMON;
     pos           = p;
     vel           = v;
-    radius        = randFloat(7.f, 11.f);
+    radius        = randFloat(7.f, 11.f) * std::max(0.25f, radiusScale);
     float baseHp  = 24.f * hpMult;
     maxHp         = std::max(8.f, baseHp);
     hp            = maxHp;
@@ -840,7 +841,7 @@ bool AsteroidManager::spawnOneQueuedMeteor() {
         return false;
 
     a->spawnMeteor(pos, m_meteorQueueVel, m_meteorQueueHpMult,
-                   m_meteorQueueMaxOre);
+                   m_meteorQueueMaxOre, m_meteorRadiusScale);
     ++m_meteorQueueSpawned;
     if (m_meteorQueueSpawned >= m_meteorQueueTotal)
         m_meteorQueueActive = false;

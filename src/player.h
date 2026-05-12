@@ -19,6 +19,12 @@ public:
 
     void init(float startX, float startY);
 
+    float hp() const { return m_hp; }
+    float maxHp() const { return m_maxHp; }
+    void  takeDamage(float dmg);
+    void  resetHp();
+    void  updateHpRegen(float dt);
+
     /// nullptr = vector fallback (development zonder texture).
     void setShipSprite(const sf::Texture* tex);
 
@@ -47,6 +53,10 @@ public:
 private:
 
     bool m_hitThisFrame = false;
+
+    float m_hp    = 100.f;
+    float m_maxHp = 100.f;
+    static constexpr float HP_REGEN_PER_SEC = 5.f;
 
     const sf::Texture* m_shipTex   = nullptr;
     float              m_shipScale = 1.f;

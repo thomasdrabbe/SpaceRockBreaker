@@ -57,7 +57,8 @@ public:
                    float hpMult, OreTier lootTier);
 
     void spawnMeteor(sf::Vector2f p, sf::Vector2f v,
-                      float hpMult, OreTier maxOreTier);
+                      float hpMult, OreTier maxOreTier,
+                      float radiusScale = 1.f);
 
     bool hit(float damage, ParticleSystem& particles);
     void update(float dt, sf::Vector2f playerPos = { 0.f, 0.f });
@@ -112,6 +113,7 @@ public:
     /// Zet max. één meteor uit de shower-wachtrij (één per frame).
     void tickMeteorSpawnQueue();
     void clearMeteorSpawnQueue();
+    void setMeteorRadiusScale(float scale) { m_meteorRadiusScale = scale; }
     void update(float dt, float ox, float oy, float areaW, float areaH,
                 sf::Vector2f playerPos);
     /// Alleen meteoren integreren + opruimen (bv. mining-tab gepauzeerd op Easy).
@@ -162,6 +164,7 @@ private:
     float         m_meteorRectOy = 0.f;
     float         m_meteorRectW  = 0.f;
     float         m_meteorRectH  = 0.f;
+    float         m_meteorRadiusScale = 1.f;
 
     bool spawnOneQueuedMeteor();
     Asteroid* claim();

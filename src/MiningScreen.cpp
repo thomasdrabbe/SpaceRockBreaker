@@ -635,6 +635,14 @@ void MiningScreen::update(float      dt,
     int spawnTarget =
         std::min(target + state.levelSpawnBonus(),
                  MAX_ASTEROIDS - ASTEROID_POOL_EVENT_HEADROOM);
+    const int oreOnScreen = m_ores.aliveCount();
+    if (oreOnScreen > 200)
+        spawnTarget = std::max(2, spawnTarget / 2);
+    if (oreOnScreen > 400)
+        spawnTarget = 0;
+    const float meteorSizeBonus =
+        1.f + static_cast<float>(state.levelOf(UpgradeID::METEOR_SIZE)) * 0.15f;
+    m_asteroids.setMeteorRadiusScale(meteorSizeBonus);
     m_asteroids.maintainField(spawnTarget, m_x, m_y, m_w, m_h, asteroidHp,
                               state.maxOreTier());
     m_asteroids.tickMeteorSpawnQueue();
@@ -657,6 +665,7 @@ void MiningScreen::update(float      dt,
 
     // ── Collisions ────────────────────────────────────────
     resolveCollisions(state);
+    resolveMeteorAsteroidImpacts(state);
 
     // ── Ore collectie (alleen ore, geen credits) ──────────
     double oreThisFrame = 0.0;
@@ -724,11 +733,80 @@ void MiningScreen::tickMeteorShower(float dt, GameState& state,
     const float interval = state.meteorShowerIntervalSec();
     m_meteorTimeToNext -= dt;
     if (m_meteorTimeToNext <= 0.f) {
+        m_meteorShowerSpawnCount   = state.meteorShowerMeteorCount();
+        m_meteorShowerTurretKills = 0;
         m_asteroids.spawnMeteorSwarm(m_x, m_y, m_w, m_h,
-                                     state.meteorShowerMeteorCount(),
+                                     m_meteorShowerSpawnCount,
                                      asteroidHpMult,
                                      state.maxOreTier());
         m_meteorTimeToNext = interval;
+    }
+}
+
+// ═════════════════════════════════════════════════════════════
+//  emitAsteroidDestroyedLoot
+// ═════════════════════════════════════════════════════════════
+void MiningScreen::emitAsteroidDestroyedLoot(Asteroid& asteroid,
+                                              GameState& state) {
+    const double bzMult =
+        state.isBonusZone ? static_cast<double>(state.bonusZoneOreValueMult())
+                          : 1.0;
+    if (asteroid.isKeyAsteroid) {
+        const int nk = asteroid.keyPickupCount >= 0 ? asteroid.keyPickupCount
+                                                    : randInt(1, 3);
+        m_keyPickups.drop(asteroid.pos, nk, m_particles);
+        m_ores.drop(
+            asteroid.pos,
+            asteroid.oreDrop.color,
+            asteroid.oreDrop.value * bzMult,
+            asteroid.oreDrop.count,
+            asteroid.oreTier,
+            state.oreLuckBonus(),
+            m_particles);
+    } else if (asteroid.isBoss) {
+        int count = asteroid.oreDrop.count * asteroid.rarityDropMult();
+        m_ores.drop(
+            asteroid.pos,
+            asteroid.oreDrop.color,
+            asteroid.oreDrop.value * bzMult,
+            count,
+            asteroid.oreTier,
+            state.oreLuckBonus(),
+            m_particles);
+        if (static_cast<int>(state.maxOreTier())
+            >= static_cast<int>(OreTier::GOLD)) {
+            m_ores.drop(
+                asteroid.pos,
+                sf::Color(255, 215, 50),
+                20.0 * bzMult,
+                26,
+                OreTier::GOLD,
+                state.oreLuckBonus(),
+                m_particles);
+        }
+        if (static_cast<int>(state.maxOreTier())
+            >= static_cast<int>(OreTier::SILVER)) {
+            m_ores.drop(
+                asteroid.pos,
+                sf::Color(210, 215, 225),
+                8.0 * bzMult,
+                20,
+                OreTier::SILVER,
+                state.oreLuckBonus(),
+                m_particles);
+        }
+        state.registerBossDefeated();
+        m_pendingBossReturnToBase = true;
+    } else {
+        int count = asteroid.oreDrop.count * asteroid.rarityDropMult();
+        m_ores.drop(
+            asteroid.pos,
+            asteroid.oreDrop.color,
+            asteroid.oreDrop.value * bzMult,
+            count,
+            asteroid.oreTier,
+            state.oreLuckBonus(),
+            m_particles);
     }
 }
 
@@ -750,75 +828,55 @@ void MiningScreen::resolveCollisions(GameState& state) {
 
             bool destroyed = asteroid.hit(bullet.damage, m_particles);
             if (destroyed) {
-                const double bzMult =
-                    state.isBonusZone
-                        ? static_cast<double>(state.bonusZoneOreValueMult())
-                        : 1.0;
+                if (asteroid.isMeteor && bullet.fromTurret) {
+                    ++m_meteorShowerTurretKills;
+                    if (!state.meteorDestroyerUnlocked
+                        && m_meteorShowerTurretKills >= m_meteorShowerSpawnCount
+                        && m_meteorShowerSpawnCount > 0) {
+                        state.meteorDestroyerUnlocked = true;
+                        m_meteorEasterEggNotify         = true;
+                    }
+                }
                 if (asteroid.isBoss)
                     m_audio->play(Sfx::BossExplode);
                 else
                     m_audio->play(Sfx::Explosion);
-                if (asteroid.isKeyAsteroid) {
-                    const int nk = asteroid.keyPickupCount >= 0
-                        ? asteroid.keyPickupCount
-                        : randInt(1, 3);
-                    m_keyPickups.drop(asteroid.pos, nk, m_particles);
-                    m_ores.drop(
-                        asteroid.pos,
-                        asteroid.oreDrop.color,
-                        asteroid.oreDrop.value * bzMult,
-                        asteroid.oreDrop.count,
-                        asteroid.oreTier,
-                        state.oreLuckBonus(),
-                        m_particles);
-                } else if (asteroid.isBoss) {
-                    int count =
-                        asteroid.oreDrop.count * asteroid.rarityDropMult();
-                    m_ores.drop(
-                        asteroid.pos,
-                        asteroid.oreDrop.color,
-                        asteroid.oreDrop.value * bzMult,
-                        count,
-                        asteroid.oreTier,
-                        state.oreLuckBonus(),
-                        m_particles);
-                    if (static_cast<int>(state.maxOreTier())
-                        >= static_cast<int>(OreTier::GOLD)) {
-                        m_ores.drop(
-                            asteroid.pos,
-                            sf::Color(255, 215, 50),
-                            20.0 * bzMult,
-                            26,
-                            OreTier::GOLD,
-                            state.oreLuckBonus(),
-                            m_particles);
-                    }
-                    if (static_cast<int>(state.maxOreTier())
-                        >= static_cast<int>(OreTier::SILVER)) {
-                        m_ores.drop(
-                            asteroid.pos,
-                            sf::Color(210, 215, 225),
-                            8.0 * bzMult,
-                            20,
-                            OreTier::SILVER,
-                            state.oreLuckBonus(),
-                            m_particles);
-                    }
-                    state.registerBossDefeated();
-                    m_pendingBossReturnToBase = true;
-                } else {
-                    int count =
-                        asteroid.oreDrop.count * asteroid.rarityDropMult();
-                    m_ores.drop(
-                        asteroid.pos,
-                        asteroid.oreDrop.color,
-                        asteroid.oreDrop.value * bzMult,
-                        count,
-                        asteroid.oreTier,
-                        state.oreLuckBonus(),
-                        m_particles);
-                }
+                emitAsteroidDestroyedLoot(asteroid, state);
             }
+            break;
+        }
+    }
+}
+
+void MiningScreen::resolveMeteorAsteroidImpacts(GameState& state) {
+    if (!state.meteorDestroyerUnlocked
+        || state.levelOf(UpgradeID::METEOR_DAMAGE) <= 0)
+        return;
+
+    const float dmg =
+        state.gunDamage()
+        * (1.f
+           + static_cast<float>(state.levelOf(UpgradeID::METEOR_DAMAGE))
+                 * 0.5f);
+
+    for (auto& meteor : m_asteroids.all()) {
+        if (!meteor.alive || !meteor.isMeteor) continue;
+
+        for (auto& asteroid : m_asteroids.all()) {
+            if (!asteroid.alive || asteroid.isMeteor || asteroid.isKeyAsteroid
+                || asteroid.isBoss)
+                continue;
+
+            const float dist = distance(meteor.pos, asteroid.pos);
+            if (dist >= meteor.radius + asteroid.radius)
+                continue;
+
+            const bool destroyed = asteroid.hit(dmg, m_particles);
+            if (destroyed) {
+                m_audio->play(Sfx::Explosion);
+                emitAsteroidDestroyedLoot(asteroid, state);
+            }
+            meteor.alive = false;
             break;
         }
     }
@@ -848,6 +906,9 @@ void MiningScreen::clearAll() {
     m_asteroids.clearMeteorSpawnQueue();
     m_pendingBossReturnToBase = false;
     resetMeteorShowerSchedule();
+    m_meteorShowerSpawnCount   = 0;
+    m_meteorShowerTurretKills = 0;
+    m_meteorEasterEggNotify    = false;
 }
 
 void MiningScreen::prepareNewRun() {
@@ -1340,4 +1401,11 @@ void MiningScreen::drawHUD(sf::RenderTarget& target,
              sf::Color(255, 180, 100));
 
 
+}
+
+bool MiningScreen::pullMeteorEasterEgg() {
+    if (!m_meteorEasterEggNotify)
+        return false;
+    m_meteorEasterEggNotify = false;
+    return true;
 }

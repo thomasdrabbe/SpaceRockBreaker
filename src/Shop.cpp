@@ -24,7 +24,8 @@ const std::vector<CatInfo> CATEGORIES = {
     { "Mining", ShopCategory::MINING,
       { UpgradeID::ORE_VALUE,          UpgradeID::AUTO_COLLECT_RADIUS,
         UpgradeID::ORE_LUCK,           UpgradeID::ASTEROID_HP,
-        UpgradeID::WARP_DRIVE } },
+        UpgradeID::WARP_DRIVE,        UpgradeID::METEOR_DAMAGE,
+        UpgradeID::METEOR_SIZE } },
     { "Plinko", ShopCategory::PLINKO,
       { UpgradeID::PLINKO_ROWS,    UpgradeID::PLINKO_MULT,
         UpgradeID::PLINKO_BALLS,   UpgradeID::PLINKO_LUCK,
@@ -185,6 +186,7 @@ uint64_t Shop::layoutFingerprint(const GameState& state) const {
         mix(static_cast<uint64_t>(vis ? 1u : 0u));
     mix(static_cast<uint64_t>(m_miningShowsWarpOnly ? 1u : 0u));
     mix(static_cast<uint64_t>(m_plinkoShopAutoOnly ? 1u : 0u));
+    mix(static_cast<uint64_t>(state.meteorDestroyerUnlocked ? 1u : 0u));
 
     mix(floatBits64(m_x));
     mix(floatBits64(m_y));
@@ -479,6 +481,20 @@ void Shop::drawCard(sf::RenderTarget&  target,
 
     ty += fDesc + std::round(6.f * m_scale);
 
+    const bool meteorLocked =
+        (idx == static_cast<int>(UpgradeID::METEOR_DAMAGE)
+         || idx == static_cast<int>(UpgradeID::METEOR_SIZE))
+        && !state.meteorDestroyerUnlocked;
+    if (meteorLocked) {
+        sf::Text lockTxt(*m_font);
+        lockTxt.setCharacterSize(std::max(10u, fDesc - 1));
+        lockTxt.setString("Versla alle meteoren van een shower (torrets)");
+        lockTxt.setFillColor(sf::Color(130, 100, 140));
+        lockTxt.setPosition({ tx, ty });
+        target.draw(lockTxt);
+        ty += fDesc + std::round(4.f * m_scale);
+    }
+
     // Effect
     std::string fx = formatEffect(card.id, state);
     if (!fx.empty()) {
@@ -590,6 +606,16 @@ std::string Shop::formatEffect(UpgradeID id,
             break;
         case UpgradeID::WARP_DRIVE:
             ss << "Charge: " << state.warpDurationSec() << "s"; break;
+        case UpgradeID::METEOR_DAMAGE: {
+            const int md = state.levelOf(UpgradeID::METEOR_DAMAGE);
+            const float mult = 1.f + static_cast<float>(md) * 0.5f;
+            ss << "Impact dmg: " << (state.gunDamage() * mult);
+            break;
+        }
+        case UpgradeID::METEOR_SIZE:
+            ss << "Radius: +"
+               << (state.levelOf(UpgradeID::METEOR_SIZE) * 15) << "%";
+            break;
         case UpgradeID::UNLOCK_BRONZE:
         case UpgradeID::UNLOCK_SILVER:
         case UpgradeID::UNLOCK_GOLD:

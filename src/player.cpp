@@ -10,6 +10,22 @@
 void Player::init(float startX, float startY) {
     pos   = { startX, startY };
     angle = -90.f;
+    resetHp();
+}
+
+void Player::takeDamage(float dmg) {
+    m_hp -= dmg;
+    if (m_hp < 0.f)
+        m_hp = 0.f;
+}
+
+void Player::resetHp() {
+    m_hp = m_maxHp;
+}
+
+void Player::updateHpRegen(float dt) {
+    if (m_hp < m_maxHp)
+        m_hp = std::min(m_maxHp, m_hp + HP_REGEN_PER_SEC * dt);
 }
 
 void Player::setShipSprite(const sf::Texture* tex) {
@@ -95,6 +111,8 @@ void Player::update(float            dt,
     pos.x = clamp(pos.x, panelLeft + padSide, panelLeft + panelW - padSide);
     pos.y = clamp(pos.y, panelTop + padTop, panelTop + panelH - padSide);
 
+    updateHpRegen(dt);
+
     // ── Auto-aim ──────────────────────────────────────────
     Asteroid* target = asteroids.nearest(pos);
 
@@ -128,7 +146,7 @@ void Player::update(float            dt,
         sf::Vector2f dir = normalize(target->pos - tip);
 
         bullets.fire(tip, dir, finalDmg, isCrit, splitShot, bulletLifetimeSec,
-                     particles);
+                     particles, false);
         gSfx.play(Sfx::Shot);
 
         if (isCrit)

@@ -11,6 +11,7 @@
 namespace {
 
 constexpr float CHEST_OVERLAY_SEC = 1.05f;
+constexpr float PLAYER_HIT_HP_COOLDOWN = 0.8f;
 
 void migrateLegacySaveIfNeeded() {
     for (int s = 0; s < SAVE_SLOT_COUNT; ++s) {
@@ -426,6 +427,30 @@ void Game::drawLives() const {
         heart.setOutlineThickness(1.5f);
         m_window.draw(heart);
     }
+
+    const float maxHp = std::max(1.f, m_mining.playerMaxHp());
+    const float ratio =
+        std::clamp(m_mining.playerHp() / maxHp, 0.f, 1.f);
+    const float barW  = std::round(120.f * m_scale);
+    const float barH  = std::round(10.f * m_scale);
+    const float barX  = m_cntX + m_cntW - std::round(300.f * m_scale);
+    const float barY  = m_cntY + std::round(8.f * m_scale);
+    sf::RectangleShape hpBg(sf::Vector2f{ barW, barH });
+    hpBg.setPosition({ barX, barY });
+    hpBg.setFillColor(sf::Color(40, 10, 10, 200));
+    m_window.draw(hpBg);
+    const auto rCol = static_cast<std::uint8_t>((1.f - ratio) * 255.f);
+    const auto gCol = static_cast<std::uint8_t>(ratio * 200.f);
+    sf::RectangleShape hpFill(sf::Vector2f{ barW * ratio, barH });
+    hpFill.setPosition({ barX, barY });
+    hpFill.setFillColor(sf::Color(rCol, gCol, 30, 220));
+    m_window.draw(hpFill);
+    drawText("HP",
+             barX - std::round(24.f * m_scale),
+             barY,
+             static_cast<unsigned>(std::round(barH * 1.1f)),
+             sf::Color(200, 200, 200),
+             false);
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -481,6 +506,12 @@ void Game::update(float dt) {
         clampActiveTabToVisibility();
     }
 
+    m_oreFusionTimer += dt;
+    while (m_oreFusionTimer >= 1.f) {
+        m_oreFusionTimer -= 1.f;
+        m_state.processOreFusion();
+    }
+
     double creditsEarned = 0.0;
     double oreEarned     = 0.0;
     std::array<double, ORE_TIER_COUNT> oreByTierEarned{};
@@ -514,29 +545,49 @@ void Game::update(float dt) {
             if (m_hitCooldown > 0.f) {
                 m_hitCooldown -= dt;
             } else if (m_mining.playerHit()) {
-                m_hitCooldown = m_state.hitInvulnerabilitySec();
-                m_state.loseLife();
+                m_mining.playerTakeDamage(30.f);
+                m_hitCooldown = PLAYER_HIT_HP_COOLDOWN;
                 m_mining.particles().emitExplosion(
                     m_mining.playerPos(),
-                    40.f, sf::Color(255, 80, 60), 30);
+                    28.f, sf::Color(255, 120, 80), 18);
 
-                if (m_state.isGameOver()) {
-                    if (!m_audio->playGameOverMusicOnce())
-                        m_audio->play(Sfx::GameOver);
-                    m_state.gameOver();
-                    syncMiningSystemsFromState(true);
-                    moveRunToBaseState();
-                    pushNotif("GAME OVER - terug naar zone 1",
-                              sf::Color(255, 60, 60));
-                } else {
-                    if (m_activeTab != Tab::MINING
-                        && m_state.difficulty != Difficulty::Easy) {
-                        m_hitFlashTimer = 0.4f;
+                if (m_mining.playerHpZero()) {
+                    m_state.loseLife();
+                    m_mining.resetPlayerHp();
+                    m_hitCooldown = m_state.hitInvulnerabilitySec();
+                    m_mining.particles().emitExplosion(
+                        m_mining.playerPos(),
+                        40.f, sf::Color(255, 80, 60), 30);
+
+                    if (m_state.isGameOver()) {
+                        if (!m_audio->playGameOverMusicOnce())
+                            m_audio->play(Sfx::GameOver);
+                        m_state.gameOver();
+                        syncMiningSystemsFromState(true);
+                        moveRunToBaseState();
+                        pushNotif("GAME OVER - terug naar zone 1",
+                                  sf::Color(255, 60, 60));
+                    } else {
+                        if (m_activeTab != Tab::MINING
+                            && m_state.difficulty != Difficulty::Easy) {
+                            m_hitFlashTimer = 0.4f;
+                        }
+                        pushNotif("Leven verloren!  " +
+                                  std::to_string(m_state.lives) + " over",
+                                  sf::Color(255, 120, 60));
                     }
-                    pushNotif("Leven verloren!  " +
-                              std::to_string(m_state.lives) + " over",
-                              sf::Color(255, 120, 60));
+                } else {
+                    pushNotif(
+                        "Schade! "
+                        + std::to_string(static_cast<int>(m_mining.playerHp()))
+                        + " HP",
+                        sf::Color(255, 180, 60));
                 }
+            }
+
+            if (m_mining.pullMeteorEasterEgg()) {
+                pushNotif("Meteor Destroyer ontgrendeld — nieuwe mining-upgrades!",
+                          sf::Color(255, 200, 120));
             }
 
             if (m_mining.trySpawnBoss(m_state)) {

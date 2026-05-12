@@ -89,6 +89,7 @@ private:
     static constexpr float SAVE_INTERVAL = 30.f;
     // Onkwetsbaar na hit (duur hangt van moeilijkheid af)
     float m_hitCooldown = 0.f;
+    float m_oreFusionTimer = 0.f;
 
     bool m_mainMenuPickDifficulty = false;
     struct SaveSlotPreview {

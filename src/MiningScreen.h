@@ -29,6 +29,14 @@ class IAudioBus;
 class MiningScreen {
 public:
     bool playerHit() const;
+    void playerTakeDamage(float dmg) { m_player.takeDamage(dmg); }
+    void resetPlayerHp() { m_player.resetHp(); }
+    bool playerHpZero() const { return m_player.hp() <= 0.f; }
+    float playerHp() const { return m_player.hp(); }
+    float playerMaxHp() const { return m_player.maxHp(); }
+
+    /// Eénmalige melding na Meteor Destroyer-unlock (alle shower-meteoren door torrets).
+    bool pullMeteorEasterEgg();
     //--player pos voor emit explosion
     sf::Vector2f playerPos() const { return m_player.pos; }
 
@@ -170,11 +178,16 @@ private:
     IAudioBus* m_audio = nullptr;
 
     float                  m_meteorTimeToNext = -1.f;
+    int                    m_meteorShowerSpawnCount   = 0;
+    int                    m_meteorShowerTurretKills = 0;
+    bool                   m_meteorEasterEggNotify = false;
 
     void resetMeteorShowerSchedule();
 
     // ── Collision ─────────────────────────────────────────
     void resolveCollisions(GameState& state);
+    void resolveMeteorAsteroidImpacts(GameState& state);
+    void emitAsteroidDestroyedLoot(Asteroid& asteroid, GameState& state);
 
     // ── Draw helpers ──────────────────────────────────────
     void drawStarfield(sf::RenderTarget& target, float warpCharge,

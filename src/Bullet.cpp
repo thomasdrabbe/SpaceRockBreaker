@@ -30,7 +30,8 @@ void BulletManager::fire(sf::Vector2f    origin,
                           bool            isCrit,
                           int             splitCount,
                           float           lifetimeSec,
-                          ParticleSystem& particles) {
+                          ParticleSystem& particles,
+                          bool            fromTurret) {
     float baseAngle = std::atan2(targetDir.y, targetDir.x);
 
     for (int i = 0; i < splitCount; i++) {
@@ -53,6 +54,7 @@ void BulletManager::fire(sf::Vector2f    origin,
         b->lifetime = std::max(0.05f, lifetimeSec);
         b->isCrit   = isCrit;
         b->alive    = true;
+        b->fromTurret = fromTurret;
 
         if (isCrit) {
             b->color  = sf::Color(255, 60, 60);
