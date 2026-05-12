@@ -142,8 +142,13 @@ private:
     std::array<sf::Texture, ASTEROID_TEX_COUNT> m_asteroidTextures{};
     bool                                           m_asteroidTexturesLoaded = false;
     void                                           loadAsteroidTextures();
+    void                                           loadAsteroidGlowShader();
     void drawAsteroidsWithSprites(sf::RenderTarget& target,
                                   float             animTime) const;
+
+    /// Additieve PNG-silhouet-gloed; `mutable` voor `setUniform` vanuit `const` draw.
+    mutable sf::Shader m_asteroidGlowShader{};
+    mutable bool       m_asteroidGlowShaderReady = false;
 
     void buildNebulaClouds(int zone, bool isBonusZone, OreRarity bonusRarity);
     void drawNebulaTexture(sf::RenderTarget& target, const GameState& state) const;

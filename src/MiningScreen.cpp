@@ -1,11 +1,13 @@
 #include "MiningScreen.h"
 #include "SoundHub.h"
 #include "Utils.h"
+#include <SFML/Graphics/Glsl.hpp>
 #include <cmath>
 #include <sstream>
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <filesystem>
 
 namespace {
 
@@ -98,6 +100,7 @@ void MiningScreen::init(sf::Font& font,
 
     loadNebulaPngTextures();
     loadAsteroidTextures();
+    loadAsteroidGlowShader();
 
     if (m_playerShipTex.loadFromFile(resolveAssetPath("assets/player_ship.png"))) {
         m_playerShipTex.setSmooth(true);
@@ -174,6 +177,17 @@ void MiningScreen::loadAsteroidTextures() {
     }
 }
 
+void MiningScreen::loadAsteroidGlowShader() {
+    m_asteroidGlowShaderReady = false;
+    if (!m_asteroidTexturesLoaded || !sf::Shader::isAvailable())
+        return;
+    const std::filesystem::path fragPath(resolveAssetPath("assets/shaders/asteroid_glow.frag"));
+    if (!m_asteroidGlowShader.loadFromFile(fragPath, sf::Shader::Type::Fragment))
+        return;
+    m_asteroidGlowShader.setUniform("texture", sf::Shader::CurrentTexture);
+    m_asteroidGlowShaderReady = true;
+}
+
 void MiningScreen::drawAsteroidsWithSprites(sf::RenderTarget& target,
                                               float             animTime) const {
     if (!m_asteroidTexturesLoaded) {
@@ -186,19 +200,59 @@ void MiningScreen::drawAsteroidsWithSprites(sf::RenderTarget& target,
             continue;
 
         a.drawHalosBehindBody(target, animTime);
-        a.drawTintedBodyGlow(target, animTime);
 
         const int          idx = std::clamp(a.spriteVariant, 0, ASTEROID_TEX_COUNT - 1);
         const sf::Texture& tex =
             m_asteroidTextures[static_cast<std::size_t>(idx)];
         const auto tsz = tex.getSize();
         if (tsz.x > 0u && tsz.y > 0u) {
-            sf::Sprite sprite(tex);
             const float diameter = a.radius * 2.f;
-            sprite.setOrigin({ static_cast<float>(tsz.x) * 0.5f,
-                               static_cast<float>(tsz.y) * 0.5f });
-            sprite.setScale({ diameter / static_cast<float>(tsz.x),
-                              diameter / static_cast<float>(tsz.y) });
+            const float scaleX   = diameter / static_cast<float>(tsz.x);
+            const float scaleY   = diameter / static_cast<float>(tsz.y);
+            const sf::Vector2f origin{ static_cast<float>(tsz.x) * 0.5f,
+                                        static_cast<float>(tsz.y) * 0.5f };
+
+            if (m_asteroidGlowShaderReady) {
+                const float pulse =
+                    0.88f + 0.12f * std::sin(animTime * 1.65f + a.pos.x * 0.017f + a.pos.y * 0.013f);
+                float alphaMul = 1.f;
+                if (a.isMeteor)
+                    alphaMul = 0.5f;
+                else if (a.isBoss)
+                    alphaMul = 1.1f;
+                const float glowStrength = (a.isBoss ? 2.35f : 1.85f) * pulse * alphaMul;
+
+                m_asteroidGlowShader.setUniform(
+                    "glow_rgb",
+                    sf::Glsl::Vec3(static_cast<float>(a.color.r) / 255.f,
+                                    static_cast<float>(a.color.g) / 255.f,
+                                    static_cast<float>(a.color.b) / 255.f));
+                m_asteroidGlowShader.setUniform(
+                    "texel_size",
+                    sf::Glsl::Vec2(1.f / static_cast<float>(tsz.x),
+                                   1.f / static_cast<float>(tsz.y)));
+                m_asteroidGlowShader.setUniform("glow_strength", glowStrength);
+
+                sf::Sprite glowSpr(tex);
+                glowSpr.setOrigin(origin);
+                glowSpr.setScale({ scaleX, scaleY });
+                glowSpr.setPosition(a.pos);
+                glowSpr.setRotation(sf::degrees(a.rotation));
+                glowSpr.setColor(sf::Color::White);
+
+                sf::RenderStates rs(sf::BlendAdd,
+                                     {},
+                                     sf::Transform::Identity,
+                                     sf::CoordinateType::Pixels,
+                                     nullptr,
+                                     &m_asteroidGlowShader);
+                target.draw(glowSpr, rs);
+            } else
+                a.drawTintedBodyGlow(target, animTime);
+
+            sf::Sprite sprite(tex);
+            sprite.setOrigin(origin);
+            sprite.setScale({ scaleX, scaleY });
             sprite.setPosition(a.pos);
             sprite.setRotation(sf::degrees(a.rotation));
             sprite.setColor(a.color);
