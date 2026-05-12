@@ -116,13 +116,13 @@ private:
         float        radiusX   = 1.f;
         float        radiusY   = 1.f;
         float        rotation  = 0.f; // graden
-        float        alpha     = 40.f; // basis 0–80 schaal
+        float        alpha     = 28.f; // basis 15–40 (wolken) / hoger voor highlights
         float        driftX    = 0.f;
         float        driftY    = 0.f;
         float        phase     = 0.f;
     };
-    static constexpr int NEBULA_CLOUD_COUNT      = 12;
-    static constexpr int NEBULA_HIGHLIGHT_COUNT  = 4;
+    static constexpr int NEBULA_CLOUD_COUNT      = 20;
+    static constexpr int NEBULA_HIGHLIGHT_COUNT  = 8;
     std::array<NebulaCloud, NEBULA_CLOUD_COUNT>     m_nebulaClouds{};
     std::array<NebulaCloud, NEBULA_HIGHLIGHT_COUNT> m_nebulaHighlights{};
     int       m_lastNebulaZone   = -1;

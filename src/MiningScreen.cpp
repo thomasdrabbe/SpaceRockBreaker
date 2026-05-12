@@ -133,6 +133,21 @@ void nebulaStir(uint32_t& s) {
     s ^= s << 5u;
 }
 
+static constexpr int         NEBULA_SOFT_LAYER_COUNT = 6;
+static constexpr float       NEBULA_LAYER_RAD[NEBULA_SOFT_LAYER_COUNT] = {
+    0.25f, 0.45f, 0.60f, 0.75f, 0.88f, 1.00f};
+static constexpr float       NEBULA_LAYER_AMUL[NEBULA_SOFT_LAYER_COUNT] = {
+    0.90f, 0.70f, 0.50f, 0.30f, 0.15f, 0.06f};
+
+[[nodiscard]] sf::Color lerpRgb(const sf::Color& a, const sf::Color& b, float t) {
+    t = std::clamp(t, 0.f, 1.f);
+    auto ch = [&](std::uint8_t xa, std::uint8_t xb) {
+        return static_cast<std::uint8_t>(
+            std::round(float(xa) + t * (float(xb) - float(xa))));
+    };
+    return sf::Color(ch(a.r, b.r), ch(a.g, b.g), ch(a.b, b.b));
+}
+
 } // namespace
 
 float MiningScreen::nebulaIntensityForZone(int      zone,
@@ -207,31 +222,29 @@ void MiningScreen::buildNebulaClouds(int      zone,
 
     for (int i = 0; i < NEBULA_CLOUD_COUNT; ++i) {
         NebulaCloud& c = m_nebulaClouds[static_cast<std::size_t>(i)];
-        c.basePos.x = m_x - m_w * 0.18f + uf() * (m_w * 1.36f);
-        c.basePos.y = m_y - m_h * 0.18f + uf() * (m_h * 1.36f);
+        // Tot ~60% buiten de rand voor organischer overlap.
+        c.basePos.x = m_x - m_w * 0.60f + uf() * (m_w * 2.20f);
+        c.basePos.y = m_y - m_h * 0.60f + uf() * (m_h * 2.20f);
         c.radiusX   = (0.15f + uf() * 0.30f) * m_w;
         c.radiusY   = c.radiusX * (0.4f + uf() * 0.5f);
         c.rotation  = uf() * 360.f;
-        const float aLo = 25.f + intensity * 18.f;
-        const float aHi = 52.f + intensity * 23.f;
-        c.alpha     = aLo + uf() * (aHi - aLo);
-        c.driftX    = uf() * 16.f - 8.f;
-        c.driftY    = uf() * 16.f - 8.f;
-        c.phase     = uf() * 6.2831853f;
+        c.alpha       = (15.f + uf() * 25.f) * (0.88f + 0.12f * intensity);
+        c.driftX      = uf() * 16.f - 8.f;
+        c.driftY      = uf() * 16.f - 8.f;
+        c.phase       = uf() * 6.2831853f;
     }
 
     for (int i = 0; i < NEBULA_HIGHLIGHT_COUNT; ++i) {
         NebulaCloud& c = m_nebulaHighlights[static_cast<std::size_t>(i)];
-        c.basePos.x = m_x - m_w * 0.12f + uf() * (m_w * 1.24f);
-        c.basePos.y = m_y - m_h * 0.12f + uf() * (m_h * 1.24f);
-        c.radiusX   = (0.075f + uf() * 0.15f) * m_w;
+        c.basePos.x = m_x - m_w * 0.55f + uf() * (m_w * 2.10f);
+        c.basePos.y = m_y - m_h * 0.55f + uf() * (m_h * 2.10f);
+        c.radiusX   = (0.034f + uf() * 0.086f) * m_w;
         c.radiusY   = c.radiusX * (0.45f + uf() * 0.45f);
         c.rotation  = uf() * 360.f;
-        const float baseA = 28.f + uf() * 35.f;
-        c.alpha       = std::min(120.f, baseA * 2.f);
-        c.driftX      = uf() * 12.f - 6.f;
-        c.driftY      = uf() * 12.f - 6.f;
-        c.phase       = uf() * 6.2831853f;
+        c.alpha     = 48.f + uf() * 52.f;
+        c.driftX    = uf() * 12.f - 6.f;
+        c.driftY    = uf() * 12.f - 6.f;
+        c.phase     = uf() * 6.2831853f;
     }
 }
 
@@ -245,40 +258,57 @@ void MiningScreen::drawNebula(sf::RenderTarget& target,
     if (intensity <= 0.f)
         return;
 
-    const float spanX = m_w + 120.f;
-    const float spanY = m_h + 120.f;
+    const float spanX = m_w + 320.f;
+    const float spanY = m_h + 320.f;
 
-    auto drawBlob = [&](const NebulaCloud& cloud, bool secondary) {
+    const sf::Color prim = nebulaColorForZone(zone, isBonusZone, bonusRarity, false);
+    const sf::Color sec  = nebulaColorForZone(zone, isBonusZone, bonusRarity, true);
+
+    const sf::RenderStates rsAdd(sf::BlendAdd);
+
+    auto drawSoftCloud = [&](const NebulaCloud& cloud,
+                             float               extraAlphaScale,
+                             const sf::RenderStates& rs) {
         const float ox =
             nebulaModF(animTime * cloud.driftX + cloud.phase * 12.f, spanX);
         const float oy =
             nebulaModF(animTime * cloud.driftY + cloud.phase * 9.3f, spanY);
         const float px = cloud.basePos.x + ox - spanX * 0.5f;
         const float py = cloud.basePos.y + oy - spanY * 0.5f;
-
         const float pulse =
             std::sin(animTime * 0.3f + cloud.phase) * 0.15f + 0.85f;
-        const sf::Color rgb =
-            nebulaColorForZone(zone, isBonusZone, bonusRarity, secondary);
-        const float aFloat =
-            std::clamp(cloud.alpha * pulse * intensity, 0.f, 255.f);
-        const auto  a = static_cast<std::uint8_t>(aFloat);
 
-        sf::CircleShape blob(cloud.radiusX);
-        blob.setOrigin({ cloud.radiusX, cloud.radiusX });
-        blob.setPosition({ px, py });
-        if (cloud.radiusX > 0.5f)
-            blob.setScale({ 1.f, cloud.radiusY / cloud.radiusX });
-        blob.setRotation(sf::degrees(cloud.rotation));
-        blob.setFillColor(sf::Color(rgb.r, rgb.g, rgb.b, a));
-        blob.setOutlineThickness(0.f);
-        target.draw(blob);
+        for (int li = NEBULA_SOFT_LAYER_COUNT - 1; li >= 0; --li) {
+            const float     t = static_cast<float>(li) / 5.f;
+            const sf::Color rgb = lerpRgb(prim, sec, t);
+            const float     radX = cloud.radiusX * NEBULA_LAYER_RAD[li];
+            const float     radY = cloud.radiusY * NEBULA_LAYER_RAD[li];
+            if (radX < 0.5f)
+                continue;
+            const float aFloat = std::clamp(
+                cloud.alpha * NEBULA_LAYER_AMUL[li] * pulse * intensity
+                    * extraAlphaScale,
+                0.f, 255.f);
+            const auto a = static_cast<std::uint8_t>(aFloat);
+
+            sf::CircleShape blob(radX);
+            blob.setOrigin({ radX, radX });
+            blob.setPosition({ px, py });
+            blob.setScale({ 1.f, radY / radX });
+            blob.setRotation(sf::degrees(cloud.rotation));
+            blob.setFillColor(sf::Color(rgb.r, rgb.g, rgb.b, a));
+            blob.setOutlineThickness(0.f);
+            target.draw(blob, rs);
+        }
     };
 
     for (int i = 0; i < NEBULA_CLOUD_COUNT; ++i)
-        drawBlob(m_nebulaClouds[static_cast<std::size_t>(i)], (i % 2) == 1);
+        drawSoftCloud(m_nebulaClouds[static_cast<std::size_t>(i)], 1.f,
+                      sf::RenderStates::Default);
+
     for (int i = 0; i < NEBULA_HIGHLIGHT_COUNT; ++i)
-        drawBlob(m_nebulaHighlights[static_cast<std::size_t>(i)], (i % 2) == 0);
+        drawSoftCloud(m_nebulaHighlights[static_cast<std::size_t>(i)], 0.42f,
+                      rsAdd);
 
     if (isBonusZone && bonusRarity >= OreRarity::LEGENDARY) {
         const int   nParticles = 26;
