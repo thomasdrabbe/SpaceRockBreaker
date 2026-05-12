@@ -148,6 +148,80 @@ static constexpr float       NEBULA_LAYER_AMUL[NEBULA_SOFT_LAYER_COUNT] = {
     return sf::Color(ch(a.r, b.r), ch(a.g, b.g), ch(a.b, b.b));
 }
 
+/// Dunne gloeiende “aders” (random walk), additief — referentie: interne structuur.
+void nebulaDrawFilaments(sf::RenderTarget& target,
+                         float             animTime,
+                         int               zone,
+                         bool              isBonusZone,
+                         OreRarity         bonusRarity,
+                         float             mx,
+                         float             my,
+                         float             mw,
+                         float             mh,
+                         float             intensity,
+                         const sf::Color&  prim,
+                         const sf::Color&  sec) {
+    if (!isBonusZone && zone < 5)
+        return;
+
+    const sf::RenderStates rsAdd(sf::BlendAdd);
+    uint32_t              seed =
+        static_cast<uint32_t>(std::max(1, zone)) * 2654435761u;
+    if (isBonusZone)
+        seed ^= 0xD16Eu
+                ^ (static_cast<uint32_t>(bonusRarity) * 747796405u);
+
+    const float minDim = std::max(40.f, std::min(mw, mh));
+
+    for (int f = 0; f < 9; ++f) {
+        uint32_t t = seed ^ static_cast<uint32_t>(f * 92837111u);
+        nebulaStir(t);
+        float x = mx + (t & 0xFFFFu) / 65536.f * mw;
+        nebulaStir(t);
+        float y = my + (t & 0xFFFFu) / 65536.f * mh;
+        nebulaStir(t);
+        float ang = (t & 4095u) / 4096.f * 6.2831853f;
+        const int   nseg  = 24;
+        const float step  = minDim * 0.016f;
+        float       thick = 1.85f;
+        if (zone >= 10 && zone < 15 && !isBonusZone)
+            thick = 2.45f;
+        if (isBonusZone && bonusRarity >= OreRarity::EPIC)
+            thick = 2.1f;
+
+        for (int si = 0; si < nseg; ++si) {
+            nebulaStir(t);
+            ang += ((t & 2047u) / 2047.f - 0.5f) * 0.62f;
+            const float x2 = x + std::cos(ang) * step;
+            const float y2 = y + std::sin(ang) * step;
+            const float len = std::max(1.f, std::hypot(x2 - x, y2 - y));
+            const float midx = (x + x2) * 0.5f;
+            const float midy = (y + y2) * 0.5f;
+            const float deg =
+                std::atan2(y2 - y, x2 - x) * 180.f / 3.14159265358979323846f;
+
+            sf::RectangleShape seg(
+                { len, thick + static_cast<float>(t & 7u) * 0.11f });
+            seg.setOrigin({ len * 0.5f, seg.getSize().y * 0.5f });
+            seg.setPosition({ midx, midy });
+            seg.setRotation(sf::degrees(deg));
+            const float   u = static_cast<float>(si) / static_cast<float>(nseg - 1);
+            sf::Color     c = lerpRgb(prim, sec, u);
+            const float   pulse =
+                std::sin(animTime * 0.5f + si * 0.17f + f * 0.4f) * 0.22f + 0.78f;
+            const float   boost =
+                (isBonusZone && bonusRarity >= OreRarity::LEGENDARY) ? 1.35f : 1.f;
+            const auto alpha = static_cast<std::uint8_t>(std::clamp(
+                22.f * intensity * pulse * boost, 5.f, 115.f));
+            c.a = alpha;
+            seg.setFillColor(c);
+            target.draw(seg, rsAdd);
+            x = x2;
+            y = y2;
+        }
+    }
+}
+
 } // namespace
 
 float MiningScreen::nebulaIntensityForZone(int      zone,
@@ -174,34 +248,42 @@ sf::Color MiningScreen::nebulaColorForZone(int      zone,
                                           bool     secondary) {
     if (isBonusZone) {
         const int ri = std::clamp(static_cast<int>(bonusRarity), 0, 5);
-        if (secondary) {
-            const int r = std::min(255, 140 + ri * 8);
-            const int g = std::min(255, 60 + ri * 4);
-            const int b = std::min(255, 5 + ri * 2);
-            return sf::Color(static_cast<std::uint8_t>(r),
-                             static_cast<std::uint8_t>(g),
-                             static_cast<std::uint8_t>(b));
-        }
-        const int r = std::min(255, 180 + ri * 5);
-        const int g = std::min(255, 120 + ri * 6);
-        const int b = std::min(255, 15 + ri * 3);
-        return sf::Color(static_cast<std::uint8_t>(r),
-                         static_cast<std::uint8_t>(g),
-                         static_cast<std::uint8_t>(b));
+        // Warm goud / amber naar legendarisch “zonnecore” (referentie bonus).
+        static constexpr std::uint8_t kBonSecR[] = { 115, 125, 138, 152, 172,
+                                                      195 };
+        static constexpr std::uint8_t kBonSecG[] = { 38,  44,  50,  54,  62,
+                                                      72 };
+        static constexpr std::uint8_t kBonSecB[] = { 10,  12,  12,  11,  10,
+                                                      14 };
+        static constexpr std::uint8_t kBonPriR[] = { 215, 225, 235, 245, 252,
+                                                      255 };
+        static constexpr std::uint8_t kBonPriG[] = { 150, 165, 185, 200, 218,
+                                                      235 };
+        static constexpr std::uint8_t kBonPriB[] = { 55,  48,  42,  38,  32,
+                                                      28 };
+        if (secondary)
+            return { kBonSecR[ri], kBonSecG[ri], kBonSecB[ri] };
+        return { kBonPriR[ri], kBonPriG[ri], kBonPriB[ri] };
     }
     if (zone < 5)
         return sf::Color(0, 0, 0, 0);
-    if (zone < 10)
-        return secondary ? sf::Color(20, 100, 160) : sf::Color(40, 60, 180);
-    if (zone < 15)
-        return secondary ? sf::Color(140, 60, 20) : sf::Color(160, 30, 40);
+    // Zone 5–9: cyan kern / diep blauw volume (blauwe nevel-referentie).
+    if (zone < 10) {
+        return secondary ? sf::Color(18, 52, 105)
+                         : sf::Color(130, 218, 255);
+    }
+    // Zone 10–14: fel oranje-rode highlights / diep karmozijn (rode nevel).
+    if (zone < 15) {
+        return secondary ? sf::Color(72, 8, 14)
+                         : sf::Color(255, 185, 140);
+    }
     if (zone < 20)
-        return secondary ? sf::Color(20, 100, 90) : sf::Color(20, 120, 60);
+        return secondary ? sf::Color(18, 95, 82) : sf::Color(35, 185, 105);
     if (zone < 30)
-        return secondary ? sf::Color(60, 20, 140) : sf::Color(100, 20, 160);
+        return secondary ? sf::Color(52, 14, 118) : sf::Color(200, 120, 255);
     if (zone < 50)
-        return secondary ? sf::Color(30, 5, 60) : sf::Color(60, 10, 100);
-    return secondary ? sf::Color(10, 15, 80) : sf::Color(20, 30, 120);
+        return secondary ? sf::Color(22, 4, 48) : sf::Color(130, 70, 210);
+    return secondary ? sf::Color(8, 14, 58) : sf::Color(70, 120, 220);
 }
 
 void MiningScreen::buildNebulaClouds(int      zone,
@@ -305,6 +387,9 @@ void MiningScreen::drawNebula(sf::RenderTarget& target,
     for (int i = 0; i < NEBULA_CLOUD_COUNT; ++i)
         drawSoftCloud(m_nebulaClouds[static_cast<std::size_t>(i)], 1.f,
                       sf::RenderStates::Default);
+
+    nebulaDrawFilaments(target, animTime, zone, isBonusZone, bonusRarity, m_x,
+                        m_y, m_w, m_h, intensity, prim, sec);
 
     for (int i = 0; i < NEBULA_HIGHLIGHT_COUNT; ++i)
         drawSoftCloud(m_nebulaHighlights[static_cast<std::size_t>(i)], 0.42f,
