@@ -7,14 +7,75 @@
       "displayName": "Visual Studio 2026 + vcpkg (x64)",
       "binaryDir": "${sourceDir}/build",
       "generator": "Visual Studio 18 2026",
-      "architecture": "x64"
+      "architecture": "x64",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
     },
     {
       "name": "vs2022",
       "displayName": "Visual Studio 2022 + vcpkg (x64)",
       "binaryDir": "${sourceDir}/build-vs2022",
       "generator": "Visual Studio 17 2022",
-      "architecture": "x64"
+      "architecture": "x64",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "macos-arm64",
+      "displayName": "macOS Apple Silicon (Ninja + vcpkg)",
+      "binaryDir": "${sourceDir}/build-macos",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_OSX_ARCHITECTURES": "arm64",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "13.0",
+        "SRB_AUTO_BUMP_VERSION_ON_BUILD": "OFF"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      }
+    },
+    {
+      "name": "macos-x64",
+      "displayName": "macOS Intel (Ninja + vcpkg)",
+      "binaryDir": "${sourceDir}/build-macos-x64",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_OSX_ARCHITECTURES": "x86_64",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "13.0",
+        "SRB_AUTO_BUMP_VERSION_ON_BUILD": "OFF"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      }
+    },
+    {
+      "name": "macos-arm64-debug",
+      "displayName": "macOS Apple Silicon Debug",
+      "binaryDir": "${sourceDir}/build-macos-debug",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_OSX_ARCHITECTURES": "arm64",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "13.0",
+        "SRB_AUTO_BUMP_VERSION_ON_BUILD": "OFF"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      }
     }
   ],
   "buildPresets": [
@@ -22,25 +83,65 @@
       "name": "release",
       "displayName": "Release → build/Release",
       "configurePreset": "default",
-      "configuration": "Release"
+      "configuration": "Release",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
     },
     {
       "name": "debug",
       "displayName": "Debug → build/Debug",
       "configurePreset": "default",
-      "configuration": "Debug"
+      "configuration": "Debug",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
     },
     {
       "name": "release-vs2022",
       "displayName": "Release (VS2022 preset)",
       "configurePreset": "vs2022",
-      "configuration": "Release"
+      "configuration": "Release",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
     },
     {
       "name": "debug-vs2022",
       "displayName": "Debug (VS2022 preset)",
       "configurePreset": "vs2022",
-      "configuration": "Debug"
+      "configuration": "Debug",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "macos-release",
+      "displayName": "macOS Release → build-macos/SpaceRockBreaker",
+      "configurePreset": "macos-arm64",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      }
+    },
+    {
+      "name": "macos-debug",
+      "displayName": "macOS Debug → build-macos-debug/SpaceRockBreaker",
+      "configurePreset": "macos-arm64-debug",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      }
     }
   ]
 }

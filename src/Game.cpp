@@ -1,6 +1,7 @@
 #include "Game.h"
 #include "SoundHub.h"
 #include "Utils.h"
+#include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
@@ -223,24 +224,38 @@ Game::Game()
     // Zelfde padlogica als textures; voorkomt mislukte loads bij andere cwd.
     const std::string fontNoto = resolveAssetPath("assets/NotoSans-Regular.ttf");
     const std::string fontAlt  = resolveAssetPath("assets/font.ttf");
-    const bool        mainOk =
-        m_font.openFromFile(fontNoto) || m_font.openFromFile(fontAlt)
-        || m_font.openFromFile("C:/Windows/Fonts/arial.ttf");
-    const bool fbOk = m_fontFallback.openFromFile(fontAlt)
-                      || m_fontFallback.openFromFile(
-                          "C:/Windows/Fonts/arial.ttf");
+    bool              mainOk =
+        m_font.openFromFile(fontNoto) || m_font.openFromFile(fontAlt);
+    if (!mainOk) {
+        for (const std::string& sys : systemFontFallbackPaths()) {
+            if (m_font.openFromFile(sys)) {
+                mainOk = true;
+                break;
+            }
+        }
+    }
+    bool fbOk = m_fontFallback.openFromFile(fontAlt);
+    if (!fbOk) {
+        for (const std::string& sys : systemFontFallbackPaths()) {
+            if (m_fontFallback.openFromFile(sys)) {
+                fbOk = true;
+                break;
+            }
+        }
+    }
     if (!mainOk && fbOk)
         m_font = m_fontFallback;
-#if defined(_WIN32)
     if (!mainOk && !fbOk) {
-        MessageBoxA(nullptr,
-                    "Geen lettertype geladen. Zorg dat de map 'assets' naast "
-                    "SpaceRockBreaker.exe staat (of start vanuit de build-map).",
-                    "Space Rock Breaker",
-                    MB_ICONERROR);
+        const char* msg =
+            "Geen lettertype geladen. Zorg dat de map 'assets' naast het "
+            "programma staat (of start vanuit de build-map).";
+#if defined(_WIN32)
+        MessageBoxA(nullptr, msg, "Space Rock Breaker", MB_ICONERROR);
+#else
+        std::fprintf(stderr, "%s\n", msg);
+#endif
         std::exit(1);
     }
-#endif
 
     initLayout();
 

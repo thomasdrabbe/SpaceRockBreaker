@@ -1,6 +1,17 @@
+# Lokale build-tools (optioneel, scripts/download-tools-macos.sh)
+.tools/
+
+# vcpkg (lokaal gegenereerd; niet committen)
+vcpkg_installed/
+
 # Build output
 build/
+build-macos/
+build-macos-debug/
+build-macos-x64/
+build-vs2022/
 out/
+*.app/
 Release/
 Debug/
 
@@ -25,5 +36,6 @@ Makefile
 Thumbs.db
 .DS_Store
 
-# SFML DLLs (niet inchecken, gebruiker installeert zelf)
+# SFML runtime (gekopieerd naast executable bij build)
 *.dll
+*.dylib

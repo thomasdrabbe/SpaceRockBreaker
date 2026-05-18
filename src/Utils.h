@@ -6,11 +6,25 @@
 #include <sstream>
 #include <iomanip>
 #include <filesystem>
+#include <vector>
 #if defined(_WIN32)
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
 #include <windows.h>
+#elif defined(__APPLE__)
+#include <mach-o/dyld.h>
+#include <climits>
+#include <cstdlib>
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
+#elif defined(__linux__)
+#include <climits>
+#include <unistd.h>
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
 #endif
 #include <SFML/System/Vector2.hpp>
 #include <SFML/Graphics/Rect.hpp>
@@ -204,15 +218,50 @@ inline std::string applicationDirectory() {
     if (n == 0 || n >= MAX_PATH)
         return {};
     std::string s(buf, buf + n);
+#elif defined(__APPLE__)
+    char raw[PATH_MAX];
+    uint32_t size = sizeof(raw);
+    if (_NSGetExecutablePath(raw, &size) != 0)
+        return {};
+    char resolved[PATH_MAX];
+    if (realpath(raw, resolved) == nullptr)
+        return {};
+    std::string s(resolved);
+#elif defined(__linux__)
+    char raw[PATH_MAX];
+    const ssize_t n = readlink("/proc/self/exe", raw, sizeof(raw) - 1);
+    if (n <= 0)
+        return {};
+    raw[n] = '\0';
+    char resolved[PATH_MAX];
+    if (realpath(raw, resolved) == nullptr)
+        return {};
+    std::string s(resolved);
+#else
+    return {};
+#endif
     const auto slash = s.find_last_of("\\/");
     if (slash == std::string::npos)
         return {};
     s.resize(slash);
     return s;
-#else
-    (void)0;
-    return {};
+}
+
+/// OS-lettertypen als assets/font.ttf ontbreekt (Windows / macOS / Linux).
+inline std::vector<std::string> systemFontFallbackPaths() {
+    std::vector<std::string> paths;
+#if defined(_WIN32)
+    paths.emplace_back("C:/Windows/Fonts/arial.ttf");
+    paths.emplace_back("C:/Windows/Fonts/segoeui.ttf");
+#elif defined(__APPLE__)
+    paths.emplace_back("/System/Library/Fonts/Supplemental/Arial.ttf");
+    paths.emplace_back("/Library/Fonts/Arial.ttf");
+    paths.emplace_back("/System/Library/Fonts/Supplemental/Arial Bold.ttf");
+#elif defined(__linux__)
+    paths.emplace_back("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf");
+    paths.emplace_back("/usr/share/fonts/TTF/DejaVuSans.ttf");
 #endif
+    return paths;
 }
 
 inline std::string resolveAssetPath(const std::string& rel) {
@@ -237,10 +286,17 @@ inline std::string resolveAssetPath(const std::string& rel) {
     if (!appStr.empty()) {
         const fs::path app(appStr);
 
-        /// Naast SpaceRockBreaker.exe (installatie + CMake kopie naar build/Release)
+        /// Naast executable (installatie, build-map, of .app/Contents/MacOS)
         const fs::path nextToExe = app / relP;
         if (isFile(nextToExe))
             return nextToExe.string();
+
+#if defined(__APPLE__)
+        /// macOS .app: assets ook in Contents/Resources
+        const fs::path inResources = app.parent_path() / "Resources" / relP;
+        if (isFile(inResources))
+            return inResources.string();
+#endif
 
         /// Ontwikkeling: exe in build/Release, assets in projektroot/assets
         /// (niet een enkele ../ — dat werd op installatie foutief `Program Files (x86)\assets\…`)

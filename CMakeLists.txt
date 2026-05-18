@@ -1,29 +1,48 @@
 # vcpkg-toolchain kiezen vóór project():
-# - Visual Studio zet vaak VCPKG_ROOT naar ...\VC\vcpkg (ingebed), terwijl je packages
-#   op C:\vcpkg hebt staan — daarom eerst standalone C:\vcpkg als die bestaat.
-# - Of: zelf -DCMAKE_TOOLCHAIN_FILE=... meegeven.
+# - Windows: C:\vcpkg of %VCPKG_ROOT%
+# - macOS/Linux: ~/vcpkg of $VCPKG_ROOT
 if(NOT CMAKE_TOOLCHAIN_FILE)
-    set(_SRB_STANDALONE_TOOLCHAIN "C:/vcpkg/scripts/buildsystems/vcpkg.cmake")
-    if(EXISTS "${_SRB_STANDALONE_TOOLCHAIN}")
-        set(CMAKE_TOOLCHAIN_FILE "${_SRB_STANDALONE_TOOLCHAIN}"
-            CACHE FILEPATH "vcpkg toolchain")
-    elseif(DEFINED ENV{VCPKG_ROOT} AND NOT "$ENV{VCPKG_ROOT}" STREQUAL "")
-        file(TO_CMAKE_PATH "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
-             _SRB_VCPKG_TOOLCHAIN)
-        set(CMAKE_TOOLCHAIN_FILE "${_SRB_VCPKG_TOOLCHAIN}"
-            CACHE FILEPATH "vcpkg toolchain")
-    else()
-        set(CMAKE_TOOLCHAIN_FILE "${_SRB_STANDALONE_TOOLCHAIN}"
-            CACHE FILEPATH "vcpkg toolchain")
+    set(_SRB_VCPKG_CANDIDATES "")
+    if(DEFINED ENV{VCPKG_ROOT} AND NOT "$ENV{VCPKG_ROOT}" STREQUAL "")
+        list(APPEND _SRB_VCPKG_CANDIDATES "$ENV{VCPKG_ROOT}")
     endif()
+    if(WIN32)
+        list(APPEND _SRB_VCPKG_CANDIDATES "C:/vcpkg")
+    elseif(APPLE)
+        if(DEFINED ENV{HOME} AND NOT "$ENV{HOME}" STREQUAL "")
+            list(APPEND _SRB_VCPKG_CANDIDATES "$ENV{HOME}/vcpkg")
+        endif()
+        list(APPEND _SRB_VCPKG_CANDIDATES "/opt/homebrew/share/vcpkg")
+    else()
+        if(DEFINED ENV{HOME} AND NOT "$ENV{HOME}" STREQUAL "")
+            list(APPEND _SRB_VCPKG_CANDIDATES "$ENV{HOME}/vcpkg")
+        endif()
+        list(APPEND _SRB_VCPKG_CANDIDATES "/usr/local/share/vcpkg")
+    endif()
+    foreach(_SRB_VCPKG_ROOT IN LISTS _SRB_VCPKG_CANDIDATES)
+        set(_SRB_TOOLCHAIN "${_SRB_VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake")
+        if(EXISTS "${_SRB_TOOLCHAIN}")
+            set(CMAKE_TOOLCHAIN_FILE "${_SRB_TOOLCHAIN}"
+                CACHE FILEPATH "vcpkg toolchain")
+            break()
+        endif()
+    endforeach()
 endif()
+
 cmake_minimum_required(VERSION 3.16)
 project(SpaceRockBreaker LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-option(SRB_AUTO_BUMP_VERSION_ON_BUILD "Bij build: version.txt-patch + Inno AppVersion automatisch verhogen" ON)
+if(APPLE)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0" CACHE STRING "Minimum macOS version")
+    set(CMAKE_MACOSX_RPATH ON)
+endif()
+
+option(SRB_AUTO_BUMP_VERSION_ON_BUILD
+    "Bij build: version.txt-patch + Inno AppVersion automatisch verhogen (Windows installer)"
+    ${WIN32})
 
 # ─── SFML ─────────────────────────────────────────────────────
 find_package(SFML COMPONENTS Graphics Window System Audio REQUIRED)
@@ -122,22 +141,46 @@ if(WIN32)
     )
 endif()
 
-# ─── Copy assets folder next to .exe ──────────────────────────
+# ─── macOS: copy SFML dylibs next to binary (zelfde idee als DLLs op Windows) ─
+if(APPLE)
+    add_custom_command(TARGET SpaceRockBreaker POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:SFML::System>"
+            "$<TARGET_FILE:SFML::Window>"
+            "$<TARGET_FILE:SFML::Graphics>"
+            "$<TARGET_FILE:SFML::Audio>"
+            "$<TARGET_FILE_DIR:SpaceRockBreaker>"
+        COMMENT "SFML runtime dylibs naast SpaceRockBreaker kopiëren"
+    )
+endif()
+
+# ─── Copy assets folder next to executable ────────────────────
 add_custom_command(TARGET SpaceRockBreaker POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/assets"
         "$<TARGET_FILE_DIR:SpaceRockBreaker>/assets"
 )
 
-# Zelfde semver als in repo/zip: hoofdmenu leest applicationDirectory()/version.txt
 add_custom_command(TARGET SpaceRockBreaker POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_SOURCE_DIR}/version.txt"
         "$<TARGET_FILE_DIR:SpaceRockBreaker>/version.txt"
-    COMMENT "version.txt naast SpaceRockBreaker.exe (runtime versie-label)"
+    COMMENT "version.txt naast executable (runtime versie-label)"
 )
 
-add_subdirectory(launcher)
+if(APPLE)
+    add_custom_target(srb_macos_app_bundle
+        COMMAND "${CMAKE_SOURCE_DIR}/scripts/make-macos-app.sh"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        DEPENDS SpaceRockBreaker
+        COMMENT "Space Rock Breaker.app in build-macos"
+    )
+endif()
+
+# Windows-only auto-updater launcher
+if(WIN32)
+    add_subdirectory(launcher)
+endif()
 
 if(SRB_AUTO_BUMP_VERSION_ON_BUILD)
     add_custom_target(srb_bump_app_version ALL
@@ -147,7 +190,8 @@ if(SRB_AUTO_BUMP_VERSION_ON_BUILD)
         COMMENT "Auto-bump semver in version.txt + installer.iss (SRB_AUTO_BUMP_VERSION_ON_BUILD)"
     )
 
-    foreach(_tgt IN ITEMS SpaceRockBreaker SpaceRockLauncher)
-        add_dependencies(${_tgt} srb_bump_app_version)
-    endforeach()
+    add_dependencies(SpaceRockBreaker srb_bump_app_version)
+    if(WIN32)
+        add_dependencies(SpaceRockLauncher srb_bump_app_version)
+    endif()
 endif()
