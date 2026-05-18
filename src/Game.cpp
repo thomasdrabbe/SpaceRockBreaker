@@ -216,9 +216,10 @@ Game::Game()
 {
     m_window.setFramerateLimit(TARGET_FPS);
     {
+        // ASCII-titel: em-dash in setTitle crasht SFML/Cocoa op macOS (nil NSString).
         const std::string ver = readRuntimeVersionTag();
-        m_window.setTitle(
-            sf::String(std::string("Space Rock Breaker — v") + ver));
+        const std::string safeVer = ver.empty() ? "unknown" : ver;
+        m_window.setTitle(sf::String("Space Rock Breaker v" + safeVer));
     }
 
     // Zelfde padlogica als textures; voorkomt mislukte loads bij andere cwd.
