@@ -7,7 +7,7 @@
 #include "GameState.h"
 #include "MiningScreen.h"
 #include "Plinko.h"
-#include "Shop.h"
+#include "SkillTree.h"
 #include "ChestScreen.h"
 #include "NotificationSystem.h"
 #include "Particle.h"
@@ -27,7 +27,7 @@ public:
 
     void setTabVisible(Tab t, bool visible);
     bool isTabVisible(Tab t) const;
-    void focusShopCategory(ShopCategory cat);
+    void focusSkillTreeTab();
 
 private:
     // ── Window ────────────────────────────────────────────
@@ -68,7 +68,7 @@ private:
     PlinkoBoard  m_plinko;
     /// Alleen Plinko slot-explosies; niet tekenen op mining-tab.
     ParticleSystem m_plinkoParticles{ MAX_PARTICLES };
-    Shop         m_shop;
+    SkillTreeScreen m_skillTree;
     ChestScreen  m_chest;
 
     // ── Notifications (toast + timerbalk; zie NotificationSystem) ──

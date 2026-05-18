@@ -59,7 +59,7 @@ set(SOURCES
     src/Ore.cpp
     src/KeyPickup.cpp
     src/Plinko.cpp
-    src/Shop.cpp
+    src/SkillTree.cpp
     src/ChestScreen.cpp
     src/MiningScreen.cpp
     src/Player.cpp
@@ -82,7 +82,7 @@ set(HEADERS
     src/Ore.h
     src/KeyPickup.h
     src/Plinko.h
-    src/Shop.h
+    src/SkillTree.h
     src/ChestScreen.h
     src/MiningScreen.h
     src/Player.h

@@ -176,31 +176,19 @@ void drawBoldTextCenteredInRect(sf::RenderTarget& target, const sf::Font& font,
 
 class GameUnlockEffects final : public IUnlockEffects {
 public:
-    GameUnlockEffects(Game& game, Shop& shop, MiningScreen& mining)
-        : m_game(game), m_shop(shop), m_mining(mining) {}
+    GameUnlockEffects(Game& game, MiningScreen& mining)
+        : m_game(game), m_mining(mining) {}
 
     void setTabVisible(Tab tab, bool visible) override {
         m_game.setTabVisible(tab, visible);
     }
-    void setShopCategoryVisible(ShopCategory category, bool visible) override {
-        m_shop.setCategoryVisible(category, visible);
-    }
-    void setShopMiningWarpOnly(bool warpOnly) override {
-        m_shop.setMiningShowsWarpOnly(warpOnly);
-    }
-    void setShopPlinkoAutoOnly(bool autoOnly) override {
-        m_shop.setPlinkoShopAutoOnly(autoOnly);
-    }
-    void focusShopCategory(ShopCategory category) override {
-        m_game.focusShopCategory(category);
-    }
+    void focusSkillTreeTab() override { m_game.focusSkillTreeTab(); }
     void setKeyAsteroidsEnabled(bool enabled) override {
         m_mining.setKeyAsteroidsEnabled(enabled);
     }
 
 private:
-    Game& m_game;
-    Shop& m_shop;
+    Game&         m_game;
     MiningScreen& m_mining;
 };
 
@@ -339,7 +327,7 @@ void Game::reinitSystems() {
                   m_keyTexLoaded ? &m_keyTex : nullptr);
     if (m_audio)
         m_mining.setAudioBus(m_audio);
-    m_shop.init  (m_font, m_cntX, m_cntY, m_cntW, m_cntH, m_scale);
+    m_skillTree.init(m_font, m_cntX, m_cntY, m_cntW, m_cntH);
     m_chest.init(m_font, m_cntX, m_cntY, m_cntW, m_cntH, m_scale,
                  m_chestTexLoaded ? &m_chestTex : nullptr);
     rebuildPlinko();
@@ -368,12 +356,10 @@ void Game::run() {
 void Game::processEvents() {
     while (const std::optional event = m_window.pollEvent()) {
 
-        if (!m_showMainMenu && m_activeTab == Tab::SHOP) {
-            bool bought = m_shop.handleEvent(*event, m_state, m_window);
-            if (bought) {
-                syncMiningSystemsFromState(false);
-                m_audio->play(Sfx::UiClick);
-                pushNotif("Upgrade gekocht!", sf::Color(120, 220, 255));
+        if (!m_showMainMenu && m_activeTab == Tab::SKILL_TREE) {
+            if (const auto* e = event->getIf<sf::Event::MouseMoved>()) {
+                m_skillTree.setMousePos(
+                    mapPixelToUi(m_window, sf::Vector2i(e->position)));
             }
         }
         if (!m_showMainMenu && m_activeTab == Tab::CHESTS) {
@@ -517,7 +503,7 @@ void Game::update(float dt) {
     }
 
     if (!m_paused) {
-        GameUnlockEffects unlockFx(*this, m_shop, m_mining);
+        GameUnlockEffects unlockFx(*this, m_mining);
         m_unlockSystem.update(m_state, m_notifications, unlockFx);
         clampActiveTabToVisibility();
     }
@@ -745,11 +731,6 @@ void Game::update(float dt) {
     }
     m_plinkoParticles.update(dt);
 
-    if (m_activeTab == Tab::SHOP) {
-        m_shop.update(
-            mapPixelToUi(m_window, sf::Mouse::getPosition(m_window)),
-            m_state);
-    }
     if (m_activeTab == Tab::CHESTS) {
         m_chest.update(
             dt,
@@ -1086,6 +1067,13 @@ void Game::onMouseClick(sf::Vector2f pos, sf::Mouse::Button btn) {
     }
 
     switch (m_activeTab) {
+        case Tab::SKILL_TREE:
+            if (m_skillTree.handleClick(pos, m_state)) {
+                syncMiningSystemsFromState(true);
+                m_audio->play(Sfx::UiClick);
+                pushNotif("Upgrade gekocht!", sf::Color(120, 220, 255));
+            }
+            break;
         case Tab::PLINKO:   handlePlinkoClick(pos);   break;
         case Tab::PRESTIGE: handlePrestigeClick(pos); break;
         default: break;
@@ -1095,9 +1083,9 @@ void Game::onMouseClick(sf::Vector2f pos, sf::Mouse::Button btn) {
 // ═════════════════════════════════════════════════════════════
 //  onMouseScroll
 // ═════════════════════════════════════════════════════════════
-void Game::onMouseScroll(float delta, sf::Vector2f /*pos*/) {
-    if (m_activeTab == Tab::SHOP)
-        m_shop.scrollBy(-delta * 30.f);
+void Game::onMouseScroll(float delta, sf::Vector2f pos) {
+    if (m_activeTab == Tab::SKILL_TREE)
+        m_skillTree.handleScroll(-delta, pos);
     if (m_activeTab == Tab::CHESTS)
         m_chest.scrollBy(-delta * 30.f);
 }
@@ -1147,11 +1135,11 @@ void Game::onKeyPress(sf::Keyboard::Key key, bool ctrl, bool shift) {
             }
             break;
         case K::Num3:
-            if (isTabVisible(Tab::SHOP)) {
+            if (isTabVisible(Tab::SKILL_TREE)) {
                 if (m_uiFlow)
-                    m_uiFlow->activateTab(Tab::SHOP);
+                    m_uiFlow->activateTab(Tab::SKILL_TREE);
                 else
-                    m_activeTab = Tab::SHOP;
+                    m_activeTab = Tab::SKILL_TREE;
             }
             break;
         case K::Num4:
@@ -1249,13 +1237,12 @@ bool Game::isTabVisible(Tab t) const {
     return m_tabVisible[static_cast<int>(t)];
 }
 
-void Game::focusShopCategory(ShopCategory cat) {
-    if (!isTabVisible(Tab::SHOP))
+void Game::focusSkillTreeTab() {
+    if (!isTabVisible(Tab::SKILL_TREE))
         return;
-    m_activeTab = Tab::SHOP;
-    m_notifications.clearBadge(static_cast<int>(Tab::SHOP));
+    m_activeTab = Tab::SKILL_TREE;
+    m_notifications.clearBadge(static_cast<int>(Tab::SKILL_TREE));
     m_prestigeConfirm = false;
-    m_shop.trySelectCategory(cat, m_state);
 }
 
 void Game::clampActiveTabToVisibility() {
@@ -1275,7 +1262,7 @@ void Game::clampActiveTabToVisibility() {
 void Game::resetNewGameUi() {
     m_tabVisible.fill(false);
     m_tabVisible[static_cast<int>(Tab::MINING)] = true;
-    m_shop.resetProgressiveShopState();
+    m_skillTree.resetScroll();
     m_activeTab       = Tab::MINING;
     m_hitFlashTimer   = 0.f;
     m_prestigeConfirm = false;
@@ -1283,7 +1270,7 @@ void Game::resetNewGameUi() {
 
 void Game::drawTabBar() const {
     static const char* labels[TAB_COUNT] = {
-        "1  Basis", "2  Plinko", "3  Shop", "4  Chests", "5  Prestige"
+        "1  Basis", "2  Plinko", "3  Skills", "4  Chests", "5  Prestige"
     };
     static const sf::Color accents[TAB_COUNT] = {
         sf::Color( 80, 160, 255),
@@ -1360,7 +1347,9 @@ void Game::drawForegroundTab() const {
                 drawMiningBasePanel();
             break;
         case Tab::PLINKO:   drawPlinkoTab(st); break;
-        case Tab::SHOP:     m_shop.draw(m_window, m_state, st); break;
+        case Tab::SKILL_TREE:
+            m_skillTree.draw(m_window, m_state, st);
+            break;
         case Tab::CHESTS:   m_chest.draw(m_window, m_state, st); break;
         case Tab::PRESTIGE: drawPrestigeScreen();            break;
     }
@@ -1863,7 +1852,7 @@ void Game::handleMainMenuClick(sf::Vector2f pos) {
             m_diskSessionActive    = true;
             m_showMainMenu         = false;
             {
-                GameUnlockEffects unlockFx(*this, m_shop, m_mining);
+                GameUnlockEffects unlockFx(*this, m_mining);
                 m_unlockSystem.update(m_state, m_notifications, unlockFx);
                 clampActiveTabToVisibility();
             }
@@ -1904,7 +1893,7 @@ void Game::handleMainMenuClick(sf::Vector2f pos) {
                     invalidateSaveSlotPreviewCache();
                     syncMiningSystemsFromState(false);
                     resetPlinkoLayoutWatch();
-                    GameUnlockEffects unlockFx(*this, m_shop, m_mining);
+                    GameUnlockEffects unlockFx(*this, m_mining);
                     m_unlockSystem.update(m_state, m_notifications, unlockFx);
                     clampActiveTabToVisibility();
                 } else {

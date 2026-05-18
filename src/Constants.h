@@ -11,7 +11,7 @@ constexpr int      TARGET_FPS    = 60;
 const std::string  WINDOW_TITLE  = "Space Rock Breaker";
 
 // ─── Tabs ─────────────────────────────────────────────────────
-enum class Tab { MINING = 0, PLINKO, SHOP, CHESTS, PRESTIGE };
+enum class Tab { MINING = 0, PLINKO, SKILL_TREE, CHESTS, PRESTIGE };
 constexpr int TAB_COUNT = 5;
 
 // ─── Chest upgrades (keys, permanent; blijven bij prestige) ──

@@ -1,7 +1,6 @@
 #pragma once
 #include <string>
 #include "Constants.h"
-#include "Shop.h"
 
 class GameState;
 class NotificationSystem;
@@ -22,10 +21,7 @@ class IUnlockEffects {
 public:
     virtual ~IUnlockEffects() = default;
     virtual void setTabVisible(Tab tab, bool visible) = 0;
-    virtual void setShopCategoryVisible(ShopCategory category, bool visible) = 0;
-    virtual void setShopMiningWarpOnly(bool warpOnly) = 0;
-    virtual void setShopPlinkoAutoOnly(bool autoOnly) = 0;
-    virtual void focusShopCategory(ShopCategory category) = 0;
+    virtual void focusSkillTreeTab() = 0;
     virtual void setKeyAsteroidsEnabled(bool enabled) = 0;
 };
 

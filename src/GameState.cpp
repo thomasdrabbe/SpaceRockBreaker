@@ -1,4 +1,5 @@
 #include "GameState.h"
+#include "SkillTree.h"
 #include "Utils.h"
 #include <algorithm>
 #include <cmath>
@@ -680,6 +681,20 @@ int GameState::levelOf(PrestigeUpgradeID id) const {
     if (!prestigeIdInRange(id))
         return 0;
     return prestigeLevels[static_cast<std::size_t>(static_cast<int>(id))];
+}
+
+bool GameState::isNodeUnlocked(const UpgradeNodeDef& node) const {
+    if (node.requireId == UpgradeID::UPGRADE_COUNT)
+        return true;
+    return levelOf(node.requireId) >= node.requireLevel;
+}
+
+bool GameState::isNodeVisible(const UpgradeNodeDef& node) const {
+    if (node.id == UpgradeID::METEOR_DAMAGE
+        || node.id == UpgradeID::METEOR_SIZE) {
+        return meteorDestroyerUnlocked;
+    }
+    return true;
 }
 
 double GameState::costOf(UpgradeID id) const {

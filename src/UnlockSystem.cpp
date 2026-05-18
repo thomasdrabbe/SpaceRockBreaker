@@ -12,50 +12,24 @@ constexpr int toIndex(UnlockPhase p) {
     return static_cast<int>(p);
 }
 
-void applyPhaseVisibility(UnlockPhase            phase,
-                          GameState&             state,
-                          IUnlockEffects&        effects) {
+void applyPhaseVisibility(UnlockPhase     phase,
+                          GameState&      state,
+                          IUnlockEffects& effects) {
     switch (phase) {
         case UnlockPhase::PLINKO_TAB:
             effects.setTabVisible(Tab::PLINKO, true);
             break;
         case UnlockPhase::SHOP_TAB:
-            effects.setTabVisible(Tab::SHOP, true);
-            effects.setShopCategoryVisible(ShopCategory::MINING, true);
-            // Alleen verbergen zolang latere fases die categorieën nog niet
-            // vrijgegeven hebben. Anders: elke frame opnieuw `setVisible(...,
-            // false)` → `ensureActiveCategoryVisible()` springt de actieve shop-tab
-            // terug naar de eerste zichtbare (Weapons), ook al zijn Plinko/Economy
-            // daarna weer true door fase 5/7.
-            if (!state.unlockPhaseDone[toIndex(UnlockPhase::AUTO_PLINKO)])
-                effects.setShopCategoryVisible(ShopCategory::PLINKO, false);
-            if (!state.unlockPhaseDone[toIndex(UnlockPhase::ECONOMY)]) {
-                effects.setShopCategoryVisible(ShopCategory::ECONOMY, false);
-                effects.setShopCategoryVisible(ShopCategory::ORE_TIERS, false);
-            }
-            effects.setShopMiningWarpOnly(true);
+            effects.setTabVisible(Tab::SKILL_TREE, true);
             break;
         case UnlockPhase::WEAPONS:
-            effects.setShopCategoryVisible(ShopCategory::WEAPONS, true);
-            break;
         case UnlockPhase::MINING:
-            effects.setShopMiningWarpOnly(false);
-            effects.setShopCategoryVisible(ShopCategory::MINING, true);
-            break;
         case UnlockPhase::AUTO_PLINKO:
-            // Auto-Plinko melding: Plinko-shop moet zichtbaar zijn (fase 2 zette die uit).
-            effects.setShopCategoryVisible(ShopCategory::PLINKO, true);
-            effects.setShopPlinkoAutoOnly(true);
+        case UnlockPhase::ECONOMY:
             break;
         case UnlockPhase::CHESTS:
             effects.setTabVisible(Tab::CHESTS, true);
             state.keyAsteroidsEnabled = true;
-            break;
-        case UnlockPhase::ECONOMY:
-            effects.setShopCategoryVisible(ShopCategory::PLINKO, true);
-            effects.setShopCategoryVisible(ShopCategory::ECONOMY, true);
-            effects.setShopCategoryVisible(ShopCategory::ORE_TIERS, true);
-            effects.setShopPlinkoAutoOnly(false);
             break;
         case UnlockPhase::PRESTIGE:
             effects.setTabVisible(Tab::PRESTIGE, true);
@@ -99,10 +73,11 @@ UnlockNextHint computeUnlockNextHint(const GameState& s) {
                 std::clamp(s.totalOre / 5.0, 0.0, 1.0));
             return h;
         case 2:
-            h.phaseName = "Shop-tab";
+            h.phaseName = "Skill tree";
             if (firstBossIncoming) {
-                h.progressDetail = "Naderende boss — shop opent automatisch";
-                h.progress01     = 1.f;
+                h.progressDetail =
+                    "Naderende boss — skill tree opent automatisch";
+                h.progress01 = 1.f;
             } else {
                 h.progressDetail =
                     "Totale ore: " + fmtOre(s.totalOre) + " / 25";
@@ -150,7 +125,7 @@ UnlockNextHint computeUnlockNextHint(const GameState& s) {
         case 7:
             h.phaseName = "Economy & ore tiers";
             if (s.currentLevel >= 3) {
-                h.progressDetail = "Zone 3+ — volledige shop";
+                h.progressDetail = "Zone 3+ — volledige skill tree";
                 h.progress01     = 1.f;
             } else {
                 h.progressDetail = "Warp naar zone 3 (nu zone "
@@ -214,7 +189,7 @@ void UnlockSystem::update(GameState&           state,
     if (!state.unlockPhaseDone[toIndex(UnlockPhase::SHOP_TAB)]
         && (state.totalOre >= 25.0 || firstBossIncoming)) {
         notifications.push(
-            "Shop unlocked! Koop Warp Drive om naar de volgende zone te gaan.",
+            "Skill tree unlocked! Koop Warp Drive om naar de volgende zone te gaan.",
             sf::Color(120, 200, 255),
             4.f,
             -1);
@@ -224,18 +199,18 @@ void UnlockSystem::update(GameState&           state,
     if (!state.unlockPhaseDone[toIndex(UnlockPhase::WEAPONS)]
         && (state.currentLevel >= 2 || firstBossIncoming)) {
         notifications.push(
-            "Zone 2 bereikt! Weapons upgrades beschikbaar.",
+            "Zone 2 bereikt! Weapon-upgrades in de skill tree.",
             sf::Color(255, 180, 140),
             4.f,
             -1);
         markDone(UnlockPhase::WEAPONS);
-        effects.focusShopCategory(ShopCategory::WEAPONS);
+        effects.focusSkillTreeTab();
     }
 
     if (!state.unlockPhaseDone[toIndex(UnlockPhase::MINING)]
         && state.credits >= 50.0) {
         notifications.push(
-            "Mining upgrades beschikbaar!",
+            "Mining upgrades beschikbaar in de skill tree!",
             sf::Color(160, 220, 255),
             4.f,
             -1);
@@ -245,13 +220,12 @@ void UnlockSystem::update(GameState&           state,
     if (!state.unlockPhaseDone[toIndex(UnlockPhase::AUTO_PLINKO)]
         && state.credits >= 100.0) {
         notifications.push(
-            "Auto-Plinko beschikbaar! Ga naar Shop (tab 3), categorie Plinko, "
-            "en koop Auto-Plinko om tegelijk te minen en Plinko te laten lopen.",
+            "Auto-Plinko beschikbaar! Open de skill tree (tab 3) en koop Auto-Plinko.",
             sf::Color(255, 200, 120),
             4.f,
-            static_cast<int>(Tab::SHOP));
+            static_cast<int>(Tab::SKILL_TREE));
         markDone(UnlockPhase::AUTO_PLINKO);
-        effects.focusShopCategory(ShopCategory::PLINKO);
+        effects.focusSkillTreeTab();
     }
 
     if (!state.unlockPhaseDone[toIndex(UnlockPhase::CHESTS)]
@@ -262,12 +236,13 @@ void UnlockSystem::update(GameState&           state,
             4.f,
             -1);
         markDone(UnlockPhase::CHESTS);
+        state.keyAsteroidsEnabled = true;
     }
 
     if (!state.unlockPhaseDone[toIndex(UnlockPhase::ECONOMY)]
         && state.currentLevel >= 3) {
         notifications.push(
-            "Plinko, Economy en Ore Tier upgrades beschikbaar!",
+            "Economy- en ore tier-upgrades beschikbaar in de skill tree!",
             sf::Color(220, 180, 255),
             4.f,
             -1);
@@ -284,7 +259,6 @@ void UnlockSystem::update(GameState&           state,
         markDone(UnlockPhase::PRESTIGE);
     }
 
-    // Eerste boss staat in zone 3: eerste Gun Damage-level gratis (geen credits).
     if (state.currentLevel >= 3 && state.nextBossMilestone == 3
         && state.levelOf(UpgradeID::GUN_DAMAGE) == 0) {
         state.upgradeLevels[static_cast<int>(UpgradeID::GUN_DAMAGE)] = 1;
@@ -292,14 +266,9 @@ void UnlockSystem::update(GameState&           state,
             "Gratis Gun Damage (lv1) voor je eerste boss!",
             sf::Color(255, 180, 140),
             4.5f,
-            static_cast<int>(Tab::SHOP));
-        effects.focusShopCategory(ShopCategory::WEAPONS);
+            static_cast<int>(Tab::SKILL_TREE));
+        effects.focusSkillTreeTab();
     }
 
-    // Zone 2+: Weapons hoort altijd in de shop (phase 3). Zonder dit kan phase 2
-    // (elke frame WEAPONS uit) phase 3 "winnen" alleen als unlockPhaseDone[3] gezet is;
-    // een haperende flag laat dan geen wapen-tab zien tijdens de eerste boss.
-    effects.setShopCategoryVisible(ShopCategory::WEAPONS,
-                                   state.currentLevel >= 2);
     effects.setKeyAsteroidsEnabled(state.keyAsteroidsEnabled);
 }

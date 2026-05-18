@@ -4,6 +4,8 @@
 #include <cstdint>
 #include "Constants.h"
 
+struct UpgradeNodeDef;
+
 // ─────────────────────────────────────────────────────────────
 //  Upgrade definition
 // ─────────────────────────────────────────────────────────────
@@ -201,6 +203,9 @@ public:
     void   buy(PrestigeUpgradeID id);
     int    levelOf(UpgradeID id)         const;
     int    levelOf(PrestigeUpgradeID id) const;
+
+    bool isNodeUnlocked(const UpgradeNodeDef& node) const;
+    bool isNodeVisible(const UpgradeNodeDef& node)  const;
 
     // ── Prestige ──────────────────────────────────────────
     double crystalsOnPrestige() const;
