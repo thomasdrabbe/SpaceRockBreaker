@@ -657,8 +657,9 @@ void Game::update(float dt) {
             }
 
             if (m_mining.pullMeteorEasterEgg()) {
-                pushNotif("Meteor Destroyer ontgrendeld - nieuwe mining-upgrades!",
-                          sf::Color(255, 200, 120));
+                pushNotif(
+                    "Meteor Destroyer ontgrendeld - hele shower vernietigd!",
+                    sf::Color(255, 200, 120));
             }
 
             if (m_mining.trySpawnBoss(m_state)) {

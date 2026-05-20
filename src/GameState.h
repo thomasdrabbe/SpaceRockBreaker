@@ -86,7 +86,7 @@ public:
     /// Progressieve unlocks (index 1…8 gebruikt; 0 ongebruikt).
     std::array<bool, 9> unlockPhaseDone{};
     bool                keyAsteroidsEnabled = false;
-    /// Alle meteoren van één shower met torret-kogels vernietigd → koop Meteor-upgrades.
+    /// Hele meteor-shower vernietigd → Meteor Damage / Size in skill tree.
     bool                meteorDestroyerUnlocked = false;
 
     Difficulty difficulty = Difficulty::Medium;

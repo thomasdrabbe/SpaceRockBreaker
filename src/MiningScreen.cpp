@@ -723,6 +723,7 @@ void MiningScreen::update(float      dt,
     // ── Collisions ────────────────────────────────────────
     resolveCollisions(state);
     resolveMeteorAsteroidImpacts(state);
+    tryCompleteMeteorShowerChallenge(state);
 
     // ── Ore collectie (alleen ore, geen credits) ──────────
     double oreThisFrame = 0.0;
@@ -794,8 +795,9 @@ void MiningScreen::tickMeteorShower(float dt, GameState& state,
     const float interval = state.meteorShowerIntervalSec();
     m_meteorTimeToNext -= dt;
     if (m_meteorTimeToNext <= 0.f) {
-        m_meteorShowerSpawnCount   = state.meteorShowerMeteorCount();
-        m_meteorShowerTurretKills = 0;
+        m_meteorShowerSpawnCount = state.meteorShowerMeteorCount();
+        m_meteorShowerKills      = 0;
+        m_meteorShowerTracking   = true;
         m_asteroids.spawnMeteorSwarm(m_x, m_y, m_w, m_h,
                                      m_meteorShowerSpawnCount,
                                      asteroidHpMult,
@@ -904,15 +906,8 @@ void MiningScreen::resolveCollisions(GameState& state) {
                 m_player.addFuel(state.fuelOnKill());
                 if (wasBoss)
                     m_player.addFuel(state.fuelOnKill() * 3.f);
-                if (asteroid.isMeteor && bullet.fromTurret) {
-                    ++m_meteorShowerTurretKills;
-                    if (!state.meteorDestroyerUnlocked
-                        && m_meteorShowerTurretKills >= m_meteorShowerSpawnCount
-                        && m_meteorShowerSpawnCount > 0) {
-                        state.meteorDestroyerUnlocked = true;
-                        m_meteorEasterEggNotify         = true;
-                    }
-                }
+                if (asteroid.isMeteor && m_meteorShowerTracking)
+                    ++m_meteorShowerKills;
                 if (asteroid.isBoss)
                     m_audio->play(Sfx::BossExplode);
                 else
@@ -983,9 +978,31 @@ void MiningScreen::clearAll() {
     m_asteroids.clearMeteorSpawnQueue();
     m_pendingBossReturnToBase = false;
     resetMeteorShowerSchedule();
-    m_meteorShowerSpawnCount   = 0;
-    m_meteorShowerTurretKills = 0;
-    m_meteorEasterEggNotify    = false;
+    m_meteorShowerSpawnCount  = 0;
+    m_meteorShowerKills       = 0;
+    m_meteorShowerTracking    = false;
+    m_meteorEasterEggNotify   = false;
+}
+
+void MiningScreen::tryCompleteMeteorShowerChallenge(GameState& state) {
+    if (!m_meteorShowerTracking || state.meteorDestroyerUnlocked)
+        return;
+    if (m_asteroids.meteorSpawnQueueActive())
+        return;
+    if (m_asteroids.livingMeteorCount() > 0)
+        return;
+
+    const int spawned = m_asteroids.lastMeteorSwarmSpawned();
+    if (spawned < 1) {
+        m_meteorShowerTracking = false;
+        return;
+    }
+    if (m_meteorShowerKills < spawned)
+        return;
+
+    state.meteorDestroyerUnlocked = true;
+    m_meteorEasterEggNotify       = true;
+    m_meteorShowerTracking        = false;
 }
 
 void MiningScreen::prepareNewRun() {

@@ -35,7 +35,7 @@ public:
     float playerHp() const { return m_player.hp(); }
     float playerMaxHp() const { return m_player.maxHp(); }
 
-    /// Eénmalige melding na Meteor Destroyer-unlock (alle shower-meteoren door torrets).
+    /// Eénmalige melding na Meteor Destroyer-unlock (hele meteor-shower vernietigd).
     bool pullMeteorEasterEgg();
     //--player pos voor emit explosion
     sf::Vector2f playerPos() const { return m_player.pos; }
@@ -185,9 +185,10 @@ private:
     IAudioBus* m_audio = nullptr;
 
     float                  m_meteorTimeToNext = -1.f;
-    int                    m_meteorShowerSpawnCount   = 0;
-    int                    m_meteorShowerTurretKills = 0;
-    bool                   m_meteorEasterEggNotify = false;
+    int                    m_meteorShowerSpawnCount = 0;
+    int                    m_meteorShowerKills      = 0;
+    bool                   m_meteorShowerTracking   = false;
+    bool                   m_meteorEasterEggNotify  = false;
 
     bool  m_bossPhase2Spawned  = false;
     bool  m_bossPhase3Active   = false;
@@ -202,6 +203,7 @@ private:
     void resolveCollisions(GameState& state);
     void resolveMeteorAsteroidImpacts(GameState& state);
     void emitAsteroidDestroyedLoot(Asteroid& asteroid, GameState& state);
+    void tryCompleteMeteorShowerChallenge(GameState& state);
 
     // ── Draw helpers ──────────────────────────────────────
     void drawStarfield(sf::RenderTarget& target, float warpCharge,

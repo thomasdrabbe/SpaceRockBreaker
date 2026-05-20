@@ -57,7 +57,7 @@ enum class UpgradeID {
     UNLOCK_IRIDIUM,
     WARP_DRIVE,
     BULLET_RANGE,
-    /// Na easter egg (alle shower-meteoren door torret-kogels): asteroïden raken.
+    /// Na easter egg (hele meteor-shower vernietigen): asteroïden raken.
     METEOR_DAMAGE,
     METEOR_SIZE,
     FUEL_CAPACITY,

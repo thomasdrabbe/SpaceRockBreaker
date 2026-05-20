@@ -161,6 +161,10 @@ public:
 
     int aliveCount() const { return m_alive; }
     void refreshAliveCount();
+    int livingMeteorCount() const;
+    bool meteorSpawnQueueActive() const { return m_meteorQueueActive; }
+    /// Meteoren die daadwerkelijk uit de laatste shower-queue kwamen.
+    int lastMeteorSwarmSpawned() const { return m_lastMeteorSwarmSpawned; }
 
     /// Actieve zone-boss op het veld (voor boss-muziek).
     bool hasLivingBoss() const;
@@ -187,6 +191,7 @@ private:
     bool          m_meteorQueueActive   = false;
     int           m_meteorQueueTotal    = 0;
     int           m_meteorQueueSpawned  = 0;
+    int           m_lastMeteorSwarmSpawned = 0;
     int           m_meteorQueueLeftCount = 0;
     sf::Vector2f  m_meteorQueueApex{};
     sf::Vector2f  m_meteorQueueDirL{};
