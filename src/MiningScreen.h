@@ -215,6 +215,8 @@ private:
                          const GameState&  state)  const;
     void drawHUD(sf::RenderTarget& target, const GameState&  state,
                  float warpCharge, float animTime) const;
+    void drawFuelBarAbovePlayer(sf::RenderTarget& target,
+                                float             animTime) const;
 
 
     static int targetAsteroidCount(int turrets);

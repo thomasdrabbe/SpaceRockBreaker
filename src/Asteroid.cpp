@@ -643,10 +643,10 @@ void Asteroid::drawOverlays(sf::RenderTarget& target,
         const char* phaseLabel;
         if (phase >= 3) {
             barCol      = sf::Color(255, 90, 50);
-            phaseLabel  = "PHASE 3 — METEOR BARRAGE";
+            phaseLabel  = "PHASE 3 - METEOR BARRAGE";
         } else if (phase >= 2) {
             barCol      = sf::Color(180, 60, 220);
-            phaseLabel  = "PHASE 2 — SUMMONING";
+            phaseLabel  = "PHASE 2 - SUMMONING";
         } else {
             barCol      = sf::Color(220, 50, 50);
             phaseLabel  = "PHASE 1";

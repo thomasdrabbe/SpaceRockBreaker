@@ -1170,6 +1170,9 @@ void MiningScreen::draw(sf::RenderTarget& target,
 
     drawWarpFlashOverlay(target, warpFlashRemain);
 
+    if (m_font)
+        drawFuelBarAbovePlayer(target, animTime);
+
     target.setView(oldView);
 
     // ── HUD (buiten clipped view) ─────────────────────────
@@ -1373,57 +1376,78 @@ void MiningScreen::drawCollectRing(sf::RenderTarget& target,
 }
 
 // ─────────────────────────────────────────────────────────────
-//  drawHUD
+//  drawFuelBarAbovePlayer  (wereldcoordinaten, boven het schip)
 // ─────────────────────────────────────────────────────────────
-void MiningScreen::drawHUD(sf::RenderTarget& target,
-                             const GameState&  state,
-                             float             warpCharge,
-                             float             animTime) const {
-    if (!m_font)
-        return;
-
+void MiningScreen::drawFuelBarAbovePlayer(sf::RenderTarget& target,
+                                           float             animTime) const {
     const float scale     = m_uiScale;
-    const float fuelRatio = m_player.fuelRatio();
-    const float fBarW     = std::round(120.f * scale);
-    const float fBarH     = std::round(10.f * scale);
-    const float fBarX     = m_x + std::round(8.f * scale);
-    const float fBarY     = m_y + std::round(8.f * scale);
+    const float fuelRatio = std::clamp(m_player.fuelRatio(), 0.f, 1.f);
+    const float barW      = std::round(88.f * scale);
+    const float barH      = std::round(8.f * scale);
+    const float gap       = std::round(6.f * scale);
+    const float lift      = std::round(42.f * scale);
 
-    sf::RectangleShape fuelBg({ fBarW, fBarH });
-    fuelBg.setPosition({ fBarX, fBarY });
-    fuelBg.setFillColor(sf::Color(40, 25, 10, 200));
+    const float barX = m_player.pos.x - barW * 0.5f;
+    const float barY = m_player.pos.y - lift - barH;
+
+    sf::RectangleShape fuelBg({ barW, barH });
+    fuelBg.setPosition({ barX, barY });
+    fuelBg.setFillColor(sf::Color(40, 25, 10, 210));
+    fuelBg.setOutlineColor(sf::Color(80, 50, 20, 180));
+    fuelBg.setOutlineThickness(std::max(1.f, 1.2f * scale));
     target.draw(fuelBg);
 
     const uint8_t fr =
         static_cast<uint8_t>(255.f * (1.f - fuelRatio));
     const uint8_t fg =
         static_cast<uint8_t>(180.f * fuelRatio);
-    sf::RectangleShape fuelFill({ fBarW * fuelRatio, fBarH });
-    fuelFill.setPosition({ fBarX, fBarY });
-    fuelFill.setFillColor(sf::Color(fr, fg, 20, 220));
-    target.draw(fuelFill);
+    if (fuelRatio > 0.01f) {
+        sf::RectangleShape fuelFill({ barW * fuelRatio, barH });
+        fuelFill.setPosition({ barX, barY });
+        fuelFill.setFillColor(sf::Color(fr, fg, 20, 230));
+        target.draw(fuelFill);
+    }
 
     sf::Text fuelLabel(*m_font);
     fuelLabel.setString("FUEL");
-    fuelLabel.setCharacterSize(static_cast<unsigned>(fBarH * 1.1f));
-    fuelLabel.setFillColor(sf::Color(200, 160, 80));
-    fuelLabel.setPosition({ fBarX - std::round(36.f * scale), fBarY });
+    fuelLabel.setCharacterSize(
+        static_cast<unsigned>(std::max(9.f, 10.f * scale)));
+    fuelLabel.setFillColor(sf::Color(220, 170, 90));
+    const sf::FloatRect flb = fuelLabel.getLocalBounds();
+    fuelLabel.setOrigin({ flb.position.x + flb.size.x * 0.5f,
+                          flb.position.y + flb.size.y });
+    fuelLabel.setPosition({ m_player.pos.x, barY - gap });
     target.draw(fuelLabel);
 
     if (fuelRatio < 0.25f) {
         sf::Text warn(*m_font);
-        warn.setString("LOW FUEL!");
-        warn.setCharacterSize(static_cast<unsigned>(14.f * scale));
+        warn.setString("LOW FUEL");
+        warn.setCharacterSize(
+            static_cast<unsigned>(std::max(10.f, 11.f * scale)));
         warn.setStyle(sf::Text::Bold);
         warn.setFillColor(sf::Color(
             255, 80, 40,
-            static_cast<uint8_t>(180 + 75 * std::sin(animTime * 6.f))));
+            static_cast<uint8_t>(
+                180 + 75 * std::sin(animTime * 6.f))));
         const sf::FloatRect wb = warn.getLocalBounds();
-        warn.setPosition({
-            m_x + m_w * 0.5f - wb.size.x * 0.5f,
-            m_y + m_h * 0.5f - std::round(60.f * scale) });
+        warn.setOrigin({ wb.position.x + wb.size.x * 0.5f,
+                         wb.position.y + wb.size.y });
+        warn.setPosition({ m_player.pos.x,
+                           barY - gap - std::round(14.f * scale) });
         target.draw(warn);
     }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  drawHUD
+// ─────────────────────────────────────────────────────────────
+void MiningScreen::drawHUD(sf::RenderTarget& target,
+                             const GameState&  state,
+                             float             warpCharge,
+                             float             animTime) const {
+    (void)animTime;
+    if (!m_font)
+        return;
 
     // ── Warp UI ───────────────────────────────────────────────
     if (state.warpDriveUnlocked()) {

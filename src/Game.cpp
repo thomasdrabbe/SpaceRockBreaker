@@ -327,7 +327,7 @@ void Game::reinitSystems() {
                   m_keyTexLoaded ? &m_keyTex : nullptr);
     if (m_audio)
         m_mining.setAudioBus(m_audio);
-    m_skillTree.init(m_font, m_cntX, m_cntY, m_cntW, m_cntH);
+    m_skillTree.init(m_font, m_cntX, m_cntY, m_cntW, m_cntH, m_scale);
     m_chest.init(m_font, m_cntX, m_cntY, m_cntW, m_cntH, m_scale,
                  m_chestTexLoaded ? &m_chestTex : nullptr);
     rebuildPlinko();
@@ -593,7 +593,7 @@ void Game::update(float dt) {
             }
 
             if (m_mining.pullMeteorEasterEgg()) {
-                pushNotif("Meteor Destroyer ontgrendeld — nieuwe mining-upgrades!",
+                pushNotif("Meteor Destroyer ontgrendeld - nieuwe mining-upgrades!",
                           sf::Color(255, 200, 120));
             }
 
@@ -618,17 +618,17 @@ void Game::update(float dt) {
             }
 
             if (m_mining.pullBossPhase2())
-                pushNotif("PHASE 2 — Mini-bosses spawned!",
+                pushNotif("PHASE 2 - Mini-bosses spawned!",
                           sf::Color(220, 80, 200));
             if (m_mining.pullBossPhase3())
-                pushNotif("PHASE 3 — METEOR BARRAGE!",
+                pushNotif("PHASE 3 - METEOR BARRAGE!",
                           sf::Color(255, 80, 60));
 
             if (m_mining.pullFuelEmpty()) {
                 collectRunOreToState();
                 syncMiningSystemsFromState(false);
                 moveRunToBaseState();
-                pushNotif("Fuel op — terug naar basis",
+                pushNotif("Fuel op - terug naar basis",
                           sf::Color(255, 140, 40));
             }
 

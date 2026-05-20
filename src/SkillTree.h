@@ -20,7 +20,8 @@ class SkillTreeScreen {
 public:
     void init(sf::Font& font,
               float panelX, float panelY,
-              float panelW, float panelH);
+              float panelW, float panelH,
+              float uiScale = 1.f);
 
     void draw(sf::RenderTarget& target,
               const GameState&  state,
@@ -37,6 +38,7 @@ private:
     float     m_y     = 0.f;
     float     m_w     = 0.f;
     float     m_h     = 0.f;
+    float     m_uiScale = 1.f;
 
     mutable float m_scrollX = 0.f;
     mutable float m_scrollY = 0.f;
@@ -48,6 +50,15 @@ private:
     static constexpr float GRID_STEP_X  = 200.f;
     static constexpr float GRID_STEP_Y  = 120.f;
     static constexpr float PANEL_PAD   = 40.f;
+
+    float nodeW()     const { return NODE_W * m_uiScale; }
+    float nodeH()     const { return NODE_H * m_uiScale; }
+    float gridStepX() const { return GRID_STEP_X * m_uiScale; }
+    float gridStepY() const { return GRID_STEP_Y * m_uiScale; }
+    float panelPad()  const { return PANEL_PAD * m_uiScale; }
+    unsigned fontSz(unsigned base) const {
+        return static_cast<unsigned>(std::round(base * m_uiScale));
+    }
 
     sf::Vector2f nodeScreenPos(const UpgradeNodeDef& node) const;
     sf::FloatRect nodeRect(const UpgradeNodeDef& node) const;

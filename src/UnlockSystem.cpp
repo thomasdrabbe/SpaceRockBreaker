@@ -76,7 +76,7 @@ UnlockNextHint computeUnlockNextHint(const GameState& s) {
             h.phaseName = "Skill tree";
             if (firstBossIncoming) {
                 h.progressDetail =
-                    "Naderende boss — skill tree opent automatisch";
+                    "Naderende boss - skill tree opent automatisch";
                 h.progress01 = 1.f;
             } else {
                 h.progressDetail =
@@ -113,7 +113,7 @@ UnlockNextHint computeUnlockNextHint(const GameState& s) {
         case 6:
             h.phaseName = "Chests & sleutels";
             if (s.currentLevel >= 3) {
-                h.progressDetail = "Zone 3+ — chest-tab en sleutels";
+                h.progressDetail = "Zone 3+ - chest-tab en sleutels";
                 h.progress01     = 1.f;
             } else {
                 h.progressDetail = "Warp naar zone 3 (nu zone "
@@ -125,7 +125,7 @@ UnlockNextHint computeUnlockNextHint(const GameState& s) {
         case 7:
             h.phaseName = "Economy & ore tiers";
             if (s.currentLevel >= 3) {
-                h.progressDetail = "Zone 3+ — volledige skill tree";
+                h.progressDetail = "Zone 3+ - volledige skill tree";
                 h.progress01     = 1.f;
             } else {
                 h.progressDetail = "Warp naar zone 3 (nu zone "
@@ -137,7 +137,7 @@ UnlockNextHint computeUnlockNextHint(const GameState& s) {
         case 8:
             h.phaseName = "Prestige";
             if (s.currentLevel >= 5) {
-                h.progressDetail = "Zone 5+ — prestige-tab";
+                h.progressDetail = "Zone 5+ - prestige-tab";
                 h.progress01     = 1.f;
             } else {
                 h.progressDetail = "Warp naar zone 5 (nu zone "

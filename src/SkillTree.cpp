@@ -57,12 +57,14 @@ const UpgradeNodeDef* findNodeById(UpgradeID id) {
 
 void SkillTreeScreen::init(sf::Font& font,
                             float panelX, float panelY,
-                            float panelW, float panelH) {
-    m_font = &font;
-    m_x    = panelX;
-    m_y    = panelY;
-    m_w    = panelW;
-    m_h    = panelH;
+                            float panelW, float panelH,
+                            float uiScale) {
+    m_font    = &font;
+    m_x       = panelX;
+    m_y       = panelY;
+    m_w       = panelW;
+    m_h       = panelH;
+    m_uiScale = std::max(0.75f, uiScale);
     resetScroll();
 }
 
@@ -80,23 +82,23 @@ void SkillTreeScreen::updateScrollLimits() const {
         maxGY = std::max(maxGY, n.gridY);
     }
     const float contentW =
-        PANEL_PAD + static_cast<float>(maxGX) * GRID_STEP_X + NODE_W + PANEL_PAD;
+        panelPad() + static_cast<float>(maxGX) * gridStepX() + nodeW() + panelPad();
     const float contentH =
-        PANEL_PAD + static_cast<float>(maxGY) * GRID_STEP_Y + NODE_H + PANEL_PAD;
+        panelPad() + static_cast<float>(maxGY) * gridStepY() + nodeH() + panelPad();
     m_minScrollX = std::min(0.f, m_w - contentW);
     m_minScrollY = std::min(0.f, m_h - contentH);
 }
 
 sf::Vector2f SkillTreeScreen::nodeScreenPos(const UpgradeNodeDef& node) const {
     return {
-        m_x + PANEL_PAD + static_cast<float>(node.gridX) * GRID_STEP_X + m_scrollX,
-        m_y + PANEL_PAD + static_cast<float>(node.gridY) * GRID_STEP_Y + m_scrollY,
+        m_x + panelPad() + static_cast<float>(node.gridX) * gridStepX() + m_scrollX,
+        m_y + panelPad() + static_cast<float>(node.gridY) * gridStepY() + m_scrollY,
     };
 }
 
 sf::FloatRect SkillTreeScreen::nodeRect(const UpgradeNodeDef& node) const {
     const auto pos = nodeScreenPos(node);
-    return { pos, { NODE_W, NODE_H } };
+    return { pos, { nodeW(), nodeH() } };
 }
 
 void SkillTreeScreen::draw(sf::RenderTarget& target,
@@ -137,12 +139,12 @@ void SkillTreeScreen::drawConnections(sf::RenderTarget& target,
             continue;
 
         sf::Vector2f from = nodeScreenPos(*parent);
-        from.x += NODE_W * 0.5f;
-        from.y += NODE_H * 0.5f;
+        from.x += nodeW() * 0.5f;
+        from.y += nodeH() * 0.5f;
 
         sf::Vector2f to = nodeScreenPos(node);
-        to.x += NODE_W * 0.5f;
-        to.y += NODE_H * 0.5f;
+        to.x += nodeW() * 0.5f;
+        to.y += nodeH() * 0.5f;
 
         const bool unlocked = state.isNodeUnlocked(node);
         const sf::Color lineColor = unlocked
@@ -206,28 +208,33 @@ void SkillTreeScreen::drawNode(sf::RenderTarget&     target,
     else
         borderColor = sf::Color(60, 80, 120);
 
-    sf::RectangleShape bg({ NODE_W, NODE_H });
+    const float padIn = 8.f * m_uiScale;
+    const float line1 = 8.f * m_uiScale;
+    const float line2 = 28.f * m_uiScale;
+    const float line3 = 46.f * m_uiScale;
+
+    sf::RectangleShape bg({ nodeW(), nodeH() });
     bg.setPosition(pos);
     bg.setFillColor(hubBackdropTint(bgColor, seeThroughMiningBackdrop));
     bg.setOutlineColor(borderColor);
-    bg.setOutlineThickness(hovered ? 2.5f : 2.f);
+    bg.setOutlineThickness((hovered ? 2.5f : 2.f) * m_uiScale);
     target.draw(bg);
 
     sf::Text name(*m_font);
     name.setString(def.name);
-    name.setCharacterSize(12);
+    name.setCharacterSize(fontSz(13));
     name.setFillColor(unlocked ? sf::Color(220, 230, 255)
                                : sf::Color(80, 80, 100));
-    name.setPosition({ pos.x + 8.f, pos.y + 8.f });
+    name.setPosition({ pos.x + padIn, pos.y + line1 });
     target.draw(name);
 
     const int lv = state.levelOf(node.id);
     if (lv > 0) {
         sf::Text lvText(*m_font);
         lvText.setString("Lv " + std::to_string(lv));
-        lvText.setCharacterSize(11);
+        lvText.setCharacterSize(fontSz(12));
         lvText.setFillColor(sf::Color(120, 200, 120));
-        lvText.setPosition({ pos.x + 8.f, pos.y + 28.f });
+        lvText.setPosition({ pos.x + padIn, pos.y + line2 });
         target.draw(lvText);
     }
 
@@ -235,10 +242,10 @@ void SkillTreeScreen::drawNode(sf::RenderTarget&     target,
         && lv == 0) {
         sf::Text bossLabel(*m_font);
         bossLabel.setString("Boss Reward!");
-        bossLabel.setCharacterSize(11);
+        bossLabel.setCharacterSize(fontSz(12));
         bossLabel.setStyle(sf::Text::Bold);
         bossLabel.setFillColor(sf::Color(255, 170, 0));
-        bossLabel.setPosition({ pos.x + 8.f, pos.y + 46.f });
+        bossLabel.setPosition({ pos.x + padIn, pos.y + line3 });
         target.draw(bossLabel);
         return;
     }
@@ -246,19 +253,19 @@ void SkillTreeScreen::drawNode(sf::RenderTarget&     target,
     if (unlocked && !maxed) {
         sf::Text priceText(*m_font);
         priceText.setString("$" + formatBig(state.costOf(node.id)));
-        priceText.setCharacterSize(11);
+        priceText.setCharacterSize(fontSz(12));
         priceText.setFillColor(affordable ? sf::Color(255, 215, 50)
                                           : sf::Color(120, 80, 80));
-        priceText.setPosition({ pos.x + 8.f, pos.y + 46.f });
+        priceText.setPosition({ pos.x + padIn, pos.y + line3 });
         target.draw(priceText);
     }
 
     if (!unlocked) {
         sf::Text lockText(*m_font);
         lockText.setString("[LOCKED]");
-        lockText.setCharacterSize(10);
+        lockText.setCharacterSize(fontSz(11));
         lockText.setFillColor(sf::Color(80, 80, 100));
-        lockText.setPosition({ pos.x + 8.f, pos.y + 46.f });
+        lockText.setPosition({ pos.x + padIn, pos.y + line3 });
         target.draw(lockText);
 
         if (const UpgradeNodeDef* req = findNodeById(node.requireId)) {
@@ -270,9 +277,9 @@ void SkillTreeScreen::drawNode(sf::RenderTarget&     target,
                 needs += " lv" + std::to_string(node.requireLevel);
             sf::Text reqText(*m_font);
             reqText.setString(needs);
-            reqText.setCharacterSize(9);
+            reqText.setCharacterSize(fontSz(10));
             reqText.setFillColor(sf::Color(100, 100, 130));
-            reqText.setPosition({ pos.x + 8.f, pos.y + NODE_H - 14.f });
+            reqText.setPosition({ pos.x + padIn, pos.y + nodeH() - 16.f * m_uiScale });
             target.draw(reqText);
         }
     }
@@ -280,10 +287,10 @@ void SkillTreeScreen::drawNode(sf::RenderTarget&     target,
     if (maxed) {
         sf::Text maxText(*m_font);
         maxText.setString("MAXED");
-        maxText.setCharacterSize(11);
+        maxText.setCharacterSize(fontSz(12));
         maxText.setStyle(sf::Text::Bold);
         maxText.setFillColor(sf::Color(80, 220, 80));
-        maxText.setPosition({ pos.x + 8.f, pos.y + 46.f });
+        maxText.setPosition({ pos.x + padIn, pos.y + line3 });
         target.draw(maxText);
     }
 }
@@ -296,35 +303,36 @@ void SkillTreeScreen::drawTooltip(sf::RenderTarget&     target,
         GameState::upgradeCatalog[static_cast<std::size_t>(
             static_cast<int>(node.id))];
 
-    constexpr float tw = 220.f;
-    constexpr float th = 80.f;
-    float tx = nodePos.x + NODE_W + 8.f;
+    const float tw = 220.f * m_uiScale;
+    const float th = 96.f * m_uiScale;
+    const float tipPad = 8.f * m_uiScale;
+    float tx = nodePos.x + nodeW() + tipPad;
     float ty = nodePos.y;
     if (tx + tw > m_x + m_w)
-        tx = nodePos.x - tw - 8.f;
+        tx = nodePos.x - tw - tipPad;
     if (ty + th > m_y + m_h)
-        ty = m_y + m_h - th - 4.f;
+        ty = m_y + m_h - th - 4.f * m_uiScale;
 
     sf::RectangleShape bg({ tw, th });
     bg.setPosition({ tx, ty });
     bg.setFillColor(sf::Color(10, 12, 30, 240));
     bg.setOutlineColor(sf::Color(80, 100, 180));
-    bg.setOutlineThickness(1.f);
+    bg.setOutlineThickness(std::max(1.f, 1.f * m_uiScale));
     target.draw(bg);
 
     sf::Text title(*m_font);
     title.setString(def.name);
-    title.setCharacterSize(13);
+    title.setCharacterSize(fontSz(15));
     title.setStyle(sf::Text::Bold);
     title.setFillColor(sf::Color(200, 220, 255));
-    title.setPosition({ tx + 8.f, ty + 8.f });
+    title.setPosition({ tx + tipPad, ty + tipPad });
     target.draw(title);
 
     sf::Text desc(*m_font);
     desc.setString(def.description);
-    desc.setCharacterSize(11);
+    desc.setCharacterSize(fontSz(13));
     desc.setFillColor(sf::Color(160, 170, 200));
-    desc.setPosition({ tx + 8.f, ty + 28.f });
+    desc.setPosition({ tx + tipPad, ty + 30.f * m_uiScale });
     target.draw(desc);
 
     const int lv = state.levelOf(node.id);
@@ -333,16 +341,16 @@ void SkillTreeScreen::drawTooltip(sf::RenderTarget&     target,
         lvStr += " / " + std::to_string(def.maxLevel);
     sf::Text lvInfo(*m_font);
     lvInfo.setString(lvStr);
-    lvInfo.setCharacterSize(11);
+    lvInfo.setCharacterSize(fontSz(13));
     lvInfo.setFillColor(sf::Color(120, 200, 120));
-    lvInfo.setPosition({ tx + 8.f, ty + 48.f });
+    lvInfo.setPosition({ tx + tipPad, ty + 52.f * m_uiScale });
     target.draw(lvInfo);
 
     sf::Text costInfo(*m_font);
     costInfo.setString("Cost: $" + formatBig(state.costOf(node.id)));
-    costInfo.setCharacterSize(11);
+    costInfo.setCharacterSize(fontSz(13));
     costInfo.setFillColor(sf::Color(255, 215, 50));
-    costInfo.setPosition({ tx + 8.f, ty + 62.f });
+    costInfo.setPosition({ tx + tipPad, ty + 72.f * m_uiScale });
     target.draw(costInfo);
 }
 
@@ -364,6 +372,6 @@ bool SkillTreeScreen::handleClick(sf::Vector2f pos, GameState& state) {
 
 void SkillTreeScreen::handleScroll(float delta, sf::Vector2f /*pos*/) {
     updateScrollLimits();
-    m_scrollY += delta * 40.f;
+    m_scrollY += delta * 48.f * m_uiScale;
     m_scrollY = std::clamp(m_scrollY, m_minScrollY, 40.f);
 }
