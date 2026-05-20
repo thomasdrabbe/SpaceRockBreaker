@@ -101,8 +101,6 @@ private:
     mutable std::array<SaveSlotPreview, SAVE_SLOT_COUNT> m_saveSlotPreview{};
     mutable bool m_saveSlotPreviewDirty = true;
 
-    void drawLives() const;
-
     // ── Prestige confirm ──────────────────────────────────
     bool m_prestigeConfirm = false;
 

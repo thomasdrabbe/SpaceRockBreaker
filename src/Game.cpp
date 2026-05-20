@@ -501,51 +501,6 @@ void Game::processEvents() {
         }
     }
 }
-// draw lives
-void Game::drawLives() const {
-    float x = m_cntX + m_cntW - std::round(160.f * m_scale);
-    float y = m_cntY + std::round(8.f * m_scale);
-    float r = std::round(10.f * m_scale);
-    float gap = std::round(28.f * m_scale);
-
-    const int cap = m_state.maxLives();
-    for (int i = 0; i < cap; i++) {
-        sf::CircleShape heart(r);
-        heart.setOrigin({ r, r });
-        heart.setPosition({ x + i * gap, y + r });
-        heart.setFillColor(i < m_state.lives
-            ? sf::Color(255, 60, 80)
-            : sf::Color(45, 25, 32));
-        heart.setOutlineColor(sf::Color(200, 40, 60, 160));
-        heart.setOutlineThickness(1.5f);
-        m_window.draw(heart);
-    }
-
-    const float maxHp = std::max(1.f, m_mining.playerMaxHp());
-    const float ratio =
-        std::clamp(m_mining.playerHp() / maxHp, 0.f, 1.f);
-    const float barW  = std::round(120.f * m_scale);
-    const float barH  = std::round(10.f * m_scale);
-    const float barX  = m_cntX + m_cntW - std::round(300.f * m_scale);
-    const float barY  = m_cntY + std::round(8.f * m_scale);
-    sf::RectangleShape hpBg(sf::Vector2f{ barW, barH });
-    hpBg.setPosition({ barX, barY });
-    hpBg.setFillColor(sf::Color(40, 10, 10, 200));
-    m_window.draw(hpBg);
-    const auto rCol = static_cast<std::uint8_t>((1.f - ratio) * 255.f);
-    const auto gCol = static_cast<std::uint8_t>(ratio * 200.f);
-    sf::RectangleShape hpFill(sf::Vector2f{ barW * ratio, barH });
-    hpFill.setPosition({ barX, barY });
-    hpFill.setFillColor(sf::Color(rCol, gCol, 30, 220));
-    m_window.draw(hpFill);
-    drawText("HP",
-             barX - std::round(24.f * m_scale),
-             barY,
-             static_cast<unsigned>(std::round(barH * 1.1f)),
-             sf::Color(200, 200, 200),
-             false);
-}
-
 // ═════════════════════════════════════════════════════════════
 //  update
 // ═════════════════════════════════════════════════════════════
