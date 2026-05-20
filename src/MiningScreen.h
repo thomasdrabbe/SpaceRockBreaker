@@ -10,6 +10,7 @@
 #include "KeyPickup.h"
 #include "Particle.h"
 #include "Player.h"
+#include "Satellite.h"
 
 // ─────────────────────────────────────────────────────────────
 //  Star (parallax background)
@@ -29,7 +30,13 @@ class IAudioBus;
 class MiningScreen {
 public:
     bool playerHit() const;
-    void playerTakeDamage(float dmg) { m_player.takeDamage(dmg); }
+    void playerTakeDamage(float dmg, const GameState& state) {
+        m_player.applyDamage(dmg,
+                             state.shieldMaxHp(),
+                             state.shieldRechargePerSec(),
+                             state.shieldRechargeDelaySec(),
+                             state.shieldExtraHits());
+    }
     void resetPlayerHp() { m_player.resetHp(); }
     bool playerHpZero() const { return m_player.hp() <= 0.f; }
     float playerHp() const { return m_player.hp(); }
@@ -90,6 +97,12 @@ public:
 
     bool hasLivingBoss() const;
 
+    /// Target Priority UI (< >); alleen als upgrade lv >= 1.
+    bool handleTargetHudClick(sf::Vector2f pos, GameState& state);
+
+    /// Verzamel alle losse ore (Vacuum Warp).
+    void collectAllLooseOre(GameState& state);
+
     /// Meteor-timer + shower-queue starten. Wordt vanuit Game aangeroepen.
     void tickMeteorShower(float dt, GameState& state, float asteroidHpMult);
     /// Alleen meteoren bewegen (Game roept dit aan bij gepauzeerde mining-tab).
@@ -114,7 +127,8 @@ private:
     // ── Entities ──────────────────────────────────────────
     AsteroidManager m_asteroids;
     BulletManager   m_bullets;
-    TurretManager   m_turrets;
+    TurretManager      m_turrets;
+    SatelliteManager   m_satellites;
     OreManager      m_ores;
     KeyPickupManager m_keyPickups;
     ParticleSystem  m_particles;
@@ -203,7 +217,12 @@ private:
     void resolveCollisions(GameState& state);
     void resolveMeteorAsteroidImpacts(GameState& state);
     void emitAsteroidDestroyedLoot(Asteroid& asteroid, GameState& state);
+    void tryExplosionOnDestroy(const Asteroid& origin, GameState& state, int depth);
     void tryCompleteMeteorShowerChallenge(GameState& state);
+    void syncSatellites(const GameState& state);
+
+    mutable sf::FloatRect m_targetBtnL{};
+    mutable sf::FloatRect m_targetBtnR{};
 
     // ── Draw helpers ──────────────────────────────────────
     void drawStarfield(sf::RenderTarget& target, float warpCharge,

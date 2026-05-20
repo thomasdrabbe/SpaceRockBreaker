@@ -26,6 +26,7 @@ struct Peg {
     float        hitFlash = 0.f;
     OreRarity    pegRarity = OreRarity::COMMON;
     bool         duplicator = false;
+    bool         refiner    = false;
     bool         isWall = false;
     int          cellRow   = -1;
     int          cellCol   = -1;
@@ -85,8 +86,9 @@ public:
                     int ballsPerTick, int maxBalls);
 
     void update(float dt, double& creditsOut,
-                float creditMult, int bulkMult,
-                ParticleSystem& particles);
+                          float creditMult, int bulkMult,
+                          ParticleSystem& particles,
+                          int maxOreTierForRefiner = 0);
 
     void draw(sf::RenderTarget& target,
               sf::Font&         font,
@@ -99,6 +101,7 @@ public:
     /// zelfde (rij,kolom) blijft zeldzame kleur na rebuild.
     void syncGoldenPegChestRarities(int goldenPegChestLevel);
     void syncDuplicatorPegChestRarities(int duplicatorChestLevel);
+    void syncRefinerPegChestRarities(int refinerChestLevel);
 
     int   ballsAlive()  const;
     float boardLeft()   const { return m_boardX; }
@@ -127,13 +130,17 @@ private:
 
     std::map<std::pair<int, int>, OreRarity> m_pegRarityByCell;
     std::set<std::pair<int, int>>            m_duplicatorCells;
+    std::set<std::pair<int, int>>            m_refinerCells;
     int m_lastBuildRows                 = -1;
     int m_syncedGoldenPegChestLevel     = -1;
     int m_syncedDuplicatorChestLevel    = -1;
+    int m_syncedRefinerChestLevel       = -1;
+    int m_refinerMaxOreTier             = 0;
 
     void buildPegs();
     void applyPegRarityRolls(int rollCount);
     void applyDuplicatorRolls(int rollCount);
+    void applyRefinerRolls(int rollCount);
     void buildSlots(float multBonus, float plinkoLuck, float chestSlotMult);
     void resolvePegCollision(PlinkoBall& ball,
                              double&     creditsOut,

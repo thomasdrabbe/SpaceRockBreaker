@@ -1241,19 +1241,6 @@ void AsteroidManager::tickBossShooting(float dt, sf::Vector2f playerPos,
 
 Asteroid* AsteroidManager::nearest(sf::Vector2f from, float maxDist,
                                      float meteorMinYToAcquire) {
-    Asteroid* boss = nullptr;
-    float     bossD2 = maxDist * maxDist;
-    for (auto& a : m_pool) {
-        if (!a.alive || !a.isBoss) continue;
-        float d2 = distanceSq(from, a.pos);
-        if (d2 < bossD2) {
-            bossD2 = d2;
-            boss   = &a;
-        }
-    }
-    if (boss)
-        return boss;
-
     Asteroid* best   = nullptr;
     float     bestD2 = maxDist * maxDist;
 
@@ -1267,4 +1254,68 @@ Asteroid* AsteroidManager::nearest(sf::Vector2f from, float maxDist,
         }
     }
     return best;
+}
+
+Asteroid* AsteroidManager::keyAsteroid() {
+    for (auto& a : m_pool)
+        if (a.alive && a.isKeyAsteroid)
+            return &a;
+    return nullptr;
+}
+
+Asteroid* AsteroidManager::highestOreTier(sf::Vector2f from, float maxDist) {
+    Asteroid* best     = nullptr;
+    int       bestTier = -1;
+    float     bestD2   = maxDist * maxDist;
+    for (auto& a : m_pool) {
+        if (!a.alive) continue;
+        const int   tier = static_cast<int>(a.oreTier);
+        const float d2   = distanceSq(from, a.pos);
+        if (tier > bestTier || (tier == bestTier && d2 < bestD2)) {
+            bestTier = tier;
+            bestD2   = d2;
+            best     = &a;
+        }
+    }
+    return best;
+}
+
+Asteroid* AsteroidManager::lowestHp() {
+    Asteroid* best   = nullptr;
+    float     bestHp = 1e30f;
+    for (auto& a : m_pool) {
+        if (!a.alive || a.hp <= 0.f) continue;
+        if (a.hp < bestHp) {
+            bestHp = a.hp;
+            best   = &a;
+        }
+    }
+    return best;
+}
+
+Asteroid* AsteroidManager::pickTarget(TargetMode mode,
+                                         sf::Vector2f from,
+                                         float maxDist,
+                                         float meteorMinYToAcquire) {
+    switch (mode) {
+        case TargetMode::BOSS: {
+            Asteroid* b = getBoss();
+            return b ? b : nearest(from, maxDist, meteorMinYToAcquire);
+        }
+        case TargetMode::KEY: {
+            Asteroid* k = keyAsteroid();
+            return k ? k : nearest(from, maxDist, meteorMinYToAcquire);
+        }
+        case TargetMode::ORE_TIER: {
+            Asteroid* hi = highestOreTier(from, maxDist);
+            return hi ? hi : nearest(from, maxDist, meteorMinYToAcquire);
+        }
+        case TargetMode::LOWEST_HP: {
+            Asteroid* l = lowestHp();
+            return l ? l : nearest(from, maxDist, meteorMinYToAcquire);
+        }
+        case TargetMode::NEAREST:
+        default:
+            return nearest(from, maxDist, meteorMinYToAcquire);
+    }
 }

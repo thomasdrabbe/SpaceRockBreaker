@@ -156,6 +156,15 @@ public:
                         float maxDist                 = 99999.f,
                         float meteorMinYToAcquire     = NEAREST_METEOR_Y_NO_FILTER);
 
+    Asteroid* pickTarget(TargetMode mode,
+                         sf::Vector2f from,
+                         float maxDist             = 99999.f,
+                         float meteorMinYToAcquire = NEAREST_METEOR_Y_NO_FILTER);
+    Asteroid* keyAsteroid();
+    Asteroid* highestOreTier(sf::Vector2f from,
+                             float maxDist = 99999.f);
+    Asteroid* lowestHp();
+
     std::array<Asteroid, MAX_ASTEROIDS>& all() { return m_pool; }
     const std::array<Asteroid, MAX_ASTEROIDS>& all() const { return m_pool; }
 

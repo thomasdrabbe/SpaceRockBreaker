@@ -165,6 +165,9 @@ void PlinkoBoard::buildPegs() {
             peg.duplicator =
                 peg.cellRow >= 0
                 && m_duplicatorCells.count({ peg.cellRow, peg.cellCol }) > 0;
+            peg.refiner =
+                peg.cellRow >= 0
+                && m_refinerCells.count({ peg.cellRow, peg.cellCol }) > 0;
             m_pegs.push_back(peg);
         }
     }
@@ -329,6 +332,16 @@ void PlinkoBoard::updateAuto(float dt, GameState& state, float autoInterval,
     }
 }
 
+namespace {
+OreTier oreTierFromBallValue(double v) {
+    for (int i = ORE_TIER_COUNT - 1; i >= 0; --i) {
+        if (v >= oreTierBaseValue(static_cast<OreTier>(i)) * 0.85)
+            return static_cast<OreTier>(i);
+    }
+    return OreTier::IRON;
+}
+} // namespace
+
 // ═════════════════════════════════════════════════════════════
 //  resolvePegCollision
 // ═════════════════════════════════════════════════════════════
@@ -373,6 +386,15 @@ void PlinkoBoard::resolvePegCollision(PlinkoBall& ball,
                     ball.vel
                     + sf::Vector2f(randFloat(-55.f, 55.f), randFloat(-35.f, 35.f));
                 dupSpawns.push_back(s);
+            }
+
+            if (peg.refiner && m_refinerMaxOreTier > 0) {
+                int tier = static_cast<int>(oreTierFromBallValue(ball.oreValue));
+                const int cap = std::min(m_refinerMaxOreTier,
+                                         ORE_TIER_COUNT - 1);
+                tier = std::min(tier + 1, cap);
+                ball.oreValue = oreTierBaseValue(static_cast<OreTier>(tier));
+                ball.ballColor = oreTierColor(static_cast<OreTier>(tier));
             }
 
             const int ri = static_cast<int>(peg.pegRarity);
@@ -440,7 +462,9 @@ int PlinkoBoard::findSlot(float x) const {
 // ═════════════════════════════════════════════════════════════
 void PlinkoBoard::update(float dt, double& creditsOut,
                           float creditMult, int bulkMult,
-                          ParticleSystem& particles) {
+                          ParticleSystem& particles,
+                          int maxOreTierForRefiner) {
+    m_refinerMaxOreTier = std::max(0, maxOreTierForRefiner);
     float slotTopY = m_boardY + m_boardH - SLOT_HEIGHT;
 
     for (auto& peg : m_pegs)
@@ -589,6 +613,21 @@ void PlinkoBoard::draw(sf::RenderTarget& target,
             pegShape.setRadius(m_pegDrawRadius);
             pegShape.setOrigin({ m_pegDrawRadius, m_pegDrawRadius });
         }
+        if (peg.refiner) {
+            float ringR = m_pegDrawRadius + std::round(4.5f * m_scale);
+            pegShape.setRadius(ringR);
+            pegShape.setOrigin({ ringR, ringR });
+            pegShape.setPosition(peg.pos);
+            pegShape.setFillColor(sf::Color::Transparent);
+            pegShape.setOutlineColor(hubBackdropTint(
+                sf::Color(255, 140, 40,
+                    static_cast<uint8_t>(130 + 110 * ft)),
+                st));
+            pegShape.setOutlineThickness(std::max(1.5f, 2.f * m_scale));
+            target.draw(pegShape);
+            pegShape.setRadius(m_pegDrawRadius);
+            pegShape.setOrigin({ m_pegDrawRadius, m_pegDrawRadius });
+        }
     }
 
     // ── Bonus-peg credit floaters ─────────────────────────
@@ -713,13 +752,16 @@ void PlinkoBoard::draw(sf::RenderTarget& target,
 void PlinkoBoard::resetGoldenPegRarityState() {
     m_pegRarityByCell.clear();
     m_duplicatorCells.clear();
+    m_refinerCells.clear();
     m_syncedGoldenPegChestLevel  = -1;
     m_syncedDuplicatorChestLevel = -1;
+    m_syncedRefinerChestLevel    = -1;
     m_lastBuildRows              = -1;
     m_pegCreditPopups.clear();
     for (auto& p : m_pegs) {
         p.pegRarity   = OreRarity::COMMON;
         p.duplicator  = false;
+        p.refiner     = false;
     }
 }
 
@@ -819,5 +861,53 @@ void PlinkoBoard::syncDuplicatorPegChestRarities(int duplicatorChestLevel) {
         m_syncedDuplicatorChestLevel = -1;
         applyDuplicatorRolls(targetRolls);
         m_syncedDuplicatorChestLevel = duplicatorChestLevel;
+    }
+}
+
+void PlinkoBoard::applyRefinerRolls(int rollCount) {
+    if (m_pegs.empty() || rollCount <= 0)
+        return;
+    const int nPegs = static_cast<int>(m_pegs.size());
+    for (int i = 0; i < rollCount; ++i) {
+        for (int t = 0; t < 16; ++t) {
+            Peg& peg = m_pegs[randInt(0, nPegs - 1)];
+            if (peg.cellRow < 0)
+                continue;
+            const auto key = std::make_pair(peg.cellRow, peg.cellCol);
+            if (m_refinerCells.insert(key).second) {
+                peg.refiner = true;
+                break;
+            }
+        }
+    }
+}
+
+void PlinkoBoard::syncRefinerPegChestRarities(int refinerChestLevel) {
+    if (refinerChestLevel < 0)
+        refinerChestLevel = 0;
+    const int targetRolls = refinerChestLevel * 3;
+
+    if (m_pegs.empty()) {
+        m_syncedRefinerChestLevel = refinerChestLevel;
+        return;
+    }
+
+    if (m_syncedRefinerChestLevel < 0) {
+        applyRefinerRolls(targetRolls);
+        m_syncedRefinerChestLevel = refinerChestLevel;
+        return;
+    }
+
+    if (refinerChestLevel > m_syncedRefinerChestLevel) {
+        const int d = refinerChestLevel - m_syncedRefinerChestLevel;
+        applyRefinerRolls(d * 3);
+        m_syncedRefinerChestLevel = refinerChestLevel;
+    } else if (refinerChestLevel < m_syncedRefinerChestLevel) {
+        m_refinerCells.clear();
+        for (auto& p : m_pegs)
+            p.refiner = false;
+        m_syncedRefinerChestLevel = -1;
+        applyRefinerRolls(targetRolls);
+        m_syncedRefinerChestLevel = refinerChestLevel;
     }
 }

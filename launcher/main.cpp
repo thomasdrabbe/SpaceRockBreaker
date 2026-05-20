@@ -896,5 +896,12 @@ int main() {
 
     if (!workerJoined && worker.joinable())
         worker.join();
+
+    // Update mislukt of venster gesloten: start bestaande installatie als exe er is.
+    if (fs::exists(gameExe)) {
+        logLine("Starting game after launcher UI closed.");
+        if (!startGame(gameExe))
+            logLine("startGame failed after launcher UI closed.");
+    }
     return 0;
 }

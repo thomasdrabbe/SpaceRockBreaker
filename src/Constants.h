@@ -21,7 +21,18 @@ enum class ChestUpgradeID {
     PLINKO_DUPLICATOR_PEG,
     PLINKO_MULT_CHEST,
     PLINKO_LUCK_CHEST,
+    PLINKO_REFINER_PEG,
     CHEST_UPGRADE_COUNT
+};
+
+/// Mining auto-aim modus (TARGET_PRIORITY upgrade).
+enum class TargetMode : std::uint8_t {
+    NEAREST   = 0,
+    BOSS      = 1,
+    KEY       = 2,
+    ORE_TIER  = 3,
+    LOWEST_HP = 4,
+    TARGET_MODE_COUNT
 };
 
 // ─── Upgrade IDs (reset on prestige) ──────────────────────────
@@ -65,6 +76,24 @@ enum class UpgradeID {
     FUEL_ON_KILL,
     FUEL_ON_PICKUP,
     FUEL_WARP_REFILL,
+    TURRET_DAMAGE,
+    TURRET_FIRE_RATE,
+    TURRET_FUEL_DRAIN,
+    ORE_ON_KILL,
+    SHIP_SPEED,
+    SPEED_EFFICIENCY,
+    TARGET_PRIORITY,
+    SEEKING_BULLETS,
+    SHIELD_HP,
+    SHIELD_RECHARGE,
+    SHIELD_DELAY,
+    SHIELD_MULTI_HIT,
+    WARP_ORE_BONUS,
+    AUTO_WARP,
+    EXPLOSIVE_ASTEROIDS,
+    CHAIN_REACTION,
+    AUTO_SELL_THRESHOLD,
+    SATELLITE,
     UPGRADE_COUNT   // sentinel
 
 };
@@ -155,7 +184,11 @@ constexpr float TAB_BAR_H    = 46.f;
 // ─── Save ─────────────────────────────────────────────────────
 const std::string SAVE_FILE = "srb_save.bin"; // legacy (wordt naar slot 0 gemigreerd)
 constexpr int     SAVE_SLOT_COUNT = 3;
-constexpr int     SAVE_VERSION    = 21;
+constexpr int     SAVE_VERSION    = 23;
+/// `upgradeLevels` in saves vóór volledige upgrade-roadmap batch 2.
+constexpr int     LEGACY_UPGRADE_SAVE_COUNT_V22 = 37;
+/// `upgradeLevels` in saves vóór TURRET_* / ORE_ON_KILL.
+constexpr int     LEGACY_UPGRADE_SAVE_COUNT_V21 = 34;
 /// `upgradeLevels` in saves vóór FUEL_ON_PICKUP / FUEL_WARP_REFILL.
 constexpr int     LEGACY_UPGRADE_SAVE_COUNT_V20 = 32;
 /// Eerste zone-boss en daarna elke N zones (5, 10, 15, …).

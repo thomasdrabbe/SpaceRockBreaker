@@ -628,7 +628,7 @@ void Game::update(float dt) {
             if (m_hitCooldown > 0.f) {
                 m_hitCooldown -= dt;
             } else if (m_mining.playerHit()) {
-                m_mining.playerTakeDamage(30.f);
+                m_mining.playerTakeDamage(30.f, m_state);
                 m_hitCooldown = PLAYER_HIT_HP_COOLDOWN;
                 m_mining.particles().emitExplosion(
                     m_mining.playerPos(),
@@ -726,18 +726,33 @@ void Game::update(float dt) {
             m_mining.tickMeteorSpawnQueue();
         }
 
+        const bool autoWarpReady =
+            m_state.autoWarpEnabled() && m_state.canWarp()
+            && !m_mining.hasLivingBoss();
+        const bool manualWarpHeld =
+            sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Space);
         if (m_activeTab == Tab::MINING && m_state.canWarp()
             && !m_mining.hasLivingBoss()) {
-            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Space)) {
-                // Eén keer SFX per vasthoud (loslaten reset; los van m_warpCharge≈0 float).
+            if (autoWarpReady) {
+                m_warpCharge = 1.f;
+            } else if (manualWarpHeld) {
                 if (m_warpSfxArmed) {
                     const float pitch =
-                        m_audio->warpPitchForChargeDuration(m_state.warpDurationSec());
+                        m_audio->warpPitchForChargeDuration(
+                            m_state.warpDurationSec());
                     m_audio->play(Sfx::Warp, pitch);
                     m_warpSfxArmed = false;
                 }
                 m_warpCharge += dt / m_state.warpDurationSec();
-                if (m_warpCharge >= 1.f) {
+            } else {
+                if (m_warpCharge > 0.001f)
+                    m_audio->stopWarpSound();
+                m_warpCharge = std::max(0.f, m_warpCharge - dt * 2.f);
+                m_warpSfxArmed = true;
+            }
+            if (m_warpCharge >= 1.f) {
+                    if (m_state.warpCollectsLooseOre())
+                        m_mining.collectAllLooseOre(m_state);
                     // Bij succesvolle warp niet hard afkappen: laat de clip natuurlijk eindigen.
                     m_warpCharge = 0.f;
                     const int    preWarpLevel = m_state.currentLevel;
@@ -805,12 +820,6 @@ void Game::update(float dt) {
                                   sf::Color(120, 220, 255));
                     }
                 }
-            } else {
-                if (m_warpCharge > 0.001f)
-                    m_audio->stopWarpSound();
-                m_warpCharge = std::max(0.f, m_warpCharge - dt * 2.f);
-                m_warpSfxArmed = true;
-            }
         } else {
             if (m_warpCharge > 0.001f)
                 m_audio->stopWarpSound();
@@ -823,17 +832,22 @@ void Game::update(float dt) {
         m_warpCharge   = 0.f;
         m_warpSfxArmed = true;
     }
-    if (m_state.autoPlinkoEnabled() && m_state.ore >= m_state.plinkoBallOreCost())
-        m_plinko.updateAuto(dt, m_state, 1.f / m_state.fireRatePerSec(),
-                            m_state.autoPlinkoBallsPerTick(),
-                            m_state.maxPlinkoBalls());
+    if (m_state.autoPlinkoEnabled()) {
+        const double thresh = m_state.autoSellOreThreshold();
+        const bool   oreOk  = thresh <= 0.0 || m_state.ore >= thresh;
+        if (oreOk && m_state.ore >= m_state.plinkoBallOreCost())
+            m_plinko.updateAuto(dt, m_state, 1.f / m_state.fireRatePerSec(),
+                                m_state.autoPlinkoBallsPerTick(),
+                                m_state.maxPlinkoBalls());
+    }
 
     {
         double plinkoCredits = 0.0;
         m_plinko.update(dt, plinkoCredits,
                         m_state.creditMult(),
                         m_state.bulkProcess(),
-                        m_plinkoParticles);
+                        m_plinkoParticles,
+                        static_cast<int>(m_state.maxOreTier()));
         creditsEarned += plinkoCredits;
     }
     m_plinkoParticles.update(dt);
@@ -1182,6 +1196,12 @@ void Game::onMouseClick(sf::Vector2f pos, sf::Mouse::Button btn) {
                       sf::Color(120, 220, 255));
             return;
         }
+    }
+
+    if (m_activeTab == Tab::MINING && m_runMode == RunMode::RUNNING
+        && m_mining.handleTargetHudClick(pos, m_state)) {
+        m_audio->play(Sfx::UiClick);
+        return;
     }
 
     switch (m_activeTab) {
@@ -1892,6 +1912,8 @@ void Game::rebuildPlinko() {
         m_state.levelOfChest(ChestUpgradeID::PLINKO_PEG_SIZE));
     m_plinko.syncDuplicatorPegChestRarities(
         m_state.levelOfChest(ChestUpgradeID::PLINKO_DUPLICATOR_PEG));
+    m_plinko.syncRefinerPegChestRarities(
+        m_state.levelOfChest(ChestUpgradeID::PLINKO_REFINER_PEG));
 }
 
 void Game::drawPlinkoTab(bool seeThroughMiningBackdrop) const {

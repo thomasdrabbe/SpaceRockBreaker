@@ -91,6 +91,8 @@ public:
 
     Difficulty difficulty = Difficulty::Medium;
 
+    TargetMode targetMode = TargetMode::NEAREST;
+
     int   maxLives()              const;
     float difficultyAsteroidHpMult() const;
     float hitInvulnerabilitySec() const;
@@ -171,7 +173,26 @@ public:
     // ── Computed stats ────────────────────────────────────
     float gunDamage()         const;
     float fireRatePerSec()    const;
+    float turretDamage()      const;
+    float turretFireRatePerSec() const;
     int   turretCount()       const;
+    float oreOnKillDoubleChance() const;
+    float shipSpeed()         const;
+    float speedEfficiencyMoveMult() const;
+    int   unlockedTargetModeCount() const;
+    void  cycleTargetMode(int direction);
+    const char* targetModeLabel() const;
+    float seekingHomingDegPerFrame() const;
+    float shieldMaxHp()       const;
+    float shieldRechargePerSec() const;
+    float shieldRechargeDelaySec() const;
+    int   shieldExtraHits()   const;
+    bool  warpCollectsLooseOre() const;
+    bool  autoWarpEnabled()   const;
+    float explosiveAsteroidChance() const;
+    int   chainReactionMaxDepth() const;
+    double autoSellOreThreshold() const;
+    int   satelliteCount()    const;
     float critChance()        const;
     float critMult()          const;
     int   splitShot()         const;
@@ -211,6 +232,7 @@ public:
     int   chestPegUpgradeCount() const;
     /// Duplicator pegs: rolls zoals golden pegs (level x 3).
     int   chestDuplicatorRollCount() const;
+    int   chestRefinerPegRollCount() const;
     /// 1.0 zonder Trough Boost; elk niveau ×1.32 extra (stapelt op valbak-mults).
     float chestPlinkoSlotMult() const;
 

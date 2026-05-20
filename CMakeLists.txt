@@ -56,6 +56,7 @@ set(SOURCES
     src/Asteroid.cpp
     src/Bullet.cpp
     src/Turret.cpp
+    src/Satellite.cpp
     src/Ore.cpp
     src/KeyPickup.cpp
     src/Plinko.cpp
@@ -79,6 +80,7 @@ set(HEADERS
     src/Asteroid.h
     src/Bullet.h
     src/Turret.h
+    src/Satellite.h
     src/Ore.h
     src/KeyPickup.h
     src/Plinko.h

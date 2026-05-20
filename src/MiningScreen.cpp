@@ -569,6 +569,10 @@ void MiningScreen::syncTurrets(const GameState& state) {
     }
 }
 
+void MiningScreen::syncSatellites(const GameState& state) {
+    m_satellites.setCount(state.satelliteCount());
+}
+
 // ─────────────────────────────────────────────────────────────
 //  targetAsteroidCount
 // ─────────────────────────────────────────────────────────────
@@ -591,9 +595,17 @@ void MiningScreen::update(float      dt,
                             float      warpChargeStars) {
     //
     m_player.clearHit();
-    m_player.speed = 220.f * m_uiScale;
-    // ── Sync turrets ──────────────────────────────────────
+    m_player.speed = state.shipSpeed() * m_uiScale;
+    m_player.updateShield(dt,
+                          state.shieldMaxHp(),
+                          state.shieldRechargePerSec(),
+                          state.shieldRechargeDelaySec(),
+                          state.shieldExtraHits());
+    if (state.shieldMaxHp() > 0.f && m_player.shieldMaxHp() <= 0.f)
+        m_player.resetHp();
+    // ── Sync turrets / satellites ─────────────────────────
     syncTurrets(state);
+    syncSatellites(state);
 
     const int z = state.currentLevel;
     const int iw = static_cast<int>(std::ceil(std::max(1.f, m_w)));
@@ -622,6 +634,7 @@ void MiningScreen::update(float      dt,
                     state.fuelMoveDrain(),
                     state.fuelShootDrain(),
                     state.fuelTurretDrain(),
+                    state.targetMode,
                     m_asteroids,
                     m_bullets,
                     m_particles);
@@ -707,8 +720,8 @@ void MiningScreen::update(float      dt,
 
     // ── Turrets ───────────────────────────────────────────
     m_turrets.update(dt,
-                     1.f / state.fireRatePerSec(),
-                     state.gunDamage(),
+                     1.f / state.turretFireRatePerSec(),
+                     state.turretDamage(),
                      state.critChance(),
                      state.critMult(),
                      state.splitShot(),
@@ -717,8 +730,16 @@ void MiningScreen::update(float      dt,
                      m_bullets,
                      m_particles);
 
+    m_satellites.update(
+        m_player.pos, dt, 72.f * m_uiScale, 1.4f,
+        1.f / std::max(0.35f, state.turretFireRatePerSec() * 0.85f),
+        state.turretDamage() * 0.65f, state.critChance(), state.critMult(),
+        1, state.bulletLifetimeSec(), state.targetMode, m_asteroids, m_bullets,
+        m_particles);
+
     // ── Bullets ───────────────────────────────────────────
-    m_bullets.update(dt, m_x, m_y, m_w, m_h);
+    m_bullets.update(dt, m_x, m_y, m_w, m_h, state.seekingHomingDegPerFrame(),
+                     &m_asteroids, state.targetMode);
 
     // ── Collisions ────────────────────────────────────────
     resolveCollisions(state);
@@ -882,6 +903,9 @@ void MiningScreen::emitAsteroidDestroyedLoot(Asteroid& asteroid,
             m_particles);
     } else {
         int count = asteroid.oreDrop.count * asteroid.rarityDropMult();
+        if (!asteroid.isMeteor && state.oreOnKillDoubleChance() > 0.f
+            && chance(state.oreOnKillDoubleChance()))
+            count *= 2;
         m_ores.drop(
             asteroid.pos,
             asteroid.oreDrop.color,
@@ -923,8 +947,41 @@ void MiningScreen::resolveCollisions(GameState& state) {
                 else
                     m_audio->play(Sfx::Explosion);
                 emitAsteroidDestroyedLoot(asteroid, state);
+                tryExplosionOnDestroy(asteroid, state, 0);
             }
             break;
+        }
+    }
+}
+
+void MiningScreen::tryExplosionOnDestroy(const Asteroid& origin,
+                                          GameState&      state,
+                                          int             depth) {
+    if (origin.isBoss || origin.isKeyAsteroid)
+        return;
+    const float blastChance = state.explosiveAsteroidChance();
+    if (blastChance <= 0.f || !chance(blastChance))
+        return;
+    const int maxDepth = state.chainReactionMaxDepth();
+    if (depth > maxDepth)
+        return;
+
+    const sf::Vector2f epicentre = origin.pos;
+    const float radius = 95.f * m_uiScale;
+    const float dmg    = state.gunDamage() * 0.55f;
+    for (auto& other : m_asteroids.all()) {
+        if (!other.alive)
+            continue;
+        if (other.isBoss || other.isKeyAsteroid)
+            continue;
+        if (distance(epicentre, other.pos) > radius + other.radius)
+            continue;
+        if (other.hit(dmg, m_particles)) {
+            m_player.addFuel(state.fuelOnKill());
+            m_audio->play(Sfx::Explosion);
+            emitAsteroidDestroyedLoot(other, state);
+            if (maxDepth > 0 && depth < maxDepth)
+                tryExplosionOnDestroy(other, state, depth + 1);
         }
     }
 }
@@ -957,11 +1014,34 @@ void MiningScreen::resolveMeteorAsteroidImpacts(GameState& state) {
                 m_player.addFuel(state.fuelOnKill());
                 m_audio->play(Sfx::Explosion);
                 emitAsteroidDestroyedLoot(asteroid, state);
+                tryExplosionOnDestroy(asteroid, state, 0);
             }
             meteor.alive = false;
             break;
         }
     }
+}
+
+void MiningScreen::collectAllLooseOre(GameState& state) {
+    double dummy = 0.0;
+    std::array<double, ORE_TIER_COUNT> byTier{};
+    collectAllOre(dummy, byTier, state);
+    if (dummy > 0.0)
+        state.addOre(dummy);
+}
+
+bool MiningScreen::handleTargetHudClick(sf::Vector2f pos, GameState& state) {
+    if (state.levelOf(UpgradeID::TARGET_PRIORITY) < 1)
+        return false;
+    if (m_targetBtnL.contains(pos)) {
+        state.cycleTargetMode(-1);
+        return true;
+    }
+    if (m_targetBtnR.contains(pos)) {
+        state.cycleTargetMode(1);
+        return true;
+    }
+    return false;
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -1034,6 +1114,7 @@ void MiningScreen::prepareNewRun() {
 }
 
 void MiningScreen::initPlayerFuel(const GameState& state) {
+    m_player.resetHp();
     m_player.setMaxFuel(state.maxFuel());
     m_player.addFuel(state.maxFuel());
 }
@@ -1197,6 +1278,7 @@ void MiningScreen::draw(sf::RenderTarget& target,
     m_keyPickups.draw(target, m_keyIconTex);
     m_bullets.draw(target);
     m_turrets.draw(target);
+    m_satellites.draw(target);
     m_player.draw(target);
     if (m_font)
         m_particles.draw(target, *m_font);
@@ -1541,6 +1623,63 @@ void MiningScreen::drawHUD(sf::RenderTarget& target,
     zoneLabel.setFillColor(sf::Color(180, 210, 255));
     zoneLabel.setPosition({ m_x + 8.f, m_y + 8.f });
     target.draw(zoneLabel);
+
+    if (state.levelOf(UpgradeID::TARGET_PRIORITY) >= 1) {
+        const float cy = m_y + 36.f;
+        const float cx = m_x + m_w * 0.5f;
+        const float bw = 28.f;
+        const float bh = 22.f;
+        m_targetBtnL = sf::FloatRect({ cx - 120.f, cy }, { bw, bh });
+        m_targetBtnR = sf::FloatRect({ cx + 120.f - bw, cy }, { bw, bh });
+
+        auto drawBtn = [&](const sf::FloatRect& r, const char* label) {
+            sf::RectangleShape box(sf::Vector2f(r.size.x, r.size.y));
+            box.setPosition({ r.position.x, r.position.y });
+            box.setFillColor(sf::Color(30, 40, 70, 200));
+            box.setOutlineColor(sf::Color(100, 160, 255, 180));
+            box.setOutlineThickness(1.f);
+            target.draw(box);
+            sf::Text t(*m_font);
+            t.setString(label);
+            t.setCharacterSize(14);
+            t.setFillColor(sf::Color(200, 220, 255));
+            const auto lb = t.getLocalBounds();
+            t.setPosition({
+                r.position.x + (r.size.x - lb.size.x) * 0.5f - lb.position.x,
+                r.position.y + (r.size.y - lb.size.y) * 0.5f - lb.position.y });
+            target.draw(t);
+        };
+        drawBtn(m_targetBtnL, "<");
+        drawBtn(m_targetBtnR, ">");
+
+        sf::Text modeT(*m_font);
+        modeT.setString(state.targetModeLabel());
+        modeT.setCharacterSize(13);
+        modeT.setFillColor(sf::Color(160, 200, 255));
+        const auto mb = modeT.getLocalBounds();
+        modeT.setPosition({
+            cx - mb.size.x * 0.5f - mb.position.x,
+            cy + (bh - mb.size.y) * 0.5f - mb.position.y });
+        target.draw(modeT);
+    }
+
+    if (state.shieldMaxHp() > 0.f) {
+        const float sw = 70.f;
+        const float sh = 6.f;
+        const float sx = m_x + 8.f;
+        const float sy = m_y + 28.f;
+        sf::RectangleShape sbg(sf::Vector2f{ sw, sh });
+        sbg.setPosition({ sx, sy });
+        sbg.setFillColor(sf::Color(20, 30, 50, 180));
+        target.draw(sbg);
+        const float ratio = m_player.shieldMaxHp() > 0.f
+            ? m_player.shieldHp() / m_player.shieldMaxHp()
+            : 0.f;
+        sf::RectangleShape sfill(sf::Vector2f{ sw * ratio, sh });
+        sfill.setPosition({ sx, sy });
+        sfill.setFillColor(sf::Color(80, 180, 255, 220));
+        target.draw(sfill);
+    }
 
     if (state.isBonusZone) {
         static const char* const rNames[] = {

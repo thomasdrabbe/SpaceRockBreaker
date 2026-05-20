@@ -1,0 +1,5 @@
+Space Rock Breaker — upgrade roadmap (design spec).
+Full roadmap implemented in 1.1.50 (save v23).
+See skill tree + chest tab in game for all nodes.
+
+Out of scope: missiles, afterburner, reflective shield, etc. (see full spec in chat).

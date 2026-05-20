@@ -1,4 +1,5 @@
 #include "Bullet.h"
+#include "Asteroid.h"
 #include "Utils.h"
 #include <cmath>
 
@@ -72,10 +73,30 @@ void BulletManager::fire(sf::Vector2f    origin,
 //  update
 // ─────────────────────────────────────────────────────────────
 void BulletManager::update(float dt, float ox, float oy,
-                            float areaW, float areaH) {
+                            float areaW, float areaH,
+                            float homingDegPerFrame,
+                            AsteroidManager* asteroids,
+                            TargetMode targetMode) {
     m_alive = 0;
     for (auto& b : m_pool) {
         if (!b.alive) continue;
+
+        if (homingDegPerFrame > 0.f && asteroids) {
+            Asteroid* tgt = asteroids->pickTarget(targetMode, b.pos);
+            if (tgt) {
+                const float curAng = std::atan2(b.vel.y, b.vel.x);
+                const float wantAng =
+                    std::atan2(tgt->pos.y - b.pos.y, tgt->pos.x - b.pos.x);
+                float diff = wantAng - curAng;
+                while (diff > PI) diff -= 2.f * PI;
+                while (diff < -PI) diff += 2.f * PI;
+                const float maxTurn = toRad(homingDegPerFrame);
+                const float turn = clamp(diff, -maxTurn, maxTurn);
+                const float spd  = length(b.vel);
+                const float ang  = curAng + turn;
+                b.vel = { std::cos(ang) * spd, std::sin(ang) * spd };
+            }
+        }
 
         b.pos      += b.vel * dt;
         b.lifetime -= dt;

@@ -89,6 +89,24 @@ GameState::upgradeCatalog = {{
     { "Fuel on Kill",    "+0.5 fuel per asteroid destroyed", 90.0, 1.50, 8 },
     { "Fuel on Pickup",  "+0.12 fuel per ore collected",   85.0,  1.48, 5 },
     { "Warp Fuel Refill","+10% full fuel chance on warp",  120.0, 1.55, 5 },
+    { "Turret Calibration", "+25% turret damage per level", 260.0, 1.75, 0 },
+    { "Turret Overcharge",  "+0.3 turret shots/sec per level", 310.0, 1.80, 0 },
+    { "Turret Cooling",     "-12% fuel drain per active turret", 140.0, 1.60, 5 },
+    { "Rich Veins",         "+6% double ore drop on destroy", 160.0, 1.65, 8 },
+    { "Ship Speed",         "+20 movement speed per level",    75.0,  1.50, 0 },
+    { "Engine Trim",        "-10% fuel drain while moving",    90.0,  1.55, 6 },
+    { "Target Priority",    "Unlock targeting modes (< >)",  180.0, 1.80, 4 },
+    { "Seeking Rounds",     "+6 deg homing per frame",       380.0, 1.90, 5 },
+    { "Shield Plating",     "+30 shield HP per level",       220.0, 1.65, 0 },
+    { "Shield Capacitor",   "+15% shield recharge rate",     180.0, 1.60, 0 },
+    { "Quick Recovery",     "-0.4s shield recharge delay",   150.0, 1.55, 5 },
+    { "Reinforced Shield",  "+1 hit before shield breaks",   420.0, 2.00, 4 },
+    { "Vacuum Warp",        "Collect loose ore on warp",     450.0, 1.85, 1 },
+    { "Autopilot",          "Auto-warp when ore goal met",   900.0, 2.20, 1 },
+    { "Shrapnel Core",      "+8% chain explosion chance",    340.0, 1.85, 0 },
+    { "Cascade Protocol",   "Explosions chain (max depth 3)",620.0, 2.10, 5 },
+    { "Ore Overflow",       "Auto-Plinko when ore over cap", 480.0, 2.00, 5 },
+    { "Satellite Drone",    "+1 orbiting combat drone",     1200.0, 2.50, 4 },
 }};
 static_assert(
     GameState::upgradeCatalog.size()
@@ -125,6 +143,9 @@ GameState::chestCatalog = {{
       "Verhoog alle slot multipliers met +10% per level", 0 },
     { "Plinko Luck",
       "+5% kans op hogere slots per level", 0 },
+    { "Refiner Pegs",
+      "Pegs upgrade ball ore tier +1 on hit; +3 pegs per level",
+      0 },
 }};
 static_assert(
     GameState::chestCatalog.size()
@@ -165,6 +186,10 @@ int GameState::chestPegUpgradeCount() const {
 
 int GameState::chestDuplicatorRollCount() const {
     return levelOfChest(ChestUpgradeID::PLINKO_DUPLICATOR_PEG) * 3;
+}
+
+int GameState::chestRefinerPegRollCount() const {
+    return levelOfChest(ChestUpgradeID::PLINKO_REFINER_PEG) * 3;
 }
 
 float GameState::chestPlinkoSlotMult() const {
@@ -433,6 +458,113 @@ int GameState::turretCount() const {
     return levelOf(UpgradeID::TURRET_COUNT);
 }
 
+float GameState::turretDamage() const {
+    const float base = gunDamage();
+    const int   lv   = levelOf(UpgradeID::TURRET_DAMAGE);
+    return base * (1.f + static_cast<float>(lv) * 0.25f);
+}
+
+float GameState::turretFireRatePerSec() const {
+    return 1.2f + levelOf(UpgradeID::TURRET_FIRE_RATE) * 0.3f;
+}
+
+float GameState::oreOnKillDoubleChance() const {
+    return clamp(levelOf(UpgradeID::ORE_ON_KILL) * 0.06f, 0.f, 0.95f);
+}
+
+float GameState::shipSpeed() const {
+    return 220.f + static_cast<float>(levelOf(UpgradeID::SHIP_SPEED)) * 20.f;
+}
+
+float GameState::speedEfficiencyMoveMult() const {
+    const float eff = 1.f - levelOf(UpgradeID::SPEED_EFFICIENCY) * 0.10f;
+    return std::max(0.1f, eff);
+}
+
+int GameState::unlockedTargetModeCount() const {
+    const int lv = levelOf(UpgradeID::TARGET_PRIORITY);
+    return std::min(1 + lv,
+                    static_cast<int>(TargetMode::TARGET_MODE_COUNT));
+}
+
+void GameState::cycleTargetMode(int direction) {
+    const int n = unlockedTargetModeCount();
+    if (n <= 1)
+        return;
+    int cur = static_cast<int>(targetMode);
+    cur = (cur + direction) % n;
+    if (cur < 0)
+        cur += n;
+    targetMode = static_cast<TargetMode>(cur);
+}
+
+const char* GameState::targetModeLabel() const {
+    switch (targetMode) {
+        case TargetMode::NEAREST:   return "Nearest";
+        case TargetMode::BOSS:      return "Boss first";
+        case TargetMode::KEY:       return "Key first";
+        case TargetMode::ORE_TIER:  return "Ore tier";
+        case TargetMode::LOWEST_HP: return "Lowest HP";
+        default:                    return "Nearest";
+    }
+}
+
+float GameState::seekingHomingDegPerFrame() const {
+    return static_cast<float>(levelOf(UpgradeID::SEEKING_BULLETS)) * 6.f;
+}
+
+float GameState::shieldMaxHp() const {
+    return static_cast<float>(levelOf(UpgradeID::SHIELD_HP)) * 30.f;
+}
+
+float GameState::shieldRechargePerSec() const {
+    const int lv = levelOf(UpgradeID::SHIELD_RECHARGE);
+    if (lv <= 0)
+        return 0.f;
+    return 8.f * (1.f + static_cast<float>(lv) * 0.15f);
+}
+
+float GameState::shieldRechargeDelaySec() const {
+    constexpr float base = 2.5f;
+    return std::max(0.2f,
+                    base - static_cast<float>(levelOf(UpgradeID::SHIELD_DELAY))
+                               * 0.4f);
+}
+
+int GameState::shieldExtraHits() const {
+    return levelOf(UpgradeID::SHIELD_MULTI_HIT);
+}
+
+bool GameState::warpCollectsLooseOre() const {
+    return levelOf(UpgradeID::WARP_ORE_BONUS) > 0;
+}
+
+bool GameState::autoWarpEnabled() const {
+    return levelOf(UpgradeID::AUTO_WARP) > 0;
+}
+
+float GameState::explosiveAsteroidChance() const {
+    return clamp(levelOf(UpgradeID::EXPLOSIVE_ASTEROIDS) * 0.08f, 0.f, 0.95f);
+}
+
+int GameState::chainReactionMaxDepth() const {
+    const int lv = levelOf(UpgradeID::CHAIN_REACTION);
+    if (lv <= 0)
+        return 0;
+    return std::min(3, lv);
+}
+
+double GameState::autoSellOreThreshold() const {
+    const int lv = levelOf(UpgradeID::AUTO_SELL_THRESHOLD);
+    if (lv <= 0)
+        return 0.0;
+    return 500.0 * static_cast<double>(lv);
+}
+
+int GameState::satelliteCount() const {
+    return levelOf(UpgradeID::SATELLITE);
+}
+
 float GameState::critChance() const {
     return clamp(levelOf(UpgradeID::CRIT_CHANCE) * 0.05f, 0.f, 0.95f);
 }
@@ -463,7 +595,7 @@ float GameState::fuelPassiveDrain() const {
 float GameState::fuelMoveDrain() const {
     const float base = 2.f;
     const float eff  = 1.f - levelOf(UpgradeID::FUEL_EFFICIENCY) * 0.05f;
-    return base * std::max(0.1f, eff);
+    return base * std::max(0.1f, eff) * speedEfficiencyMoveMult();
 }
 
 float GameState::fuelShootDrain() const {
@@ -486,7 +618,12 @@ float GameState::warpFuelRefillChance() const {
 }
 
 float GameState::fuelTurretDrain() const {
-    return 0.4f * static_cast<float>(turretCount());
+    const int n = turretCount();
+    if (n <= 0)
+        return 0.f;
+    const float base = 0.4f * static_cast<float>(n);
+    const float eff  = 1.f - levelOf(UpgradeID::TURRET_FUEL_DRAIN) * 0.12f;
+    return base * std::max(0.2f, eff);
 }
 
 float GameState::oreValueMult() const {
@@ -963,6 +1100,7 @@ void GameState::reset() {
     prestigeCount = 0;
     oreThisLevel = 0.0;
     difficulty   = Difficulty::Medium;
+    targetMode   = TargetMode::NEAREST;
     lives        = maxLives();
     keys         = 0;
     chestLevels.fill(0);
@@ -1079,6 +1217,8 @@ bool GameState::save(const std::string& path) const {
     f.write(reinterpret_cast<const char*>(&bonusR), sizeof(bonusR));
     const uint8_t meteorB = meteorDestroyerUnlocked ? 1u : 0u;
     f.write(reinterpret_cast<const char*>(&meteorB), sizeof(meteorB));
+    const uint8_t tm = static_cast<uint8_t>(targetMode);
+    f.write(reinterpret_cast<const char*>(&tm), sizeof(tm));
     return f.good();
 }
 
@@ -1177,6 +1317,10 @@ void sanitizeLoadedState(GameState& s) {
             s.bonusZoneRarity = OreRarity::COMMON;
         }
     }
+
+    const int maxMode = s.unlockedTargetModeCount();
+    if (static_cast<int>(s.targetMode) >= maxMode)
+        s.targetMode = TargetMode::NEAREST;
 }
 
 } // namespace
@@ -1226,6 +1370,20 @@ bool GameState::load(const std::string& path) {
             f.read(reinterpret_cast<char*>(&upgradeLevels[static_cast<std::size_t>(i)]),
                    sizeof(int));
         for (int i = LEGACY_UPGRADE_SAVE_COUNT_V20;
+             i < static_cast<int>(UpgradeID::UPGRADE_COUNT); ++i)
+            upgradeLevels[static_cast<std::size_t>(i)] = 0;
+    } else if (ver < 22) {
+        for (int i = 0; i < LEGACY_UPGRADE_SAVE_COUNT_V21; ++i)
+            f.read(reinterpret_cast<char*>(&upgradeLevels[static_cast<std::size_t>(i)]),
+                   sizeof(int));
+        for (int i = LEGACY_UPGRADE_SAVE_COUNT_V21;
+             i < static_cast<int>(UpgradeID::UPGRADE_COUNT); ++i)
+            upgradeLevels[static_cast<std::size_t>(i)] = 0;
+    } else if (ver < 23) {
+        for (int i = 0; i < LEGACY_UPGRADE_SAVE_COUNT_V22; ++i)
+            f.read(reinterpret_cast<char*>(&upgradeLevels[static_cast<std::size_t>(i)]),
+                   sizeof(int));
+        for (int i = LEGACY_UPGRADE_SAVE_COUNT_V22;
              i < static_cast<int>(UpgradeID::UPGRADE_COUNT); ++i)
             upgradeLevels[static_cast<std::size_t>(i)] = 0;
     } else {
@@ -1301,6 +1459,13 @@ bool GameState::load(const std::string& path) {
         uint8_t meteorB = 0;
         f.read(reinterpret_cast<char*>(&meteorB), sizeof(meteorB));
         meteorDestroyerUnlocked = (meteorB != 0);
+    }
+    targetMode = TargetMode::NEAREST;
+    if (ver >= 23) {
+        uint8_t tm = 0;
+        f.read(reinterpret_cast<char*>(&tm), sizeof(tm));
+        if (tm < static_cast<uint8_t>(TargetMode::TARGET_MODE_COUNT))
+            targetMode = static_cast<TargetMode>(tm);
     }
     highestZoneReached = std::max(1, currentLevel);
     if (ver >= 20)

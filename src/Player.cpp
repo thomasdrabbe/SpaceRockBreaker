@@ -19,8 +19,64 @@ void Player::takeDamage(float dmg) {
         m_hp = 0.f;
 }
 
+void Player::applyDamage(float dmg,
+                          float shieldMaxHp,
+                          float shieldRechargePerSec,
+                          float shieldRechargeDelaySec,
+                          int   shieldExtraHits) {
+    (void)shieldRechargePerSec;
+    (void)shieldRechargeDelaySec;
+    if (dmg <= 0.f)
+        return;
+
+    m_shieldDelayT = shieldRechargeDelaySec;
+
+    if (m_shieldHits > 0) {
+        --m_shieldHits;
+        return;
+    }
+
+    if (m_shieldHp > 0.f && shieldMaxHp > 0.f) {
+        const float absorbed = std::min(m_shieldHp, dmg);
+        m_shieldHp -= absorbed;
+        dmg -= absorbed;
+        if (m_shieldHp <= 0.f) {
+            m_shieldHp   = 0.f;
+            m_shieldHits = 0;
+        }
+    }
+
+    if (dmg > 0.f)
+        takeDamage(dmg);
+}
+
+void Player::updateShield(float dt,
+                           float shieldMaxHp,
+                           float shieldRechargePerSec,
+                           float shieldRechargeDelaySec,
+                           int   shieldExtraHits) {
+    m_shieldMax = shieldMaxHp;
+    if (shieldMaxHp <= 0.f) {
+        m_shieldHp     = 0.f;
+        m_shieldHits   = 0;
+        m_shieldDelayT = 0.f;
+        return;
+    }
+    if (m_shieldHp < shieldMaxHp && m_shieldDelayT > 0.f)
+        m_shieldDelayT = std::max(0.f, m_shieldDelayT - dt);
+    if (m_shieldHp < shieldMaxHp && m_shieldDelayT <= 0.f
+        && shieldRechargePerSec > 0.f) {
+        m_shieldHp = std::min(shieldMaxHp,
+                              m_shieldHp + shieldRechargePerSec * dt);
+    }
+    if (m_shieldHp >= shieldMaxHp - 0.5f && shieldMaxHp > 0.f)
+        m_shieldHits = 1 + shieldExtraHits;
+}
+
 void Player::resetHp() {
     m_hp = m_maxHp;
+    if (m_shieldMax > 0.f)
+        m_shieldHp = m_shieldMax;
 }
 
 void Player::addFuel(float amount) {
@@ -78,6 +134,7 @@ void Player::update(float            dt,
                      float            fuelMoveDrain,
                      float            fuelShootDrain,
                      float            fuelTurretDrain,
+                     TargetMode       targetMode,
                      AsteroidManager& asteroids,
                      BulletManager&   bullets,
                      ParticleSystem&  particles) {
@@ -140,7 +197,7 @@ void Player::update(float            dt,
     updateHpRegen(dt);
 
     // ── Auto-aim ──────────────────────────────────────────
-    Asteroid* target = asteroids.nearest(pos);
+    Asteroid* target = asteroids.pickTarget(targetMode, pos);
 
     if (target) {
         float desired = toDeg(angleTo(pos, target->pos));

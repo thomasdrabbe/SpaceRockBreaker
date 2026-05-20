@@ -22,8 +22,21 @@ public:
     float hp() const { return m_hp; }
     float maxHp() const { return m_maxHp; }
     void  takeDamage(float dmg);
+    /// Shield stats van GameState; rest gaat naar HP.
+    void  applyDamage(float dmg,
+                      float shieldMaxHp,
+                      float shieldRechargePerSec,
+                      float shieldRechargeDelaySec,
+                      int   shieldExtraHits);
     void  resetHp();
     void  updateHpRegen(float dt);
+    void  updateShield(float dt,
+                       float shieldMaxHp,
+                       float shieldRechargePerSec,
+                       float shieldRechargeDelaySec,
+                       int   shieldExtraHits);
+    float shieldHp() const { return m_shieldHp; }
+    float shieldMaxHp() const { return m_shieldMax; }
 
     float fuel()    const { return m_fuel; }
     float maxFuel() const { return m_maxFuel; }
@@ -56,6 +69,7 @@ public:
                 float            fuelMoveDrain,
                 float            fuelShootDrain,
                 float            fuelTurretDrain,
+                TargetMode       targetMode,
                 AsteroidManager& asteroids,
                 BulletManager&   bullets,
                 ParticleSystem&  particles);
@@ -73,6 +87,10 @@ private:
 
     float m_hp    = 100.f;
     float m_maxHp = 100.f;
+    float m_shieldHp     = 0.f;
+    float m_shieldMax    = 0.f;
+    int   m_shieldHits   = 0;
+    float m_shieldDelayT = 0.f;
     float m_fuel    = 100.f;
     float m_maxFuel = 100.f;
     static constexpr float HP_REGEN_PER_SEC = 5.f;

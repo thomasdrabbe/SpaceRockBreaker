@@ -4,6 +4,8 @@
 #include "Constants.h"
 #include "Particle.h"
 
+class AsteroidManager;
+
 // ─────────────────────────────────────────────────────────────
 //  Single bullet
 // ─────────────────────────────────────────────────────────────
@@ -35,7 +37,10 @@ public:
               ParticleSystem& particles,
               bool            fromTurret = false);
 
-    void update(float dt, float ox, float oy, float areaW, float areaH);
+    void update(float dt, float ox, float oy, float areaW, float areaH,
+                float homingDegPerFrame = 0.f,
+                AsteroidManager* asteroids = nullptr,
+                TargetMode targetMode = TargetMode::NEAREST);
     void draw(sf::RenderTarget& target) const;
 
     std::array<Bullet, MAX_BULLETS>& all() { return m_pool; }
