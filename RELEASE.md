@@ -2,6 +2,22 @@
 
 De launcher vergelijkt de lokale build met `version.txt` op **GitHub `main`** en downloadt bij een hogere versie de **zip**. Gebruik onderstaande checklist zodat de **semver vaststaat** (geen extra patch-bump tijdens de ship-build) en alles op elkaar blijft staan.
 
+## Release vanaf macOS (aanbevolen)
+
+GitHub Actions bouwt Windows automatisch na elke push naar **`main`** (workflow: **Windows release**).
+
+1. Test lokaal op Mac: `./scripts/build-macos.sh`
+2. Zet **`version.txt`** op het nieuwe nummer (bijv. `1.1.39`) — **zelf** verhogen; CI bumpet niet.
+3. Commit je code + `version.txt`, push naar `main`.
+4. Open **GitHub → Actions → Windows release** en wacht tot groen (~10–20 min eerste keer, daarna sneller door cache).
+5. De job commit/pusht **`SpaceRockBreaker.zip`**, **`installer_output/…`** en de versioned zip. Windows-spelers met de launcher krijgen daarna de update.
+
+Je hoeft **geen** Windows-pc meer voor de update-zip. Optioneel: tag `vX.Y.Z` voor een GitHub Release-pagina.
+
+**Let op:** alleen wijzigingen onder `src/`, `version.txt`, enz. triggeren de build (zie `paths` in `.github/workflows/windows-release.yml`). Een commit met alleen documentatie start geen Windows-build.
+
+---
+
 ## Kort: waarom auto-bump uit bij release?
 
 Met `SRB_AUTO_BUMP_VERSION_ON_BUILD=ON` (standaard voor dev) verhoogt elke Release-build de patch in `version.txt` en `installer.iss`. Dat is handig lokaal, maar bij een **geplande release** wil je zelf bepalen welk nummer live gaat. Zet auto-bump daarom **uit**, stel de versie handmatig in, bouw één keer, commit/push/tag, en zet daarna auto-bump weer **aan**.

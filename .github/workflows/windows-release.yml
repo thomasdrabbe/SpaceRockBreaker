@@ -1,0 +1,112 @@
+# Bouwt Windows Release + update-zips en pusht die naar main.
+# De launcher leest version.txt en SpaceRockBreaker*.zip vanaf GitHub raw/main.
+#
+# Workflow op Mac: verhoog version.txt → commit → push main → wacht op deze job.
+
+name: Windows release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'launcher/**'
+      - 'assets/**'
+      - 'CMakeLists.txt'
+      - 'cmake/**'
+      - 'vcpkg.json'
+      - 'version.txt'
+      - 'installer.iss'
+      - 'CMakePresets.json'
+      - '.github/workflows/windows-release.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: windows-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-publish:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache vcpkg
+        uses: actions/cache@v4
+        with:
+          path: |
+            vcpkg
+            build/vcpkg_installed
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-${{ runner.os }}-
+
+      - name: Setup vcpkg
+        shell: pwsh
+        run: |
+          if (-not (Test-Path vcpkg/vcpkg.exe)) {
+            git clone --depth 1 https://github.com/microsoft/vcpkg.git vcpkg
+            & .\vcpkg\bootstrap-vcpkg.bat
+          }
+
+      - name: Sync installer.iss with version.txt
+        shell: pwsh
+        run: |
+          $v = (Get-Content version.txt -TotalCount 1).Trim()
+          if ($v -notmatch '^\d+\.\d+\.\d+$') { throw "version.txt must be semver x.y.z" }
+          $iss = Get-Content installer.iss -Raw
+          $updated = $iss -replace '#define\s+AppVersion\s+"[^"]+"', "#define AppVersion   `"$v`""
+          if ($updated -ne $iss) {
+            Set-Content installer.iss $updated -NoNewline
+            Write-Host "installer.iss -> $v"
+          }
+
+      - name: Configure (VS2022, no auto-bump)
+        shell: pwsh
+        run: |
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
+            -DCMAKE_TOOLCHAIN_FILE="$env:GITHUB_WORKSPACE/vcpkg/scripts/buildsystems/vcpkg.cmake" `
+            -DSRB_AUTO_BUMP_VERSION_ON_BUILD=OFF
+
+      - name: Build Release
+        run: cmake --build build --config Release
+
+      - name: Package update zips
+        shell: pwsh
+        run: |
+          ./make_update_zip.ps1 -SkipBuild
+          $expected = (Get-Content version.txt -TotalCount 1).Trim()
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [System.IO.Compression.ZipFile]::OpenRead("SpaceRockBreaker.zip")
+          try {
+            $entry = $zip.Entries | Where-Object { $_.FullName -ieq "version.txt" } | Select-Object -First 1
+            if (-not $entry) { throw "SpaceRockBreaker.zip missing version.txt" }
+            $reader = New-Object System.IO.StreamReader($entry.Open())
+            try { $zipVer = $reader.ReadToEnd().Trim() } finally { $reader.Dispose() }
+          } finally { $zip.Dispose() }
+          if ($zipVer -ne $expected) {
+            throw "Zip version '$zipVer' != version.txt '$expected'"
+          }
+          Write-Host "Verified zip version $zipVer"
+
+      - name: Commit and push release artifacts
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add version.txt installer.iss
+          git add SpaceRockBreaker.zip
+          git add "SpaceRockBreaker_*.zip"
+          git add installer_output/
+          if (-not (git diff --staged --quiet)) {
+            $v = (Get-Content version.txt -TotalCount 1).Trim()
+            git commit -m "ci: Windows release $v [skip ci]"
+            git push
+            Write-Host "Pushed Windows release $v"
+          } else {
+            Write-Host "No artifact changes to commit."
+          }

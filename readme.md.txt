@@ -78,11 +78,12 @@ Er is **geen automatisch laden** bij opstarten; alleen via hoofdmenu → **Doorg
 
 ## Windows-only: updates en installer
 
-- **`make_update_zip.ps1`** — release-zip + launcher (PowerShell)
-- **`installer.iss`** — Inno Setup-installer
-- **`SpaceRockLauncher`** — auto-update (alleen Windows)
+- **`SpaceRockLauncher`** — auto-update (alleen Windows); leest `version.txt` + zip van GitHub `main`
+- **GitHub Actions** — workflow **Windows release** bouwt de zip na push (ideaal als je op Mac ontwikkelt)
+- **`make_update_zip.ps1`** — handmatig op Windows (zelfde zip als CI)
+- **`installer.iss`** — Inno Setup-installer (alleen Windows)
 
-Op macOS bouw en run je alleen `SpaceRockBreaker`.
+Op macOS bouw en run je `SpaceRockBreaker` / `.app`. Zie **`RELEASE.md`** voor “release vanaf macOS”.
 
 ## Sneltoetsen in de game
 
