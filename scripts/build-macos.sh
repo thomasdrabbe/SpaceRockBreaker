@@ -43,6 +43,7 @@ cd "$ROOT"
 cmake --preset "$PRESET"
 cmake --build --preset macos-release -j"$(sysctl -n hw.ncpu 2>/dev/null || echo 4)"
 
+cp "$ROOT/version.txt" "$ROOT/build-macos/version.txt"
 "$ROOT/scripts/make-macos-app.sh"
 
 echo ""

@@ -323,68 +323,44 @@ static std::string httpGetText(const std::wstring& host,
 
 static std::string fetchRemoteVersionText() {
     const std::wstring cacheBust = L"?ts=" + std::to_wstring(GetTickCount64());
-    std::vector<std::string> candidates;
 
     auto tryEndpoint = [&](const std::wstring& host,
                            const std::wstring& path,
-                           const char*         label) {
-        std::string v = httpGetText(host, path, true);
-        if (!v.empty()) {
-            candidates.push_back(v);
-            logLine(std::string("Version endpoint ok: ") + label
-                    + " -> " + v);
-        }
+                           const char*         label) -> std::string {
+        std::string v = trim(httpGetText(host, path, true));
+        const auto  t = semverTuple(v);
+        if (!semverParsed(t))
+            return {};
+        logLine(std::string("Version endpoint ok: ") + label + " -> " + v);
+        return v;
     };
 
-    // Vraag meerdere mirrors op. Sommige endpoints kunnen tijdelijk achterlopen
-    // door CDN-cache; we kiezen later de hoogste geldige semver.
-    // refs/heads/main werkt direct na public maken; /main/ kan minuten achterlopen.
-    tryEndpoint(
-        L"raw.githubusercontent.com",
-        LR"(/thomasdrabbe/SpaceRockBreaker/refs/heads/main/version.txt)"
-            + cacheBust,
-        "raw-refs+cachebust");
-    tryEndpoint(
-        L"raw.githubusercontent.com",
-        LR"(/thomasdrabbe/SpaceRockBreaker/refs/heads/main/version.txt)",
-        "raw-refs");
-    tryEndpoint(
+    // Canonical: refs/heads/main + cache-bust (direct na push, geen CDN-lag).
+    const std::wstring refsPath =
+        LR"(/thomasdrabbe/SpaceRockBreaker/refs/heads/main/version.txt)";
+    for (const wchar_t* host : { L"raw.githubusercontent.com" }) {
+        std::string v = tryEndpoint(
+            host, refsPath + cacheBust, "raw-refs+cachebust");
+        if (!v.empty())
+            return v;
+        v = tryEndpoint(host, refsPath, "raw-refs");
+        if (!v.empty())
+            return v;
+    }
+
+    // Fallback mirrors (alleen als canonical faalt).
+    std::string v = tryEndpoint(
         L"raw.githubusercontent.com",
         LR"(/thomasdrabbe/SpaceRockBreaker/main/version.txt)" + cacheBust,
-        "raw+cachebust");
-    tryEndpoint(
-        L"raw.githubusercontent.com",
-        LR"(/thomasdrabbe/SpaceRockBreaker/main/version.txt)",
-        "raw");
-    tryEndpoint(
-        L"github.com",
-        LR"(/thomasdrabbe/SpaceRockBreaker/raw/main/version.txt)",
-        "github-raw-redirect");
-    tryEndpoint(
+        "raw-main+cachebust");
+    if (!v.empty())
+        return v;
+    v = tryEndpoint(
         L"cdn.jsdelivr.net",
         LR"(/gh/thomasdrabbe/SpaceRockBreaker@main/version.txt)" + cacheBust,
         "jsdelivr+cachebust");
-    tryEndpoint(
-        L"cdn.jsdelivr.net",
-        LR"(/gh/thomasdrabbe/SpaceRockBreaker@main/version.txt)",
-        "jsdelivr");
-
-    std::string best;
-    auto        bestT = std::tuple<int, int, int>{ -1, -1, -1 };
-    for (const auto& v : candidates) {
-        const auto t = semverTuple(v);
-        if (!semverParsed(t))
-            continue;
-        if (!semverParsed(bestT) || compareSemver(t, bestT) > 0) {
-            best  = v;
-            bestT = t;
-        }
-    }
-    if (!best.empty())
-        return best;
-
-    if (!candidates.empty())
-        return candidates.front();
+    if (!v.empty())
+        return v;
 
     logLine("Remote version unavailable on all endpoints.");
     return {};
@@ -618,6 +594,14 @@ int main() {
     const bool upToDate = remoteAvailable
         && semverParsed(locT) && semverParsed(remT)
         && compareSemver(remT, locT) <= 0;
+
+    {
+        std::ostringstream oss;
+        oss << "Version check local=" << localVer << " remote="
+            << (remoteVer.empty() ? "(none)" : remoteVer)
+            << " upToDate=" << (upToDate ? "yes" : "no");
+        logLine(oss.str());
+    }
 
     // State 1: up-to-date -> meteen starten zonder venster.
     if (upToDate) {

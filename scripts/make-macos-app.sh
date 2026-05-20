@@ -21,11 +21,12 @@ chmod +x "$APP/Contents/MacOS/SpaceRockBreaker"
 
 # Zelfde layout als platte build: assets naast executable (applicationDirectory)
 cp -R "$BUILD/assets" "$APP/Contents/MacOS/assets"
-cp "$BUILD/version.txt" "$APP/Contents/MacOS/version.txt"
+# Altijd repo-version.txt (build-map kan achterlopen na cmake-bump zonder rebuild).
+cp "$ROOT/version.txt" "$APP/Contents/MacOS/version.txt"
 
 # Ook in Resources (handig voor Finder / toekomstige bundle-paden)
 cp -R "$BUILD/assets" "$APP/Contents/Resources/assets"
-cp "$BUILD/version.txt" "$APP/Contents/Resources/version.txt"
+cp "$ROOT/version.txt" "$APP/Contents/Resources/version.txt"
 
 cat > "$APP/Contents/Info.plist" << PLIST
 <?xml version="1.0" encoding="UTF-8"?>
