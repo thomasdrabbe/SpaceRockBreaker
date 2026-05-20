@@ -488,7 +488,8 @@ void Shop::drawCard(sf::RenderTarget&  target,
     if (meteorLocked) {
         sf::Text lockTxt(*m_font);
         lockTxt.setCharacterSize(std::max(10u, fDesc - 1));
-        lockTxt.setString("Versla alle meteoren van een shower (torrets)");
+        lockTxt.setString(
+            "Vernietig een volledige meteor-shower (schip of turrets)");
         lockTxt.setFillColor(sf::Color(130, 100, 140));
         lockTxt.setPosition({ tx, ty });
         target.draw(lockTxt);

@@ -825,17 +825,29 @@ void AsteroidManager::maintainField(int targetCount,
         spawnRandom(ox, oy, areaW, areaH, hpMult, maxTier);
 }
 
-namespace {
-void tickOneMeteor(Asteroid& a, float dt, float ox, float oy, float areaW,
-                   float areaH, sf::Vector2f playerPos) {
+void AsteroidManager::setMeteorShowerScoring(bool active) {
+    m_meteorShowerScoring = active;
+    if (active)
+        m_meteorBoundsCleared = 0;
+}
+
+void AsteroidManager::resetMeteorShowerScoring() {
+    m_meteorShowerScoring = false;
+    m_meteorBoundsCleared = 0;
+}
+
+void AsteroidManager::tickOneMeteor(Asteroid& a, float dt, float ox, float oy,
+                                    float areaW, float areaH,
+                                    sf::Vector2f playerPos) {
     a.update(dt, playerPos);
     constexpr float pad = 110.f;
     if (a.pos.x + a.radius < ox - pad || a.pos.x - a.radius > ox + areaW + pad
         || a.pos.y + a.radius < oy - pad || a.pos.y - a.radius > oy + areaH + pad) {
+        if (m_meteorShowerScoring)
+            ++m_meteorBoundsCleared;
         a.alive = false;
     }
 }
-} // namespace
 
 void AsteroidManager::updateMeteorsOnly(float dt, float ox, float oy,
                                           float areaW, float areaH,
@@ -879,6 +891,7 @@ void AsteroidManager::clearMeteorSpawnQueue() {
     m_meteorQueueActive        = false;
     m_meteorQueueTotal         = 0;
     m_meteorQueueSpawned       = 0;
+    m_meteorQueueSucceeded     = 0;
     m_lastMeteorSwarmSpawned   = 0;
 }
 
@@ -886,7 +899,7 @@ void AsteroidManager::finishMeteorQueueIfDone() {
     if (m_meteorQueueSpawned < m_meteorQueueTotal)
         return;
     m_meteorQueueActive      = false;
-    m_lastMeteorSwarmSpawned = livingMeteorCount();
+    m_lastMeteorSwarmSpawned = m_meteorQueueSucceeded;
 }
 
 int AsteroidManager::livingMeteorCount() const {
@@ -1006,6 +1019,7 @@ void AsteroidManager::spawnMeteorSwarm(float ox, float oy, float areaW,
     m_meteorQueueMaxOre       = maxOreTier;
     m_meteorQueueTotal        = count;
     m_meteorQueueSpawned      = 0;
+    m_meteorQueueSucceeded    = 0;
     m_meteorQueueLeftCount    = count / 2;
     m_meteorQueueActive       = true;
     m_meteorRectOx            = ox;
@@ -1045,6 +1059,7 @@ bool AsteroidManager::spawnOneQueuedMeteor() {
     a->spawnMeteor(pos, m_meteorQueueVel, m_meteorQueueHpMult,
                    m_meteorQueueMaxOre, m_meteorRadiusScale);
     ++m_meteorQueueSpawned;
+    ++m_meteorQueueSucceeded;
     finishMeteorQueueIfDone();
     refreshAliveCount();
     return true;

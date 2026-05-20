@@ -174,6 +174,10 @@ public:
     bool meteorSpawnQueueActive() const { return m_meteorQueueActive; }
     /// Meteoren die daadwerkelijk uit de laatste shower-queue kwamen.
     int lastMeteorSwarmSpawned() const { return m_lastMeteorSwarmSpawned; }
+    /// Meteoren die het scherm verlieten tijdens een actieve shower-challenge.
+    int meteorBoundsCleared() const { return m_meteorBoundsCleared; }
+    void setMeteorShowerScoring(bool active);
+    void resetMeteorShowerScoring();
 
     /// Actieve zone-boss op het veld (voor boss-muziek).
     bool hasLivingBoss() const;
@@ -200,7 +204,10 @@ private:
     bool          m_meteorQueueActive   = false;
     int           m_meteorQueueTotal    = 0;
     int           m_meteorQueueSpawned  = 0;
+    int           m_meteorQueueSucceeded = 0;
     int           m_lastMeteorSwarmSpawned = 0;
+    int           m_meteorBoundsCleared    = 0;
+    bool          m_meteorShowerScoring    = false;
     int           m_meteorQueueLeftCount = 0;
     sf::Vector2f  m_meteorQueueApex{};
     sf::Vector2f  m_meteorQueueDirL{};
@@ -218,5 +225,7 @@ private:
 
     bool spawnOneQueuedMeteor();
     void finishMeteorQueueIfDone();
+    void tickOneMeteor(Asteroid& a, float dt, float ox, float oy, float areaW,
+                       float areaH, sf::Vector2f playerPos);
     Asteroid* claim();
 };

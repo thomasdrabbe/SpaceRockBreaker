@@ -816,10 +816,14 @@ void MiningScreen::tickMeteorShower(float dt, GameState& state,
     const float interval = state.meteorShowerIntervalSec();
     m_meteorTimeToNext -= dt;
     if (m_meteorTimeToNext <= 0.f) {
+        const int showerTarget = m_asteroids.lastMeteorSwarmSpawned();
+        const int showerCleared =
+            m_meteorShowerKills + m_asteroids.meteorBoundsCleared();
         const bool showerStillActive =
             m_meteorShowerTracking
             && (m_asteroids.meteorSpawnQueueActive()
-                || m_asteroids.livingMeteorCount() > 0);
+                || m_asteroids.livingMeteorCount() > 0
+                || (showerTarget > 0 && showerCleared < showerTarget));
         if (showerStillActive) {
             m_meteorTimeToNext = 0.5f;
             return;
@@ -828,6 +832,7 @@ void MiningScreen::tickMeteorShower(float dt, GameState& state,
         m_meteorShowerSpawnCount = state.meteorShowerMeteorCount();
         m_meteorShowerKills      = 0;
         m_meteorShowerTracking   = true;
+        m_asteroids.setMeteorShowerScoring(true);
         m_asteroids.spawnMeteorSwarm(m_x, m_y, m_w, m_h,
                                      m_meteorShowerSpawnCount,
                                      asteroidHpMult,
@@ -977,6 +982,8 @@ void MiningScreen::tryExplosionOnDestroy(const Asteroid& origin,
         if (distance(epicentre, other.pos) > radius + other.radius)
             continue;
         if (other.hit(dmg, m_particles)) {
+            if (other.isMeteor && m_meteorShowerTracking)
+                ++m_meteorShowerKills;
             m_player.addFuel(state.fuelOnKill());
             m_audio->play(Sfx::Explosion);
             emitAsteroidDestroyedLoot(other, state);
@@ -1072,6 +1079,7 @@ void MiningScreen::clearAll() {
     m_meteorShowerKills       = 0;
     m_meteorShowerTracking    = false;
     m_meteorEasterEggNotify   = false;
+    m_asteroids.resetMeteorShowerScoring();
 }
 
 void MiningScreen::tryCompleteMeteorShowerChallenge(GameState& state) {
@@ -1083,16 +1091,31 @@ void MiningScreen::tryCompleteMeteorShowerChallenge(GameState& state) {
         return;
 
     const int target = m_asteroids.lastMeteorSwarmSpawned();
-    if (m_meteorShowerKills < 1) {
+    const int cleared =
+        m_meteorShowerKills + m_asteroids.meteorBoundsCleared();
+
+    if (target < 1) {
         m_meteorShowerTracking = false;
+        m_asteroids.resetMeteorShowerScoring();
         return;
     }
-    if (target > 0 && m_meteorShowerKills < target)
+    if (cleared < target) {
+        m_meteorShowerTracking = false;
+        m_asteroids.resetMeteorShowerScoring();
         return;
+    }
+    const int minDirectKills =
+        std::max(1, target - m_asteroids.meteorBoundsCleared());
+    if (m_meteorShowerKills < minDirectKills) {
+        m_meteorShowerTracking = false;
+        m_asteroids.resetMeteorShowerScoring();
+        return;
+    }
 
     state.meteorDestroyerUnlocked = true;
     m_meteorEasterEggNotify       = true;
     m_meteorShowerTracking        = false;
+    m_asteroids.resetMeteorShowerScoring();
 }
 
 void MiningScreen::prepareNewRun() {
