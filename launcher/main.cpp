@@ -5,6 +5,7 @@
 
 #include <atomic>
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <cctype>
 #include <filesystem>
@@ -45,10 +46,16 @@ static std::string trim(std::string s) {
 }
 
 static std::string readVersionFile(const fs::path& filePath) {
-    std::ifstream in(filePath);
+    std::ifstream in(filePath, std::ios::binary);
     std::string   line;
     if (!std::getline(in, line))
         return "0.0.0";
+    // UTF-8 BOM (Windows editor / GitHub) breekt semver-parse.
+    if (line.size() >= 3
+        && static_cast<unsigned char>(line[0]) == 0xEF
+        && static_cast<unsigned char>(line[1]) == 0xBB
+        && static_cast<unsigned char>(line[2]) == 0xBF)
+        line.erase(0, 3);
     return trim(line);
 }
 
@@ -366,6 +373,20 @@ static std::string fetchRemoteVersionText() {
     return {};
 }
 
+/// version.txt nieuwer dan game.exe → eerdere update kopieerde alleen het txt-bestand.
+static bool versionFileAheadOfGameExe(const fs::path& dir,
+                                      const fs::path& gameExe) {
+    std::error_code ec;
+    const fs::path  verPath = dir / "version.txt";
+    if (!fs::exists(verPath, ec) || !fs::exists(gameExe, ec))
+        return false;
+    const auto verTime = fs::last_write_time(verPath, ec);
+    const auto exeTime = fs::last_write_time(gameExe, ec);
+    if (ec)
+        return false;
+    return verTime > exeTime;
+}
+
 static bool runExpandArchive(const fs::path& zip, const fs::path& dest) {
     // Geen groen/teal voortgangspaneel: Write-Progress uit + verborgen venster.
     std::wstring cmd =
@@ -591,9 +612,14 @@ int main() {
     const auto locT = semverTuple(localVer);
     const auto remT = semverTuple(remoteVer);
     const bool remoteAvailable = !remoteVer.empty();
-    const bool upToDate = remoteAvailable
+    bool       upToDate        = remoteAvailable
         && semverParsed(locT) && semverParsed(remT)
         && compareSemver(remT, locT) <= 0;
+
+    if (upToDate && versionFileAheadOfGameExe(dir, gameExe)) {
+        logLine("version.txt newer than SpaceRockBreaker.exe - forcing update.");
+        upToDate = false;
+    }
 
     {
         std::ostringstream oss;
@@ -623,6 +649,7 @@ int main() {
     std::atomic<std::uint64_t> downloaded{ 0 };
     std::atomic<std::uint64_t> total{ 0 };
     std::atomic<int>           status{ 0 }; // 0=running, 2=staged, <0 fail
+    std::string                failUi;
     std::string                logLineUi = remoteAvailable
         ? "Update controleren..."
         : "Versiecheck faalde, updatepakket direct proberen...";
@@ -705,8 +732,10 @@ int main() {
         const auto        ilocT        = semverTuple(installedVer);
         const auto        pkgT         = semverTuple(packageVer);
         if (semverParsed(ilocT) && semverParsed(pkgT)
-            && compareSemver(pkgT, ilocT) <= 0) {
-            logLine("Downloaded package is not newer than installed version.");
+            && compareSemver(pkgT, ilocT) <= 0
+            && !versionFileAheadOfGameExe(dir, gameExe)) {
+            logLine("Downloaded package is not newer than installed version (local="
+                    + installedVer + " package=" + packageVer + ").");
             fs::remove_all(stage);
             fs::remove(zipPath);
             status.store(-4);
@@ -714,7 +743,9 @@ int main() {
         }
 
         stagedDir = stage;
-        stagedPackageVer = packageVer;
+        stagedPackageVer = packageVer.empty()
+            ? (remoteVer.empty() ? installedVer : remoteVer)
+            : packageVer;
         fs::remove(zipPath);
         status.store(2);
     });
@@ -738,42 +769,32 @@ int main() {
                 workerJoined  = true;
                 workerRunning = false;
                 if (st == 2) {
-                    const bool inProcOk =
-                        applyStagedUpdateInProcess(dir, stagedDir);
-                    if (!inProcOk) {
-                        logLine("In-process apply failed, fallback to external apply script.");
-                        if (!scheduleApplyAndStart(
-                                dir, stagedDir, gameExe, stagedPackageVer,
-                                GetCurrentProcessId())) {
-                            startGame(gameExe);
-                            return 0;
-                        }
-                        return 0;
-                    }
-                    const std::string appliedVer = readLocalVersion(dir);
-                    if (appliedVer != stagedPackageVer) {
-                        logLine("In-process apply version mismatch, fallback to external apply script.");
-                        if (!scheduleApplyAndStart(
-                                dir, stagedDir, gameExe, stagedPackageVer,
-                                GetCurrentProcessId())) {
-                            startGame(gameExe);
-                            return 0;
-                        }
-                        return 0;
-                    }
-                    // Ensure launcher binary itself is also refreshed after this process exits.
+                    // Altijd robocopy na launcher-exit: betrouwbaarder dan
+                    // in-process (game.exe/launcher.exe locks, DLLs).
+                    logLine("Scheduling robocopy apply for v"
+                            + stagedPackageVer);
                     if (!scheduleApplyAndStart(
                             dir, stagedDir, gameExe, stagedPackageVer,
                             GetCurrentProcessId())) {
-                        fs::remove_all(stagedDir);
-                        startGame(gameExe);
+                        failUi = "Update kon niet worden toegepast.";
+                        logLine("scheduleApplyAndStart failed.");
+                    } else {
                         return 0;
                     }
-                    return 0;
+                } else if (st == -1) {
+                    failUi = "Download mislukt. Controleer internet.";
+                    logLine("Update failed: download.");
+                } else if (st == -2) {
+                    failUi = "Zip uitpakken mislukt.";
+                    logLine("Update failed: expand archive.");
+                } else if (st == -4) {
+                    failUi = "Pakket niet nieuwer (local "
+                             + localVer + ").";
+                    logLine("Update failed: package not newer.");
                 } else {
-                    logLine("Update check fell back to start game.");
-                    startGame(gameExe);
-                    return 0;
+                    failUi = "Update mislukt (code "
+                             + std::to_string(st) + ").";
+                    logLine("Update failed: status=" + std::to_string(st));
                 }
             }
         }
@@ -844,15 +865,33 @@ int main() {
 
         sf::Text lg(font);
         lg.setCharacterSize(11);
-        lg.setString(logLineUi);
-        lg.setFillColor(sf::Color(80, 90, 110));
+        lg.setString(failUi.empty() ? logLineUi : failUi);
+        lg.setFillColor(failUi.empty() ? sf::Color(80, 90, 110)
+                                       : sf::Color(255, 120, 90));
         const auto lb = lg.getLocalBounds();
         lg.setPosition({
             240.f - (lb.position.x + lb.size.x * 0.5f),
             154.f - lb.position.y });
         window.draw(lg);
 
+        if (!failUi.empty()) {
+            sf::Text hint(font);
+            hint.setCharacterSize(10);
+            hint.setString("Zie launcher_log.txt in de installatiemap.");
+            hint.setFillColor(sf::Color(140, 150, 170));
+            const auto hb = hint.getLocalBounds();
+            hint.setPosition({
+                240.f - (hb.position.x + hb.size.x * 0.5f),
+                172.f - hb.position.y });
+            window.draw(hint);
+        }
+
         window.display();
+
+        if (!failUi.empty()) {
+            std::this_thread::sleep_for(std::chrono::seconds(8));
+            window.close();
+        }
     }
 
     if (!workerJoined && worker.joinable())
