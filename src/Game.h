@@ -189,7 +189,7 @@ private:
     // ── Input ─────────────────────────────────────────────
     void onMouseClick (sf::Vector2f pos,
                        sf::Mouse::Button btn);
-    void onMouseScroll(float delta, sf::Vector2f pos);
+    void onMouseScroll(float delta, sf::Vector2f pos, bool shiftHeld = false);
     void onKeyPress(sf::Keyboard::Key key,
                     bool                 ctrl,
                     bool                 shift);

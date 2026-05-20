@@ -434,8 +434,10 @@ void Game::processEvents() {
 
         if (!m_showMainMenu && m_activeTab == Tab::SKILL_TREE) {
             if (const auto* e = event->getIf<sf::Event::MouseMoved>()) {
-                m_skillTree.setMousePos(
-                    mapPixelToUi(m_window, sf::Vector2i(e->position)));
+                const sf::Vector2f pos =
+                    mapPixelToUi(m_window, sf::Vector2i(e->position));
+                m_skillTree.setMousePos(pos);
+                m_skillTree.handlePointerMove(pos);
             }
         }
         if (!m_showMainMenu && m_activeTab == Tab::CHESTS) {
@@ -472,13 +474,26 @@ void Game::processEvents() {
                  event->getIf<sf::Event::MouseButtonPressed>()) {
             sf::Vector2f pos =
                 mapPixelToUi(m_window, sf::Vector2i(e->position));
-            onMouseClick(pos, e->button);
+            if (!m_showMainMenu && m_activeTab == Tab::SKILL_TREE
+                && m_skillTree.handlePointerDown(pos)) {
+                // scrollbalk-drag; geen node-koop
+            } else {
+                onMouseClick(pos, e->button);
+            }
+        }
+        else if (const auto* e =
+                 event->getIf<sf::Event::MouseButtonReleased>()) {
+            if (!m_showMainMenu && m_activeTab == Tab::SKILL_TREE)
+                m_skillTree.handlePointerUp();
         }
         else if (const auto* e =
                  event->getIf<sf::Event::MouseWheelScrolled>()) {
             sf::Vector2f pos =
                 mapPixelToUi(m_window, sf::Vector2i(e->position));
-            onMouseScroll(e->delta, pos);
+            const bool shift =
+                sf::Keyboard::isKeyPressed(sf::Keyboard::Key::LShift)
+                || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::RShift);
+            onMouseScroll(e->delta, pos, shift);
         }
         else if (const auto* e =
                  event->getIf<sf::Event::KeyPressed>()) {
@@ -1220,9 +1235,9 @@ void Game::onMouseClick(sf::Vector2f pos, sf::Mouse::Button btn) {
 // ═════════════════════════════════════════════════════════════
 //  onMouseScroll
 // ═════════════════════════════════════════════════════════════
-void Game::onMouseScroll(float delta, sf::Vector2f pos) {
+void Game::onMouseScroll(float delta, sf::Vector2f pos, bool shiftHeld) {
     if (m_activeTab == Tab::SKILL_TREE)
-        m_skillTree.handleScroll(-delta, pos);
+        m_skillTree.handleScroll(-delta, pos, shiftHeld);
     if (m_activeTab == Tab::CHESTS)
         m_chest.scrollBy(-delta * 30.f);
 }

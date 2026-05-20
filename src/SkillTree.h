@@ -28,7 +28,11 @@ public:
               bool              seeThroughMiningBackdrop = false) const;
 
     bool handleClick(sf::Vector2f pos, GameState& state);
-    void handleScroll(float delta, sf::Vector2f pos);
+    void handleScroll(float delta, sf::Vector2f pos, bool shiftHeld = false);
+    /// Scrollbalk of leeg gebied: true = geen node-koop op deze klik.
+    bool handlePointerDown(sf::Vector2f pos);
+    void handlePointerMove(sf::Vector2f pos);
+    void handlePointerUp();
     void setMousePos(sf::Vector2f pos) { m_mousePos = pos; }
     void resetScroll();
 
@@ -75,6 +79,23 @@ private:
                      sf::Vector2f          nodePos) const;
 
     void updateScrollLimits() const;
+    void drawScrollBars(sf::RenderTarget& target) const;
+    float scrollBarThickness() const;
+    float viewportW() const;
+    float viewportH() const;
+    bool  scrollNeededX() const;
+    bool  scrollNeededY() const;
+    sf::FloatRect hTrackBounds() const;
+    sf::FloatRect vTrackBounds() const;
+    sf::FloatRect hThumbBounds() const;
+    sf::FloatRect vThumbBounds() const;
+    void setScrollFromHThumbCenter(float thumbCenterX);
+    void setScrollFromVThumbCenter(float thumbCenterY);
+
     mutable float m_minScrollX = 0.f;
     mutable float m_minScrollY = 0.f;
+    mutable float m_contentW   = 0.f;
+    mutable float m_contentH   = 0.f;
+    int           m_dragAxis   = 0; // 0 none, 1 horizontal, 2 vertical
+    float         m_dragGrabOffset = 0.f;
 };

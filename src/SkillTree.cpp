@@ -92,6 +92,8 @@ void SkillTreeScreen::init(sf::Font& font,
 void SkillTreeScreen::resetScroll() {
     m_scrollX = 0.f;
     m_scrollY = 0.f;
+    m_dragAxis = 0;
+    m_dragGrabOffset = 0.f;
     updateScrollLimits();
 }
 
@@ -102,12 +104,141 @@ void SkillTreeScreen::updateScrollLimits() const {
         maxGX = std::max(maxGX, n.gridX);
         maxGY = std::max(maxGY, n.gridY);
     }
-    const float contentW =
+    m_contentW =
         panelPad() + static_cast<float>(maxGX) * gridStepX() + nodeW() + panelPad();
-    const float contentH =
+    m_contentH =
         panelPad() + static_cast<float>(maxGY) * gridStepY() + nodeH() + panelPad();
-    m_minScrollX = std::min(0.f, m_w - contentW);
-    m_minScrollY = std::min(0.f, m_h - contentH);
+    m_minScrollX = std::min(0.f, viewportW() - m_contentW);
+    m_minScrollY = std::min(0.f, viewportH() - m_contentH);
+    m_scrollX = std::clamp(m_scrollX, m_minScrollX, 0.f);
+    m_scrollY = std::clamp(m_scrollY, m_minScrollY, 0.f);
+}
+
+float SkillTreeScreen::scrollBarThickness() const {
+    return std::round(14.f * m_uiScale);
+}
+
+float SkillTreeScreen::viewportW() const {
+    const float bar = scrollBarThickness();
+    return std::max(0.f, m_w - (scrollNeededY() ? bar : 0.f));
+}
+
+float SkillTreeScreen::viewportH() const {
+    const float bar = scrollBarThickness();
+    return std::max(0.f, m_h - (scrollNeededX() ? bar : 0.f));
+}
+
+bool SkillTreeScreen::scrollNeededX() const {
+    const float bar = scrollBarThickness();
+    return m_contentW > m_w - bar + 0.5f;
+}
+
+bool SkillTreeScreen::scrollNeededY() const {
+    const float bar = scrollBarThickness();
+    return m_contentH > m_h - bar + 0.5f;
+}
+
+sf::FloatRect SkillTreeScreen::hTrackBounds() const {
+    if (!scrollNeededX())
+        return {};
+    const float bar = scrollBarThickness();
+    const float vBar = scrollNeededY() ? bar : 0.f;
+    return { { m_x, m_y + m_h - bar }, { m_w - vBar, bar } };
+}
+
+sf::FloatRect SkillTreeScreen::vTrackBounds() const {
+    if (!scrollNeededY())
+        return {};
+    const float bar = scrollBarThickness();
+    const float hBar = scrollNeededX() ? bar : 0.f;
+    return { { m_x + m_w - bar, m_y }, { bar, m_h - hBar } };
+}
+
+sf::FloatRect SkillTreeScreen::hThumbBounds() const {
+    const sf::FloatRect track = hTrackBounds();
+    if (track.size.x <= 0.f)
+        return {};
+    const float vw = viewportW();
+    const float minThumb = std::round(28.f * m_uiScale);
+    const float thumbW =
+        std::clamp(track.size.x * (vw / m_contentW), minThumb, track.size.x);
+    const float travel = std::max(0.f, track.size.x - thumbW);
+    const float t =
+        (m_minScrollX < 0.f) ? (m_scrollX / m_minScrollX) : 0.f;
+    return { { track.position.x + travel * t, track.position.y },
+             { thumbW, track.size.y } };
+}
+
+sf::FloatRect SkillTreeScreen::vThumbBounds() const {
+    const sf::FloatRect track = vTrackBounds();
+    if (track.size.y <= 0.f)
+        return {};
+    const float vh = viewportH();
+    const float minThumb = std::round(28.f * m_uiScale);
+    const float thumbH =
+        std::clamp(track.size.y * (vh / m_contentH), minThumb, track.size.y);
+    const float travel = std::max(0.f, track.size.y - thumbH);
+    const float t =
+        (m_minScrollY < 0.f) ? (m_scrollY / m_minScrollY) : 0.f;
+    return { { track.position.x, track.position.y + travel * t },
+             { track.size.x, thumbH } };
+}
+
+void SkillTreeScreen::setScrollFromHThumbCenter(float thumbCenterX) {
+    const sf::FloatRect track = hTrackBounds();
+    const sf::FloatRect thumb = hThumbBounds();
+    if (track.size.x <= 0.f)
+        return;
+    const float travel = std::max(0.f, track.size.x - thumb.size.x);
+    const float t = (travel > 0.f)
+        ? std::clamp((thumbCenterX - track.position.x) / travel, 0.f, 1.f)
+        : 0.f;
+    m_scrollX = m_minScrollX * t;
+}
+
+void SkillTreeScreen::setScrollFromVThumbCenter(float thumbCenterY) {
+    const sf::FloatRect track = vTrackBounds();
+    const sf::FloatRect thumb = vThumbBounds();
+    if (track.size.y <= 0.f)
+        return;
+    const float travel = std::max(0.f, track.size.y - thumb.size.y);
+    const float t = (travel > 0.f)
+        ? std::clamp((thumbCenterY - track.position.y) / travel, 0.f, 1.f)
+        : 0.f;
+    m_scrollY = m_minScrollY * t;
+}
+
+void SkillTreeScreen::drawScrollBars(sf::RenderTarget& target) const {
+    const sf::Color trackFill(22, 28, 48, 240);
+    const sf::Color trackEdge(55, 70, 110, 200);
+    const sf::Color thumbFill(70, 110, 190, 230);
+    const sf::Color thumbEdge(130, 180, 255, 220);
+
+    auto drawTrack = [&](const sf::FloatRect& r) {
+        sf::RectangleShape t(r.size);
+        t.setPosition(r.position);
+        t.setFillColor(trackFill);
+        t.setOutlineColor(trackEdge);
+        t.setOutlineThickness(1.f);
+        target.draw(t);
+    };
+    auto drawThumb = [&](const sf::FloatRect& r) {
+        sf::RectangleShape th(r.size);
+        th.setPosition(r.position);
+        th.setFillColor(thumbFill);
+        th.setOutlineColor(thumbEdge);
+        th.setOutlineThickness(1.f);
+        target.draw(th);
+    };
+
+    if (scrollNeededX()) {
+        drawTrack(hTrackBounds());
+        drawThumb(hThumbBounds());
+    }
+    if (scrollNeededY()) {
+        drawTrack(vTrackBounds());
+        drawThumb(vThumbBounds());
+    }
 }
 
 sf::Vector2f SkillTreeScreen::nodeScreenPos(const UpgradeNodeDef& node) const {
@@ -145,6 +276,8 @@ void SkillTreeScreen::draw(sf::RenderTarget& target,
 
     if (m_hoveredNode)
         drawTooltip(target, *m_hoveredNode, state, nodeScreenPos(*m_hoveredNode));
+
+    drawScrollBars(target);
 }
 
 void SkillTreeScreen::drawConnections(sf::RenderTarget& target,
@@ -391,8 +524,64 @@ bool SkillTreeScreen::handleClick(sf::Vector2f pos, GameState& state) {
     return false;
 }
 
-void SkillTreeScreen::handleScroll(float delta, sf::Vector2f /*pos*/) {
+void SkillTreeScreen::handleScroll(float delta, sf::Vector2f /*pos*/,
+                                   bool shiftHeld) {
     updateScrollLimits();
-    m_scrollY += delta * 48.f * m_uiScale;
-    m_scrollY = std::clamp(m_scrollY, m_minScrollY, 40.f);
+    const float step = 48.f * m_uiScale;
+    if (shiftHeld && scrollNeededX()) {
+        m_scrollX += delta * step;
+        m_scrollX = std::clamp(m_scrollX, m_minScrollX, 0.f);
+    } else {
+        m_scrollY += delta * step;
+        m_scrollY = std::clamp(m_scrollY, m_minScrollY, 0.f);
+    }
+}
+
+bool SkillTreeScreen::handlePointerDown(sf::Vector2f pos) {
+    updateScrollLimits();
+    m_dragAxis = 0;
+
+    if (scrollNeededX()) {
+        const sf::FloatRect thumb = hThumbBounds();
+        const sf::FloatRect track = hTrackBounds();
+        if (thumb.contains(pos)) {
+            m_dragAxis = 1;
+            m_dragGrabOffset = pos.x - (thumb.position.x + thumb.size.x * 0.5f);
+            return true;
+        }
+        if (track.contains(pos)) {
+            setScrollFromHThumbCenter(pos.x - m_dragGrabOffset);
+            m_dragAxis = 1;
+            m_dragGrabOffset = 0.f;
+            return true;
+        }
+    }
+    if (scrollNeededY()) {
+        const sf::FloatRect thumb = vThumbBounds();
+        const sf::FloatRect track = vTrackBounds();
+        if (thumb.contains(pos)) {
+            m_dragAxis = 2;
+            m_dragGrabOffset = pos.y - (thumb.position.y + thumb.size.y * 0.5f);
+            return true;
+        }
+        if (track.contains(pos)) {
+            setScrollFromVThumbCenter(pos.y - m_dragGrabOffset);
+            m_dragAxis = 2;
+            m_dragGrabOffset = 0.f;
+            return true;
+        }
+    }
+    return false;
+}
+
+void SkillTreeScreen::handlePointerMove(sf::Vector2f pos) {
+    if (m_dragAxis == 1)
+        setScrollFromHThumbCenter(pos.x - m_dragGrabOffset);
+    else if (m_dragAxis == 2)
+        setScrollFromVThumbCenter(pos.y - m_dragGrabOffset);
+}
+
+void SkillTreeScreen::handlePointerUp() {
+    m_dragAxis = 0;
+    m_dragGrabOffset = 0.f;
 }
