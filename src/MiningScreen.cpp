@@ -1037,20 +1037,6 @@ void MiningScreen::collectAllLooseOre(GameState& state) {
         state.addOre(dummy);
 }
 
-bool MiningScreen::handleTargetHudClick(sf::Vector2f pos, GameState& state) {
-    if (state.levelOf(UpgradeID::TARGET_PRIORITY) < 1)
-        return false;
-    if (m_targetBtnL.contains(pos)) {
-        state.cycleTargetMode(-1);
-        return true;
-    }
-    if (m_targetBtnR.contains(pos)) {
-        state.cycleTargetMode(1);
-        return true;
-    }
-    return false;
-}
-
 // ═════════════════════════════════════════════════════════════
 //  collectAllOre
 // ═════════════════════════════════════════════════════════════
@@ -1646,45 +1632,6 @@ void MiningScreen::drawHUD(sf::RenderTarget& target,
     zoneLabel.setFillColor(sf::Color(180, 210, 255));
     zoneLabel.setPosition({ m_x + 8.f, m_y + 8.f });
     target.draw(zoneLabel);
-
-    if (state.levelOf(UpgradeID::TARGET_PRIORITY) >= 1) {
-        const float cy = m_y + 36.f;
-        const float cx = m_x + m_w * 0.5f;
-        const float bw = 28.f;
-        const float bh = 22.f;
-        m_targetBtnL = sf::FloatRect({ cx - 120.f, cy }, { bw, bh });
-        m_targetBtnR = sf::FloatRect({ cx + 120.f - bw, cy }, { bw, bh });
-
-        auto drawBtn = [&](const sf::FloatRect& r, const char* label) {
-            sf::RectangleShape box(sf::Vector2f(r.size.x, r.size.y));
-            box.setPosition({ r.position.x, r.position.y });
-            box.setFillColor(sf::Color(30, 40, 70, 200));
-            box.setOutlineColor(sf::Color(100, 160, 255, 180));
-            box.setOutlineThickness(1.f);
-            target.draw(box);
-            sf::Text t(*m_font);
-            t.setString(label);
-            t.setCharacterSize(14);
-            t.setFillColor(sf::Color(200, 220, 255));
-            const auto lb = t.getLocalBounds();
-            t.setPosition({
-                r.position.x + (r.size.x - lb.size.x) * 0.5f - lb.position.x,
-                r.position.y + (r.size.y - lb.size.y) * 0.5f - lb.position.y });
-            target.draw(t);
-        };
-        drawBtn(m_targetBtnL, "<");
-        drawBtn(m_targetBtnR, ">");
-
-        sf::Text modeT(*m_font);
-        modeT.setString(state.targetModeLabel());
-        modeT.setCharacterSize(13);
-        modeT.setFillColor(sf::Color(160, 200, 255));
-        const auto mb = modeT.getLocalBounds();
-        modeT.setPosition({
-            cx - mb.size.x * 0.5f - mb.position.x,
-            cy + (bh - mb.size.y) * 0.5f - mb.position.y });
-        target.draw(modeT);
-    }
 
     if (state.shieldMaxHp() > 0.f) {
         const float sw = 70.f;

@@ -1198,8 +1198,7 @@ void Game::onMouseClick(sf::Vector2f pos, sf::Mouse::Button btn) {
         }
     }
 
-    if (m_activeTab == Tab::MINING && m_runMode == RunMode::RUNNING
-        && m_mining.handleTargetHudClick(pos, m_state)) {
+    if (handleTargetPriorityClick(pos)) {
         m_audio->play(Sfx::UiClick);
         return;
     }
@@ -1619,6 +1618,122 @@ void Game::drawSidePanel() const {
     css << "+ " << std::fixed << std::setprecision(0) << g << " on prestige";
     drawText(css.str(), tx, ty, fSmall, sf::Color(150, 90, 240));
 }
+
+bool Game::shouldShowTargetPriorityPanel() const {
+    return m_activeTab == Tab::MINING && !m_showMainMenu
+        && m_state.levelOf(UpgradeID::TARGET_PRIORITY) >= 1;
+}
+
+float Game::targetPriorityPanelHeight() const {
+    return std::round(72.f * m_scale);
+}
+
+sf::FloatRect Game::targetPriorityPanelBounds() const {
+    if (!shouldShowTargetPriorityPanel())
+        return sf::FloatRect({ 0.f, 0.f }, { 0.f, 0.f });
+    const float px   = m_scrW - m_sideW + 14.f;
+    const float bw   = m_sideW - 28.f;
+    const float topY =
+        sidePanelAfterPrestigeHintBottomY() + std::round(10.f * m_scale);
+    return sf::FloatRect({ px, topY }, { bw, targetPriorityPanelHeight() });
+}
+
+void Game::drawTargetPriorityPanel() const {
+    if (!shouldShowTargetPriorityPanel())
+        return;
+
+    const sf::FloatRect panel = targetPriorityPanelBounds();
+    const float         pad   = std::round(8.f * m_scale);
+    const float         btnW  = std::round(44.f * m_scale);
+    const float         btnH  = std::round(40.f * m_scale);
+    const float         rowY  =
+        panel.position.y + panel.size.y - btnH - pad;
+
+    m_targetBtnL = sf::FloatRect(
+        { panel.position.x + pad, rowY }, { btnW, btnH });
+    m_targetBtnR = sf::FloatRect(
+        { panel.position.x + panel.size.x - pad - btnW, rowY },
+        { btnW, btnH });
+
+    sf::RectangleShape box(panel.size);
+    box.setPosition(panel.position);
+    box.setFillColor(sf::Color(16, 22, 44, 235));
+    box.setOutlineColor(sf::Color(80, 130, 220, 210));
+    box.setOutlineThickness(1.5f);
+    m_window.draw(box);
+
+    const unsigned fHead =
+        static_cast<unsigned>(std::round(11.f * m_scale));
+    const unsigned fMode =
+        static_cast<unsigned>(std::round(15.f * m_scale));
+    const unsigned fBtn =
+        static_cast<unsigned>(std::round(20.f * m_scale));
+
+    {
+        sf::Text head(m_font);
+        head.setString("TARGET");
+        head.setCharacterSize(fHead);
+        head.setStyle(sf::Text::Bold);
+        head.setFillColor(sf::Color(120, 165, 255));
+        const auto hb = head.getLocalBounds();
+        head.setPosition({
+            panel.position.x + (panel.size.x - hb.size.x) * 0.5f
+                - hb.position.x,
+            panel.position.y + pad - hb.position.y });
+        m_window.draw(head);
+    }
+
+    auto drawArrowBtn = [&](const sf::FloatRect& r, const char* label) {
+        sf::RectangleShape b(r.size);
+        b.setPosition(r.position);
+        b.setFillColor(sf::Color(28, 38, 68, 240));
+        b.setOutlineColor(sf::Color(110, 170, 255, 200));
+        b.setOutlineThickness(1.5f);
+        m_window.draw(b);
+        sf::Text t(m_font);
+        t.setString(label);
+        t.setCharacterSize(fBtn);
+        t.setStyle(sf::Text::Bold);
+        t.setFillColor(sf::Color(210, 230, 255));
+        const auto lb = t.getLocalBounds();
+        t.setPosition({
+            r.position.x + (r.size.x - lb.size.x) * 0.5f - lb.position.x,
+            r.position.y + (r.size.y - lb.size.y) * 0.5f - lb.position.y });
+        m_window.draw(t);
+    };
+    drawArrowBtn(m_targetBtnL, "<");
+    drawArrowBtn(m_targetBtnR, ">");
+
+    const float midX =
+        (m_targetBtnL.position.x + m_targetBtnL.size.x
+         + m_targetBtnR.position.x)
+        * 0.5f;
+    sf::Text modeT(m_font);
+    modeT.setString(m_state.targetModeLabel());
+    modeT.setCharacterSize(fMode);
+    modeT.setStyle(sf::Text::Bold);
+    modeT.setFillColor(sf::Color(170, 210, 255));
+    const auto mb = modeT.getLocalBounds();
+    modeT.setPosition({
+        midX - mb.size.x * 0.5f - mb.position.x,
+        rowY + (btnH - mb.size.y) * 0.5f - mb.position.y });
+    m_window.draw(modeT);
+}
+
+bool Game::handleTargetPriorityClick(sf::Vector2f pos) {
+    if (!shouldShowTargetPriorityPanel())
+        return false;
+    if (m_targetBtnL.contains(pos)) {
+        m_state.cycleTargetMode(-1);
+        return true;
+    }
+    if (m_targetBtnR.contains(pos)) {
+        m_state.cycleTargetMode(1);
+        return true;
+    }
+    return false;
+}
+
 // ═════════════════════════════════════════════════════════════
 //  draw mainmenu
 // ═════════════════════════════════════════════════════════════
@@ -2667,6 +2782,7 @@ sf::FloatRect Game::runRetreatButtonBounds() const {
 
 void Game::drawSidePanelAuxButtons() const {
     const bool st = hubMiningBackdropTransparent();
+    drawTargetPriorityPanel();
     if (shouldShowPlinkoSideDrop()) {
         sf::FloatRect rb = plinkoSideDropButtonBounds();
         const double  oreCost = m_state.plinkoBallOreCost();

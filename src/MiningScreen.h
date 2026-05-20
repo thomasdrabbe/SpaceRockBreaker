@@ -97,9 +97,6 @@ public:
 
     bool hasLivingBoss() const;
 
-    /// Target Priority UI (< >); alleen als upgrade lv >= 1.
-    bool handleTargetHudClick(sf::Vector2f pos, GameState& state);
-
     /// Verzamel alle losse ore (Vacuum Warp).
     void collectAllLooseOre(GameState& state);
 
@@ -221,8 +218,6 @@ private:
     void tryCompleteMeteorShowerChallenge(GameState& state);
     void syncSatellites(const GameState& state);
 
-    mutable sf::FloatRect m_targetBtnL{};
-    mutable sf::FloatRect m_targetBtnR{};
 
     // ── Draw helpers ──────────────────────────────────────
     void drawStarfield(sf::RenderTarget& target, float warpCharge,

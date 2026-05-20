@@ -167,6 +167,13 @@ private:
     void          drawPlinkoUnlockHintBelowDrop(
                        bool seeThroughMiningBackdrop) const;
     sf::FloatRect runRetreatButtonBounds() const;
+    bool          shouldShowTargetPriorityPanel() const;
+    float         targetPriorityPanelHeight() const;
+    sf::FloatRect targetPriorityPanelBounds() const;
+    void          drawTargetPriorityPanel() const;
+    bool          handleTargetPriorityClick(sf::Vector2f pos);
+    mutable sf::FloatRect m_targetBtnL{};
+    mutable sf::FloatRect m_targetBtnR{};
     void          drawSidePanelAuxButtons() const;
     void          retreatRunToBase();
     void syncMiningSystemsFromState(bool rebuildPlinkoBoard,
