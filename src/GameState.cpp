@@ -116,6 +116,10 @@ GameState::chestCatalog = {{
       "Pegs die bij een bal-raak een extra bal spawnen (zelfde ore); "
       "meer niveaus = meer duplicator-pegs (rolls)",
       0 },
+    { "Plinko Multiplier",
+      "Verhoog alle slot multipliers met +10% per level", 0 },
+    { "Plinko Luck",
+      "+5% kans op hogere slots per level", 0 },
 }};
 static_assert(
     GameState::chestCatalog.size()
@@ -460,8 +464,9 @@ int GameState::plinkoRows() const {
 }
 
 float GameState::plinkoMultBonus() const {
-    return (1.f + levelOf(UpgradeID::PLINKO_MULT) * 0.10f)
-           * _crystalPlinkoBonus();
+    const int lv = levelOf(UpgradeID::PLINKO_MULT)
+                 + levelOfChest(ChestUpgradeID::PLINKO_MULT_CHEST);
+    return (1.f + lv * 0.10f) * _crystalPlinkoBonus();
 }
 
 int GameState::maxPlinkoBalls() const {
@@ -470,7 +475,9 @@ int GameState::maxPlinkoBalls() const {
 }
 
 float GameState::plinkoLuck() const {
-    return levelOf(UpgradeID::PLINKO_LUCK) * 0.05f;
+    const int lv = levelOf(UpgradeID::PLINKO_LUCK)
+                 + levelOfChest(ChestUpgradeID::PLINKO_LUCK_CHEST);
+    return lv * 0.05f;
 }
 
 double GameState::plinkoBallOreCost() const {
@@ -489,12 +496,16 @@ int GameState::bulkProcess() const {
 }
 
 bool GameState::autoPlinkoEnabled() const {
-    return levelOf(UpgradeID::AUTO_PLINKO) > 0;
+    return levelOf(UpgradeID::AUTO_PLINKO) > 0 || autoPlinkoUnlockedByBoss();
 }
 
 int GameState::autoPlinkoBallsPerTick() const {
     const int lv = levelOf(UpgradeID::AUTO_PLINKO);
-    return lv > 0 ? lv : 0;
+    if (lv > 0)
+        return lv;
+    if (autoPlinkoUnlockedByBoss())
+        return 1;
+    return 0;
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -792,6 +803,8 @@ int nextBossZoneAfter(int beatenZone) {
 
 void GameState::registerBossDefeated() {
     const int z = nextBossMilestone;
+    if (z == 3)
+        pendingAutoPlinkoBossNotif = true;
     double bonus = 6.0 + static_cast<double>(z) * 2.0
                  + std::floor(std::sqrt(static_cast<double>(z * z)));
     const double gain = std::max(8.0, bonus);
@@ -1119,9 +1132,13 @@ bool GameState::load(const std::string& path) {
            prestigeLevels.size() * sizeof(int));
     chestLevels.fill(0);
     if (ver >= 7) {
-        if (ver >= 12) {
+        if (ver >= 18) {
             f.read(reinterpret_cast<char*>(chestLevels.data()),
                    chestLevels.size() * sizeof(int));
+        } else if (ver >= 12) {
+            constexpr int legacyChestCount = 3;
+            f.read(reinterpret_cast<char*>(chestLevels.data()),
+                   legacyChestCount * sizeof(int));
         } else if (ver >= 10) {
             int c0 = 0, c1 = 0;
             f.read(reinterpret_cast<char*>(&c0), sizeof(c0));

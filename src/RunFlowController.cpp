@@ -13,8 +13,10 @@ RunFlowController::RunFlowController(GameState& state,
     , m_rebuildPlinko(std::move(rebuildPlinko))
     , m_resetZoneKeyState(std::move(resetZoneKeyState)) {}
 
-void RunFlowController::syncFromState(bool rebuildPlinkoBoard) {
-    m_mining.clearAll();
+void RunFlowController::syncFromState(bool rebuildPlinkoBoard,
+                                       bool clearMiningField) {
+    if (clearMiningField)
+        m_mining.clearAll();
     m_mining.syncTurrets(m_state);
     if (rebuildPlinkoBoard && m_rebuildPlinko)
         m_rebuildPlinko();

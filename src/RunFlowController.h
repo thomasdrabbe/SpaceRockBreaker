@@ -16,7 +16,7 @@ public:
                       RebuildPlinkoFn rebuildPlinko,
                       ResetZoneKeyStateFn resetZoneKeyState);
 
-    void syncFromState(bool rebuildPlinkoBoard);
+    void syncFromState(bool rebuildPlinkoBoard, bool clearMiningField);
     void startRun();
     void moveToBase();
     void collectRunOreToState();

@@ -165,7 +165,8 @@ private:
     sf::FloatRect runRetreatButtonBounds() const;
     void          drawSidePanelAuxButtons() const;
     void          retreatRunToBase();
-    void          syncMiningSystemsFromState(bool rebuildPlinkoBoard);
+    void syncMiningSystemsFromState(bool rebuildPlinkoBoard,
+                                    bool clearMiningField = false);
     void          collectRunOreToState();
     void          moveRunToBaseState();
 

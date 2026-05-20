@@ -29,12 +29,10 @@ const std::vector<UpgradeNodeDef> SKILL_TREE_NODES = {
     { UpgradeID::UNLOCK_TITANIUM,8, 2, UpgradeID::UNLOCK_PLATINUM,1 },
     { UpgradeID::UNLOCK_IRIDIUM, 9, 2, UpgradeID::UNLOCK_TITANIUM,1 },
 
-    { UpgradeID::PLINKO_MULT,    1, 4, UpgradeID::PLINKO_BALLS,   3 },
-    { UpgradeID::PLINKO_LUCK,    2, 4, UpgradeID::PLINKO_MULT,    1 },
     { UpgradeID::AUTO_PLINKO,    3, 4, UpgradeID::PLINKO_BALLS,    5 },
-    { UpgradeID::PLINKO_ROWS,    2, 5, UpgradeID::PLINKO_LUCK,    3 },
+    { UpgradeID::PLINKO_ROWS,    2, 5, UpgradeID::PLINKO_BALLS,    3 },
 
-    { UpgradeID::CREDIT_MULT,    3, 3, UpgradeID::PLINKO_MULT,    1 },
+    { UpgradeID::CREDIT_MULT,    3, 3, UpgradeID::PLINKO_BALLS,    1 },
     { UpgradeID::BULK_PROCESS,   4, 3, UpgradeID::CREDIT_MULT,    3 },
 
     { UpgradeID::METEOR_DAMAGE,  5, 0, UpgradeID::SPLIT_SHOT,     1 },
@@ -227,6 +225,18 @@ void SkillTreeScreen::drawNode(sf::RenderTarget&     target,
         lvText.setFillColor(sf::Color(120, 200, 120));
         lvText.setPosition({ pos.x + 8.f, pos.y + 28.f });
         target.draw(lvText);
+    }
+
+    if (node.id == UpgradeID::AUTO_PLINKO && state.autoPlinkoUnlockedByBoss()
+        && lv == 0) {
+        sf::Text bossLabel(*m_font);
+        bossLabel.setString("Boss Reward!");
+        bossLabel.setCharacterSize(11);
+        bossLabel.setStyle(sf::Text::Bold);
+        bossLabel.setFillColor(sf::Color(255, 170, 0));
+        bossLabel.setPosition({ pos.x + 8.f, pos.y + 46.f });
+        target.draw(bossLabel);
+        return;
     }
 
     if (unlocked && !maxed) {

@@ -26,7 +26,7 @@ public:
     void  updateHpRegen(float dt);
 
     /// nullptr = vector fallback (development zonder texture).
-    void setShipSprite(const sf::Texture* tex);
+    void setShipSprite(const sf::Texture* tex, float targetH = 112.f);
 
     void update(float            dt,
                 float            fireInterval,

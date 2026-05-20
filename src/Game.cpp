@@ -543,6 +543,11 @@ void Game::update(float dt) {
                           sf::Color(200, 150, 255));
                 m_state.bossCrystalPopup = 0.0;
             }
+            if (m_state.pendingAutoPlinkoBossNotif) {
+                m_state.pendingAutoPlinkoBossNotif = false;
+                pushNotif("Auto-Plinko unlocked!",
+                          sf::Color(120, 220, 255));
+            }
 
             if (m_hitCooldown > 0.f) {
                 m_hitCooldown -= dt;
@@ -565,7 +570,7 @@ void Game::update(float dt) {
                         if (!m_audio->playGameOverMusicOnce())
                             m_audio->play(Sfx::GameOver);
                         m_state.gameOver();
-                        syncMiningSystemsFromState(true);
+                        syncMiningSystemsFromState(true, true);
                         moveRunToBaseState();
                         pushNotif("GAME OVER - terug naar zone 1",
                                   sf::Color(255, 60, 60));
@@ -1842,7 +1847,7 @@ void Game::handleMainMenuClick(sf::Vector2f pos) {
                 static_cast<Difficulty>(static_cast<int>(Difficulty::Easy) + d);
             m_state.lives = m_state.maxLives();
             m_plinko.resetGoldenPegRarityState();
-            syncMiningSystemsFromState(true);
+            syncMiningSystemsFromState(true, true);
             resetPlinkoLayoutWatch();
             resetZoneKeyState();
             m_runMode              = RunMode::BASE;
@@ -2080,7 +2085,7 @@ void Game::handlePrestigeClick(sf::Vector2f pos) {
         } else {
             double gained = m_state.crystalsOnPrestige();
             m_state.doPrestige();
-            syncMiningSystemsFromState(true);
+            syncMiningSystemsFromState(true, true);
             m_prestigeConfirm = false;
 
             std::ostringstream ns;
@@ -2508,10 +2513,11 @@ void Game::retreatRunToBase() {
               sf::Color(160, 220, 255));
 }
 
-void Game::syncMiningSystemsFromState(bool rebuildPlinkoBoard) {
+void Game::syncMiningSystemsFromState(bool rebuildPlinkoBoard,
+                                      bool clearMiningField) {
     if (!m_runFlow)
         return;
-    m_runFlow->syncFromState(rebuildPlinkoBoard);
+    m_runFlow->syncFromState(rebuildPlinkoBoard, clearMiningField);
 }
 
 void Game::collectRunOreToState() {

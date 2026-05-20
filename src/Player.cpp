@@ -28,7 +28,7 @@ void Player::updateHpRegen(float dt) {
         m_hp = std::min(m_maxHp, m_hp + HP_REGEN_PER_SEC * dt);
 }
 
-void Player::setShipSprite(const sf::Texture* tex) {
+void Player::setShipSprite(const sf::Texture* tex, float targetH) {
     m_shipTex = tex;
     if (!tex) {
         m_shipScale  = 1.f;
@@ -43,14 +43,13 @@ void Player::setShipSprite(const sf::Texture* tex) {
         m_hitRadius  = SHIP_RADIUS;
         return;
     }
-    constexpr float targetH = 112.f;
     m_shipScale = targetH / static_cast<float>(sz.y);
     m_muzzleDist = std::max(
         BARREL_LEN,
         m_shipScale * static_cast<float>(sz.y) * 0.48f);
     const float rw =
         m_shipScale * static_cast<float>(std::max(sz.x, sz.y)) * 0.36f;
-    m_hitRadius = std::max(SHIP_RADIUS, rw);
+    m_hitRadius = std::max(SHIP_RADIUS * m_shipScale, rw);
 }
 
 // ═════════════════════════════════════════════════════════════

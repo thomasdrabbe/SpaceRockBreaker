@@ -187,6 +187,19 @@ std::string ChestScreen::formatEffect(ChestUpgradeID id,
         case ChestUpgradeID::PLINKO_DUPLICATOR_PEG:
             return "Duplicator rolls: "
                 + std::to_string(state.chestDuplicatorRollCount());
+        case ChestUpgradeID::PLINKO_MULT_CHEST:
+            return "Slot mult: +"
+                + std::to_string(
+                       (state.levelOfChest(ChestUpgradeID::PLINKO_MULT_CHEST)
+                        + state.levelOf(UpgradeID::PLINKO_MULT))
+                       * 10)
+                + "%";
+        case ChestUpgradeID::PLINKO_LUCK_CHEST:
+            return "Slot luck: +"
+                + std::to_string(
+                       static_cast<int>(
+                           (state.plinkoLuck()) * 100.f))
+                + "%";
         default:
             return "";
     }

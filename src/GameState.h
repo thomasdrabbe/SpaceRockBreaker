@@ -115,6 +115,12 @@ public:
 
     void registerBossDefeated();
 
+    bool autoPlinkoUnlockedByBoss() const {
+        return prestigeCount > 0 || nextBossMilestone > 3;
+    }
+
+    bool pendingAutoPlinkoBossNotif = false;
+
     // ── New computed stats ────────────────────────────────
     OreTier maxOreTier()    const;   // highest unlocked ore tier
     double lastOreValue = 1.0;   // waarde van meest recent gecollecte ore

@@ -46,15 +46,18 @@ public:
     void spawn(AsteroidTier tier,
                sf::Vector2f pos,
                sf::Vector2f vel,
-               float        hpMult = 1.f,
-               OreTier      ot     = OreTier::IRON);
+               float        hpMult       = 1.f,
+               OreTier      ot           = OreTier::IRON,
+               float        radiusScale  = 1.f);
 
     void spawnKey(sf::Vector2f pos, sf::Vector2f vel, float hpMult,
                    OreTier keyOreTier = OreTier::GOLD,
-                   int     forcedKeys = -1);
+                   int     forcedKeys = -1,
+                   float   radiusScale = 1.f);
 
     void spawnBoss(float ox, float oy, float areaW, float areaH,
-                   float hpMult, OreTier lootTier);
+                   float hpMult, OreTier lootTier,
+                   float radiusScale = 1.f);
 
     void spawnMeteor(sf::Vector2f p, sf::Vector2f v,
                       float hpMult, OreTier maxOreTier,
@@ -114,6 +117,7 @@ public:
     void tickMeteorSpawnQueue();
     void clearMeteorSpawnQueue();
     void setMeteorRadiusScale(float scale) { m_meteorRadiusScale = scale; }
+    void setFieldRadiusScale(float scale) { m_fieldRadiusScale = scale; }
     void update(float dt, float ox, float oy, float areaW, float areaH,
                 sf::Vector2f playerPos);
     /// Alleen meteoren integreren + opruimen (bv. mining-tab gepauzeerd op Easy).
@@ -165,6 +169,7 @@ private:
     float         m_meteorRectW  = 0.f;
     float         m_meteorRectH  = 0.f;
     float         m_meteorRadiusScale = 1.f;
+    float         m_fieldRadiusScale  = 1.f;
 
     bool spawnOneQueuedMeteor();
     Asteroid* claim();

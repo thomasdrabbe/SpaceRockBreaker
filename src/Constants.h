@@ -19,6 +19,8 @@ enum class ChestUpgradeID {
     PLINKO_PEG_SIZE = 0,
     PLINKO_SLOT_MULT,
     PLINKO_DUPLICATOR_PEG,
+    PLINKO_MULT_CHEST,
+    PLINKO_LUCK_CHEST,
     CHEST_UPGRADE_COUNT
 };
 
@@ -148,7 +150,7 @@ constexpr float TAB_BAR_H    = 46.f;
 // ─── Save ─────────────────────────────────────────────────────
 const std::string SAVE_FILE = "srb_save.bin"; // legacy (wordt naar slot 0 gemigreerd)
 constexpr int     SAVE_SLOT_COUNT = 3;
-constexpr int     SAVE_VERSION    = 17;
+constexpr int     SAVE_VERSION    = 18;
 /// Aantal `upgradeLevels`-entries in saves vóór METEOR_DAMAGE / METEOR_SIZE.
 constexpr int     LEGACY_UPGRADE_SAVE_COUNT_V16 = 26;
 

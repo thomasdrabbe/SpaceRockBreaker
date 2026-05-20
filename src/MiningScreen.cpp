@@ -101,9 +101,9 @@ void MiningScreen::init(sf::Font& font,
 
     if (m_playerShipTex.loadFromFile(resolveAssetPath("assets/player_ship.png"))) {
         m_playerShipTex.setSmooth(true);
-        m_player.setShipSprite(&m_playerShipTex);
+        m_player.setShipSprite(&m_playerShipTex, m_h * 0.03f);
     } else
-        m_player.setShipSprite(nullptr);
+        m_player.setShipSprite(nullptr, m_h * 0.03f);
 }
 
 void MiningScreen::loadNebulaPngTextures() {
@@ -643,6 +643,8 @@ void MiningScreen::update(float      dt,
     const float meteorSizeBonus =
         1.f + static_cast<float>(state.levelOf(UpgradeID::METEOR_SIZE)) * 0.15f;
     m_asteroids.setMeteorRadiusScale(meteorSizeBonus);
+    const float screenScale = m_h / 900.f;
+    m_asteroids.setFieldRadiusScale(screenScale);
     m_asteroids.maintainField(spawnTarget, m_x, m_y, m_w, m_h, asteroidHp,
                               state.maxOreTier());
     m_asteroids.tickMeteorSpawnQueue();
