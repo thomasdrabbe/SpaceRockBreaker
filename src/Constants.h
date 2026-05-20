@@ -163,6 +163,8 @@ constexpr int     FIRST_BOSS_ZONE       = 5;
 constexpr int     BOSS_ZONE_INTERVAL    = 5;
 /// Zone-knoppen per rij op het basis-paneel (meerdere rijen vanaf zone 6+).
 constexpr int     START_ZONE_BUTTONS_PER_ROW = 8;
+/// Max zones in start-kiezer (voorkomt freeze bij corrupte save).
+constexpr int     START_ZONE_PICKER_MAX_ZONES = 50;
 /// Aantal `upgradeLevels`-entries in saves vóór METEOR_DAMAGE / METEOR_SIZE.
 constexpr int     LEGACY_UPGRADE_SAVE_COUNT_V16 = 26;
 

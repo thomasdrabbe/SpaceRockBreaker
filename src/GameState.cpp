@@ -1138,6 +1138,20 @@ void sanitizeLoadedState(GameState& s) {
         s.highestZoneReached = 1;
     if (s.highestZoneReached < s.currentLevel)
         s.highestZoneReached = s.currentLevel;
+    if (s.highestZoneReached > START_ZONE_PICKER_MAX_ZONES)
+        s.highestZoneReached = START_ZONE_PICKER_MAX_ZONES;
+
+    for (int i = 0; i < static_cast<int>(UpgradeID::UPGRADE_COUNT); ++i) {
+        int& lv = s.upgradeLevels[static_cast<std::size_t>(i)];
+        if (lv < 0)
+            lv = 0;
+        const auto& def =
+            GameState::upgradeCatalog[static_cast<std::size_t>(i)];
+        if (def.maxLevel > 0 && lv > def.maxLevel)
+            lv = def.maxLevel;
+        if (lv > 50'000)
+            lv = 0;
+    }
 
     auto fixNonNegFinite = [](double& v) {
         if (!std::isfinite(v) || v < 0.0)

@@ -31,7 +31,7 @@ StartZonePickerLayout makeStartZonePickerLayout(int  highestReached,
                                                 float cntY,
                                                 float cntH) {
     StartZonePickerLayout L{};
-    L.visibleCount = std::max(0, highestReached);
+    L.visibleCount = std::clamp(highestReached, 0, START_ZONE_PICKER_MAX_ZONES);
     L.rows         = L.visibleCount > 0
         ? (L.visibleCount + L.perRow - 1) / L.perRow
         : 0;
@@ -262,10 +262,22 @@ private:
 //  Constructor
 // ═════════════════════════════════════════════════════════════
 Game::Game()
-    : m_window(sf::VideoMode::getDesktopMode(),
-               sf::String{WINDOW_TITLE},
-               sf::State::Fullscreen)
 {
+#if defined(_WIN32)
+    {
+        const sf::VideoMode desktop = sf::VideoMode::getDesktopMode();
+        m_window.create(desktop, sf::String{WINDOW_TITLE}, sf::State::Fullscreen);
+    }
+    if (!m_window.isOpen()) {
+        m_window.create(sf::VideoMode({1920, 1080}),
+                        sf::String{WINDOW_TITLE},
+                        sf::State::Windowed);
+    }
+#else
+    m_window.create(sf::VideoMode::getDesktopMode(),
+                    sf::String{WINDOW_TITLE},
+                    sf::State::Fullscreen);
+#endif
     m_window.setFramerateLimit(TARGET_FPS);
     {
         // ASCII-titel: em-dash in setTitle crasht SFML/Cocoa op macOS (nil NSString).
@@ -1159,7 +1171,8 @@ void Game::onMouseClick(sf::Vector2f pos, sf::Mouse::Button btn) {
             if (m_state.lives <= 0)
                 m_state.lives = m_state.maxLives();
             m_audio->stopGameOverMusic();
-            const int maxPick = m_state.highestZoneReached;
+            const int maxPick = std::min(m_state.highestZoneReached,
+                                         START_ZONE_PICKER_MAX_ZONES);
             const int startZ =
                 std::clamp(m_selectedStartZone, 1, std::max(1, maxPick));
             m_selectedStartZone = startZ;
@@ -2451,7 +2464,8 @@ void Game::drawMiningBasePanel() const {
         ty += std::round(12.f * m_scale);
     }
 
-    const int maxPick = m_state.highestZoneReached;
+    const int maxPick = std::min(m_state.highestZoneReached,
+                                 START_ZONE_PICKER_MAX_ZONES);
     const int pickZone =
         std::clamp(m_selectedStartZone, 1, std::max(1, maxPick));
     drawMiningStartZoneButtons(pickZone);
