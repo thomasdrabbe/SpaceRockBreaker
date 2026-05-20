@@ -14,6 +14,70 @@ namespace {
 constexpr float CHEST_OVERLAY_SEC = 1.05f;
 constexpr float PLAYER_HIT_HP_COOLDOWN = 0.8f;
 
+struct StartZonePickerLayout {
+    int   visibleCount = 0;
+    int   perRow       = START_ZONE_BUTTONS_PER_ROW;
+    int   rows         = 0;
+    float btnW         = 0.f;
+    float btnH         = 0.f;
+    float gap          = 0.f;
+    float rowGap       = 0.f;
+    float blockTopY    = 0.f;
+    float blockHeight  = 0.f;
+};
+
+StartZonePickerLayout makeStartZonePickerLayout(int  highestReached,
+                                                float scale,
+                                                float cntY,
+                                                float cntH) {
+    StartZonePickerLayout L{};
+    L.visibleCount = std::max(0, highestReached);
+    L.rows         = L.visibleCount > 0
+        ? (L.visibleCount + L.perRow - 1) / L.perRow
+        : 0;
+    L.btnW         = std::round(64.f * scale);
+    L.btnH         = std::round(36.f * scale);
+    L.gap          = std::round(8.f * scale);
+    L.rowGap       = std::round(8.f * scale);
+    L.blockTopY    = cntY + cntH * 0.48f;
+    if (L.rows > 0) {
+        L.blockHeight = static_cast<float>(L.rows) * L.btnH
+                      + static_cast<float>(L.rows - 1) * L.rowGap;
+    }
+    return L;
+}
+
+sf::FloatRect startZoneButtonRect(int                       zone,
+                                  float                     cx,
+                                  const StartZonePickerLayout& L) {
+    if (zone < 1 || zone > L.visibleCount)
+        return {};
+
+    const int index    = zone - 1;
+    const int row      = index / L.perRow;
+    const int col      = index % L.perRow;
+    const int rowStart = row * L.perRow;
+    const int rowEnd   = std::min(rowStart + L.perRow, L.visibleCount);
+    const int rowCount = rowEnd - rowStart;
+    const float rowW =
+        static_cast<float>(rowCount) * L.btnW
+        + static_cast<float>(rowCount - 1) * L.gap;
+    const float left =
+        cx - rowW * 0.5f + static_cast<float>(col) * (L.btnW + L.gap);
+    const float top = L.blockTopY + static_cast<float>(row) * (L.btnH + L.rowGap);
+    return sf::FloatRect({ left, top }, { L.btnW, L.btnH });
+}
+
+float startRunButtonTopY(const StartZonePickerLayout& L,
+                         float scale,
+                         float cntY,
+                         float cntH,
+                         float runBtnH) {
+    if (L.visibleCount <= 0)
+        return cntY + cntH * 0.58f - runBtnH * 0.5f;
+    return L.blockTopY + L.blockHeight + std::round(24.f * scale);
+}
+
 void migrateLegacySaveIfNeeded() {
     for (int s = 0; s < SAVE_SLOT_COUNT; ++s) {
         std::ifstream probe(saveSlotPath(s), std::ios::binary);
@@ -649,7 +713,8 @@ void Game::update(float dt) {
             m_mining.tickMeteorSpawnQueue();
         }
 
-        if (m_activeTab == Tab::MINING && m_state.canWarp()) {
+        if (m_activeTab == Tab::MINING && m_state.canWarp()
+            && !m_mining.hasLivingBoss()) {
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Space)) {
                 // Eén keer SFX per vasthoud (loslaten reset; los van m_warpCharge≈0 float).
                 if (m_warpSfxArmed) {
@@ -675,6 +740,15 @@ void Game::update(float dt) {
                     }
                     m_warpFlashRemain = WARP_FLASH_DURATION_SEC;
                     m_warpSfxArmed    = true;
+
+                    const float warpRefillChance =
+                        m_state.warpFuelRefillChance();
+                    if (warpRefillChance > 0.f
+                        && randFloat(0.f, 1.f) < warpRefillChance) {
+                        m_mining.refillFullFuel(m_state);
+                        pushNotif("Warp refill - full fuel!",
+                                  sf::Color(120, 220, 160));
+                    }
 
                     if (leavingLegBonus) {
                         const double crystalBonus =
@@ -1073,13 +1147,23 @@ void Game::onMouseClick(sf::Vector2f pos, sf::Mouse::Button btn) {
     }
 
     if (m_activeTab == Tab::MINING && m_runMode == RunMode::BASE) {
+        const int zonePick = miningStartZoneAt(pos);
+        if (zonePick > 0) {
+            m_audio->play(Sfx::UiClick);
+            m_selectedStartZone = zonePick;
+            return;
+        }
         if (miningStartRunBounds().contains(pos)) {
             m_audio->play(Sfx::UiClick);
             if (m_state.lives <= 0)
                 m_state.lives = m_state.maxLives();
             m_audio->stopGameOverMusic();
+            const int maxPick = m_state.highestZoneReached;
+            const int startZ =
+                std::clamp(m_selectedStartZone, 1, std::max(1, maxPick));
+            m_selectedStartZone = startZ;
             if (m_runFlow)
-                m_runFlow->startRun();
+                m_runFlow->startRun(startZ);
             pushNotif(std::string("Run gestart - ") + m_state.levelLabel(),
                       sf::Color(120, 220, 255));
             return;
@@ -2226,12 +2310,75 @@ void Game::pushNotif(const std::string& text, sf::Color color, float holdSec) {
 // ═════════════════════════════════════════════════════════════
 //  Basis-paneel (mining-tab wanneer niet in run)
 // ═════════════════════════════════════════════════════════════
+sf::FloatRect Game::miningStartZoneButtonBounds(int zone) const {
+    const StartZonePickerLayout layout = makeStartZonePickerLayout(
+        m_state.highestZoneReached, m_scale, m_cntY, m_cntH);
+    const float cx = m_cntX + m_cntW * 0.5f;
+    return startZoneButtonRect(zone, cx, layout);
+}
+
+int Game::miningStartZoneAt(sf::Vector2f pos) const {
+    const StartZonePickerLayout layout = makeStartZonePickerLayout(
+        m_state.highestZoneReached, m_scale, m_cntY, m_cntH);
+    for (int z = 1; z <= layout.visibleCount; ++z) {
+        const sf::FloatRect rb = miningStartZoneButtonBounds(z);
+        if (rb.size.x > 0.f && rb.contains(pos))
+            return z;
+    }
+    return 0;
+}
+
+void Game::drawMiningStartZoneButtons(int selectedZone) const {
+    const StartZonePickerLayout layout = makeStartZonePickerLayout(
+        m_state.highestZoneReached, m_scale, m_cntY, m_cntH);
+    if (layout.visibleCount <= 0)
+        return;
+
+    const float cx = m_cntX + m_cntW * 0.5f;
+    const float labelY = layout.blockTopY - std::round(18.f * m_scale);
+    const unsigned fLeg =
+        static_cast<unsigned>(std::round(13.f * m_scale));
+    drawText("Startzone (bereikt via warp):",
+             cx - fLeg * 5.8f,
+             labelY,
+             fLeg,
+             sf::Color(150, 175, 210));
+
+    const unsigned fBtn =
+        static_cast<unsigned>(std::round(13.f * m_scale));
+    for (int z = 1; z <= layout.visibleCount; ++z) {
+        const sf::FloatRect rb = startZoneButtonRect(z, cx, layout);
+        const bool selected = (z == selectedZone);
+        sf::RectangleShape btn(rb.size);
+        btn.setPosition(rb.position);
+        btn.setFillColor(selected
+                             ? sf::Color(55, 90, 150, 240)
+                             : sf::Color(28, 38, 68, 220));
+        btn.setOutlineColor(selected
+                                ? sf::Color(140, 210, 255, 240)
+                                : sf::Color(70, 100, 150, 180));
+        btn.setOutlineThickness(selected ? 2.f : 1.f);
+        m_window.draw(btn);
+
+        std::string label = "Z" + std::to_string(z);
+        drawText(label,
+                 rb.position.x + rb.size.x * 0.5f - fBtn * 0.55f,
+                 rb.position.y + rb.size.y * 0.5f - fBtn * 0.45f,
+                 fBtn,
+                 selected ? sf::Color(230, 245, 255)
+                          : sf::Color(180, 195, 220),
+                 true);
+    }
+}
+
 sf::FloatRect Game::miningStartRunBounds() const {
+    const StartZonePickerLayout layout = makeStartZonePickerLayout(
+        m_state.highestZoneReached, m_scale, m_cntY, m_cntH);
     float bw = std::round(320.f * m_scale);
     float bh = std::round(54.f * m_scale);
     float cx = m_cntX + m_cntW * 0.5f;
-    float cy = m_cntY + m_cntH * 0.58f;
-    return sf::FloatRect({ cx - bw * 0.5f, cy - bh * 0.5f }, { bw, bh });
+    float top = startRunButtonTopY(layout, m_scale, m_cntY, m_cntH, bh);
+    return sf::FloatRect({ cx - bw * 0.5f, top }, { bw, bh });
 }
 
 void Game::drawMiningBasePanel() const {
@@ -2302,6 +2449,11 @@ void Game::drawMiningBasePanel() const {
         }
         ty += std::round(12.f * m_scale);
     }
+
+    const int maxPick = m_state.highestZoneReached;
+    const int pickZone =
+        std::clamp(m_selectedStartZone, 1, std::max(1, maxPick));
+    drawMiningStartZoneButtons(pickZone);
 
     sf::FloatRect rb = miningStartRunBounds();
     sf::RectangleShape btn(rb.size);

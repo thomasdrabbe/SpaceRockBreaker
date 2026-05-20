@@ -41,6 +41,7 @@ public:
                 float           collectRadius,
                 double&         oreOut,
                 float&          fuelOut,
+                float           fuelPerOre,
                 std::array<double, ORE_TIER_COUNT>* oreByTierOut,
                 int             bulkMultiplier,
                 ParticleSystem& particles);

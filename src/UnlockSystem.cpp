@@ -47,7 +47,7 @@ UnlockNextHint computeUnlockNextHint(const GameState& s) {
 
     const auto& d = s.unlockPhaseDone;
     const bool  firstBossIncoming =
-        (s.nextBossMilestone == 3 && s.currentLevel >= 2);
+        (s.nextBossMilestone == FIRST_BOSS_ZONE && s.currentLevel >= 4);
 
     auto fmtOre = [](double v) {
         std::ostringstream o;
@@ -162,7 +162,7 @@ void UnlockSystem::update(GameState&           state,
                           NotificationSystem&  notifications,
                           IUnlockEffects&      effects) {
     const bool firstBossIncoming =
-        (state.nextBossMilestone == 3 && state.currentLevel >= 2);
+        (state.nextBossMilestone == FIRST_BOSS_ZONE && state.currentLevel >= 4);
 
     for (int p = 1; p < kPhaseCount; ++p) {
         if (state.unlockPhaseDone[static_cast<std::size_t>(p)])
@@ -259,7 +259,8 @@ void UnlockSystem::update(GameState&           state,
         markDone(UnlockPhase::PRESTIGE);
     }
 
-    if (state.currentLevel >= 3 && state.nextBossMilestone == 3
+    if (state.currentLevel >= FIRST_BOSS_ZONE
+        && state.nextBossMilestone == FIRST_BOSS_ZONE
         && state.levelOf(UpgradeID::GUN_DAMAGE) == 0) {
         state.upgradeLevels[static_cast<int>(UpgradeID::GUN_DAMAGE)] = 1;
         notifications.push(

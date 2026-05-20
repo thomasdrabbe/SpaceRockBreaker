@@ -22,7 +22,8 @@ void RunFlowController::syncFromState(bool rebuildPlinkoBoard,
         m_rebuildPlinko();
 }
 
-void RunFlowController::startRun() {
+void RunFlowController::startRun(int startZone) {
+    m_state.beginRunAtZone(startZone);
     m_runMode = RunMode::RUNNING;
     m_mining.prepareNewRun();
     m_mining.initPlayerFuel(m_state);
@@ -32,6 +33,7 @@ void RunFlowController::startRun() {
 
 void RunFlowController::moveToBase() {
     m_runMode = RunMode::BASE;
+    m_state.endRunRestoreZone();
     m_resetZoneKeyState();
 }
 

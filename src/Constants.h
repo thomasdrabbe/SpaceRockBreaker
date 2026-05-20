@@ -63,6 +63,8 @@ enum class UpgradeID {
     FUEL_CAPACITY,
     FUEL_EFFICIENCY,
     FUEL_ON_KILL,
+    FUEL_ON_PICKUP,
+    FUEL_WARP_REFILL,
     UPGRADE_COUNT   // sentinel
 
 };
@@ -153,7 +155,14 @@ constexpr float TAB_BAR_H    = 46.f;
 // ─── Save ─────────────────────────────────────────────────────
 const std::string SAVE_FILE = "srb_save.bin"; // legacy (wordt naar slot 0 gemigreerd)
 constexpr int     SAVE_SLOT_COUNT = 3;
-constexpr int     SAVE_VERSION    = 19;
+constexpr int     SAVE_VERSION    = 21;
+/// `upgradeLevels` in saves vóór FUEL_ON_PICKUP / FUEL_WARP_REFILL.
+constexpr int     LEGACY_UPGRADE_SAVE_COUNT_V20 = 32;
+/// Eerste zone-boss en daarna elke N zones (5, 10, 15, …).
+constexpr int     FIRST_BOSS_ZONE       = 5;
+constexpr int     BOSS_ZONE_INTERVAL    = 5;
+/// Zone-knoppen per rij op het basis-paneel (meerdere rijen vanaf zone 6+).
+constexpr int     START_ZONE_BUTTONS_PER_ROW = 8;
 /// Aantal `upgradeLevels`-entries in saves vóór METEOR_DAMAGE / METEOR_SIZE.
 constexpr int     LEGACY_UPGRADE_SAVE_COUNT_V16 = 26;
 

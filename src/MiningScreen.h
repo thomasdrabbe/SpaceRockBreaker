@@ -79,6 +79,7 @@ public:
     void clearAll();
     void prepareNewRun();
     void initPlayerFuel(const GameState& state);
+    void refillFullFuel(const GameState& state);
 
     bool pullBossReturnToBase();
     bool pullBossPhase2();

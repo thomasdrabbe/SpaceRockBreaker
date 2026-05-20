@@ -86,7 +86,9 @@ GameState::upgradeCatalog = {{
       10 },
     { "Fuel Tank",       "+20% max fuel per level",        80.0,  1.55, 0 },
     { "Fuel Efficiency", "-8% fuel drain per level",       100.0, 1.60, 0 },
-    { "Fuel on Kill",    "+0.5 fuel per asteroid destroyed", 90.0, 1.50, 0 },
+    { "Fuel on Kill",    "+0.5 fuel per asteroid destroyed", 90.0, 1.50, 8 },
+    { "Fuel on Pickup",  "+0.12 fuel per ore collected",   85.0,  1.48, 5 },
+    { "Warp Fuel Refill","+10% full fuel chance on warp",  120.0, 1.55, 5 },
 }};
 static_assert(
     GameState::upgradeCatalog.size()
@@ -472,6 +474,17 @@ float GameState::fuelOnKill() const {
     return 1.5f + levelOf(UpgradeID::FUEL_ON_KILL) * 0.5f;
 }
 
+float GameState::fuelOnPickup() const {
+    return 0.2f + levelOf(UpgradeID::FUEL_ON_PICKUP) * 0.12f;
+}
+
+float GameState::warpFuelRefillChance() const {
+    const int lv = levelOf(UpgradeID::FUEL_WARP_REFILL);
+    if (lv <= 0)
+        return 0.f;
+    return std::min(0.60f, 0.10f + static_cast<float>(lv) * 0.10f);
+}
+
 float GameState::fuelTurretDrain() const {
     return 0.4f * static_cast<float>(turretCount());
 }
@@ -794,12 +807,39 @@ bool GameState::canWarp() const {
     return warpDriveUnlocked() && oreThisLevel >= oreWarpRequirement();
 }
 
+void GameState::registerZoneReached(int zone) {
+    if (zone > highestZoneReached)
+        highestZoneReached = zone;
+}
+
+bool GameState::isZoneReachable(int zone) const {
+    return zone >= 1 && zone <= highestZoneReached;
+}
+
+void GameState::beginRunAtZone(int startZone) {
+    const int z = std::clamp(startZone, 1, std::max(1, highestZoneReached));
+    levelBeforeRun     = currentLevel;
+    currentLevel       = z;
+    oreThisLevel       = 0.0;
+    isBonusZone        = false;
+    bonusZoneRarity    = OreRarity::COMMON;
+    registerZoneReached(z);
+}
+
+void GameState::endRunRestoreZone() {
+    if (levelBeforeRun >= 1) {
+        currentLevel   = levelBeforeRun;
+        levelBeforeRun = 0;
+    }
+}
+
 void GameState::doWarp() {
     if (isBonusZone) {
         currentLevel++;
         isBonusZone     = false;
         bonusZoneRarity = OreRarity::COMMON;
         oreThisLevel    = 0.0;
+        registerZoneReached(currentLevel);
         return;
     }
 
@@ -814,27 +854,30 @@ void GameState::doWarp() {
         isBonusZone     = false;
         bonusZoneRarity = OreRarity::COMMON;
     }
+    registerZoneReached(currentLevel);
 }
 
 namespace {
 
 int nextBossZoneAfter(int beatenZone) {
-    static const int seq[] = {
-        3,  5,  10, 15, 20, 25, 30, 35, 40, 45, 50,
-        60, 70, 80, 90, 100, 115, 130, 150, 170, 200
-    };
-    for (int s : seq) {
-        if (s > beatenZone)
-            return s;
-    }
-    return beatenZone + 25;
+    if (beatenZone < FIRST_BOSS_ZONE)
+        return FIRST_BOSS_ZONE;
+    return beatenZone + BOSS_ZONE_INTERVAL;
+}
+
+void migrateBossMilestoneToEveryFive(GameState& s) {
+    if (s.nextBossMilestone < FIRST_BOSS_ZONE)
+        s.nextBossMilestone = FIRST_BOSS_ZONE;
+    const int rem = s.nextBossMilestone % BOSS_ZONE_INTERVAL;
+    if (rem != 0)
+        s.nextBossMilestone += BOSS_ZONE_INTERVAL - rem;
 }
 
 } // namespace
 
 void GameState::registerBossDefeated() {
     const int z = nextBossMilestone;
-    if (z == 3)
+    if (z == FIRST_BOSS_ZONE)
         pendingAutoPlinkoBossNotif = true;
     double bonus = 6.0 + static_cast<double>(z) * 2.0
                  + std::floor(std::sqrt(static_cast<double>(z * z)));
@@ -912,7 +955,9 @@ void GameState::reset() {
     totalCredits = 0.0;
     totalOre     = 0.0;
     orePerTier.fill(0.0);
-    currentLevel = 1;          // ← nieuw
+    currentLevel         = 1;
+    highestZoneReached   = 1;
+    levelBeforeRun       = 0;
     upgradeLevels.fill(0);
     prestigeLevels.fill(0);
     prestigeCount = 0;
@@ -921,7 +966,7 @@ void GameState::reset() {
     lives        = maxLives();
     keys         = 0;
     chestLevels.fill(0);
-    nextBossMilestone = 3;
+    nextBossMilestone = FIRST_BOSS_ZONE;
     bossCrystalPopup  = 0.0;
     unlockPhaseDone.fill(false);
     keyAsteroidsEnabled = false;
@@ -1018,6 +1063,8 @@ bool GameState::save(const std::string& path) const {
             chestLevels.size() * sizeof(int));
     f.write(reinterpret_cast<const char*>(&nextBossMilestone),
             sizeof(nextBossMilestone));
+    f.write(reinterpret_cast<const char*>(&highestZoneReached),
+            sizeof(highestZoneReached));
     const uint8_t diffByte = static_cast<uint8_t>(difficulty);
     f.write(reinterpret_cast<const char*>(&diffByte), sizeof(diffByte));
     for (bool b : unlockPhaseDone) {
@@ -1082,10 +1129,15 @@ void sanitizeLoadedState(GameState& s) {
     if (s.keys < 0)
         s.keys = 0;
 
-    if (s.nextBossMilestone < 3)
-        s.nextBossMilestone = 3;
+    migrateBossMilestoneToEveryFive(s);
     if (s.nextBossMilestone > s.currentLevel + 5000)
-        s.nextBossMilestone = std::max(3, s.currentLevel);
+        s.nextBossMilestone =
+            std::max(FIRST_BOSS_ZONE, s.currentLevel);
+
+    if (s.highestZoneReached < 1)
+        s.highestZoneReached = 1;
+    if (s.highestZoneReached < s.currentLevel)
+        s.highestZoneReached = s.currentLevel;
 
     auto fixNonNegFinite = [](double& v) {
         if (!std::isfinite(v) || v < 0.0)
@@ -1155,6 +1207,13 @@ bool GameState::load(const std::string& path) {
         for (int i = LEGACY_UPGRADE_SAVE_COUNT_V16;
              i < static_cast<int>(UpgradeID::UPGRADE_COUNT); ++i)
             upgradeLevels[static_cast<std::size_t>(i)] = 0;
+    } else if (ver < 21) {
+        for (int i = 0; i < LEGACY_UPGRADE_SAVE_COUNT_V20; ++i)
+            f.read(reinterpret_cast<char*>(&upgradeLevels[static_cast<std::size_t>(i)]),
+                   sizeof(int));
+        for (int i = LEGACY_UPGRADE_SAVE_COUNT_V20;
+             i < static_cast<int>(UpgradeID::UPGRADE_COUNT); ++i)
+            upgradeLevels[static_cast<std::size_t>(i)] = 0;
     } else {
         f.read(reinterpret_cast<char*>(upgradeLevels.data()),
                upgradeLevels.size() * sizeof(int));
@@ -1188,7 +1247,7 @@ bool GameState::load(const std::string& path) {
                 0;
         }
     }
-    nextBossMilestone = 3;
+    nextBossMilestone = FIRST_BOSS_ZONE;
     if (ver >= 8)
         f.read(reinterpret_cast<char*>(&nextBossMilestone),
                sizeof(nextBossMilestone));
@@ -1229,6 +1288,11 @@ bool GameState::load(const std::string& path) {
         f.read(reinterpret_cast<char*>(&meteorB), sizeof(meteorB));
         meteorDestroyerUnlocked = (meteorB != 0);
     }
+    highestZoneReached = std::max(1, currentLevel);
+    if (ver >= 20)
+        f.read(reinterpret_cast<char*>(&highestZoneReached),
+               sizeof(highestZoneReached));
+    levelBeforeRun = 0;
     sanitizeLoadedState(*this);
     if (lives > maxLives())
         lives = maxLives();
@@ -1246,6 +1310,7 @@ void GameState::gameOver() {
     ore          = 0.0;
     orePerTier.fill(0.0);
     oreThisLevel = 0.0;
+    levelBeforeRun = 0;
     currentLevel = 1;
     lives        = maxLives();
     isBonusZone     = false;

@@ -148,6 +148,10 @@ private:
     void                   drawChestLootPopup() const;
 
     sf::FloatRect miningStartRunBounds() const;
+    sf::FloatRect miningStartZoneButtonBounds(int zone) const;
+    int           miningStartZoneAt(sf::Vector2f pos) const;
+    void          drawMiningStartZoneButtons(int selectedZone) const;
+    int           m_selectedStartZone = 1;
     void          drawMiningBasePanel() const;
 
     bool          shouldShowRunRetreatButton() const;

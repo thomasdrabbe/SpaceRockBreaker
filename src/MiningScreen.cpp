@@ -732,6 +732,7 @@ void MiningScreen::update(float      dt,
                   state.autoCollectRadius() * m_uiScale,
                   oreThisFrame,
                   fuelThisFrame,
+                  state.fuelOnPickup(),
                   &oreByTierEarned,
                   state.bulkProcess(),
                   m_particles);
@@ -1010,6 +1011,11 @@ void MiningScreen::initPlayerFuel(const GameState& state) {
     m_player.addFuel(state.maxFuel());
 }
 
+void MiningScreen::refillFullFuel(const GameState& state) {
+    m_player.setMaxFuel(state.maxFuel());
+    m_player.addFuel(state.maxFuel());
+}
+
 bool MiningScreen::pullBossPhase2() {
     const bool v = m_pendingBossPhase2;
     m_pendingBossPhase2 = false;
@@ -1101,7 +1107,7 @@ bool MiningScreen::trySpawnBoss(GameState& state) {
     float hpMult = std::max(0.1f,
         1.f - state.levelOf(UpgradeID::ASTEROID_HP) * 0.1f);
     hpMult *= state.levelHpMult();
-    if (state.nextBossMilestone == 3) {
+    if (state.nextBossMilestone == FIRST_BOSS_ZONE) {
         // Eerste boss bewust toegankelijker maken.
         hpMult *= 0.5f;
     }
@@ -1486,6 +1492,8 @@ void MiningScreen::drawHUD(sf::RenderTarget& target,
                 + " / " +
                 std::to_string(state.oreWarpRequirement()) +
                 " ore");
+        else if (hasLivingBoss())
+            lbl.setString("Versla de zone-boss om te warpen");
         else if (warpCharge <= 0.f)
             lbl.setString("Warp ready - hold Space");
         else

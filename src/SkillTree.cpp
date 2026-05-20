@@ -41,6 +41,8 @@ const std::vector<UpgradeNodeDef> SKILL_TREE_NODES = {
     { UpgradeID::FUEL_CAPACITY,  5, 5, UpgradeID::WARP_DRIVE,     1 },
     { UpgradeID::FUEL_EFFICIENCY, 6, 5, UpgradeID::FUEL_CAPACITY, 1 },
     { UpgradeID::FUEL_ON_KILL,   5, 6, UpgradeID::FUEL_CAPACITY, 1 },
+    { UpgradeID::FUEL_ON_PICKUP, 4, 6, UpgradeID::AUTO_COLLECT_RADIUS, 1 },
+    { UpgradeID::FUEL_WARP_REFILL, 2, 4, UpgradeID::WARP_DRIVE, 1 },
 };
 
 namespace {

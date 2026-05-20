@@ -64,6 +64,7 @@ void OreManager::update(float           dt,
                         float           collectRadius,
                         double&         oreOut,
                         float&          fuelOut,
+                        float           fuelPerOre,
                         std::array<double, ORE_TIER_COUNT>* oreByTierOut,
                         int             bulkMultiplier,
                         ParticleSystem& particles) {
@@ -97,7 +98,7 @@ void OreManager::update(float           dt,
             if (distance(o.pos, collectorPos) < 8.f) {
                 const double gain = o.value * static_cast<double>(bulkMultiplier);
                 oreOut += gain;
-                fuelOut += 0.2f;
+                fuelOut += fuelPerOre;
                 if (oreByTierOut) {
                     (*oreByTierOut)[static_cast<std::size_t>(o.tier)] += gain;
                 }

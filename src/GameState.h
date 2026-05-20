@@ -107,16 +107,23 @@ public:
     bool openOneChest(ChestUpgradeID* outChosen = nullptr);
 
     // ── Level / zone ──────────────────────────────────────
-    int currentLevel = 1;   // advances via step E (fly to next zone)
+    int currentLevel = 1;   // advances via warp tijdens run
 
-    // ── Boss milestones (eerste bij zone 3, daarna 5, 10, 15…)
-    int     nextBossMilestone = 3;
+    /// Hoogste zone ooit bereikt (warp); bepaalt start-zone knoppen in basis.
+    int highestZoneReached = 1;
+
+    // ── Boss milestones (zone 5, 10, 15, …)
+    int     nextBossMilestone = FIRST_BOSS_ZONE;
     double  bossCrystalPopup  = 0.0;
 
     void registerBossDefeated();
+    void registerZoneReached(int zone);
+    bool isZoneReachable(int zone) const;
+    void beginRunAtZone(int startZone);
+    void endRunRestoreZone();
 
     bool autoPlinkoUnlockedByBoss() const {
-        return prestigeCount > 0 || nextBossMilestone > 3;
+        return prestigeCount > 0 || nextBossMilestone > FIRST_BOSS_ZONE;
     }
 
     bool pendingAutoPlinkoBossNotif = false;
@@ -176,6 +183,8 @@ public:
     float fuelMoveDrain()   const;
     float fuelShootDrain()  const;
     float fuelOnKill()      const;
+    float fuelOnPickup()    const;
+    float warpFuelRefillChance() const;
     float fuelTurretDrain() const;
 
     float oreValueMult()      const;
@@ -239,6 +248,8 @@ public:
     void processOreFusion();
 
 private:
+    int levelBeforeRun = 0;
+
     OreRarity rollBonusZoneRarity();
 
     float _crystalDamageBonus()  const;
