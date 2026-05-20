@@ -16,6 +16,16 @@ struct UpgradeNodeDef {
 
 extern const std::vector<UpgradeNodeDef> SKILL_TREE_NODES;
 
+enum class SkillTreeSection : int {
+    SHIP = 0,
+    ASTEROIDS,
+    PLINKO,
+    MISC, // "Het keukenlaatje"
+    COUNT
+};
+
+SkillTreeSection skillTreeSectionOf(UpgradeID id);
+
 class SkillTreeScreen {
 public:
     void init(sf::Font& font,
@@ -35,6 +45,8 @@ public:
     void handlePointerUp();
     void setMousePos(sf::Vector2f pos) { m_mousePos = pos; }
     void resetScroll();
+
+    SkillTreeSection activeSection() const { return m_activeSection; }
 
 private:
     sf::Font* m_font = nullptr;
@@ -63,6 +75,14 @@ private:
     unsigned fontSz(unsigned base) const {
         return static_cast<unsigned>(std::round(base * m_uiScale));
     }
+
+    bool nodeInActiveSection(const UpgradeNodeDef& node) const;
+    float sectionTabBarHeight() const;
+    float contentTop() const;
+    float contentHeight() const;
+    void  drawSectionTabs(sf::RenderTarget& target) const;
+    /// Tab-index 0..3, of -1.
+    int   sectionTabAt(sf::Vector2f pos) const;
 
     sf::Vector2f nodeScreenPos(const UpgradeNodeDef& node) const;
     sf::FloatRect nodeRect(const UpgradeNodeDef& node) const;
@@ -98,4 +118,5 @@ private:
     mutable float m_contentH   = 0.f;
     int           m_dragAxis   = 0; // 0 none, 1 horizontal, 2 vertical
     float         m_dragGrabOffset = 0.f;
+    SkillTreeSection m_activeSection = SkillTreeSection::SHIP;
 };

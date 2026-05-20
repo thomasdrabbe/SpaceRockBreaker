@@ -64,7 +64,52 @@ const std::vector<UpgradeNodeDef> SKILL_TREE_NODES = {
     { UpgradeID::FUEL_ON_PICKUP, 4, 6, UpgradeID::AUTO_COLLECT_RADIUS, 1 },
 };
 
+SkillTreeSection skillTreeSectionOf(UpgradeID id) {
+    switch (id) {
+    case UpgradeID::ORE_VALUE:
+    case UpgradeID::AUTO_COLLECT_RADIUS:
+    case UpgradeID::ORE_LUCK:
+    case UpgradeID::ORE_ON_KILL:
+    case UpgradeID::ASTEROID_HP:
+    case UpgradeID::EXPLOSIVE_ASTEROIDS:
+    case UpgradeID::CHAIN_REACTION:
+    case UpgradeID::UNLOCK_BRONZE:
+    case UpgradeID::UNLOCK_SILVER:
+    case UpgradeID::UNLOCK_GOLD:
+    case UpgradeID::UNLOCK_DIAMOND:
+    case UpgradeID::UNLOCK_PLATINUM:
+    case UpgradeID::UNLOCK_TITANIUM:
+    case UpgradeID::UNLOCK_IRIDIUM:
+        return SkillTreeSection::ASTEROIDS;
+
+    case UpgradeID::PLINKO_BALLS:
+    case UpgradeID::PLINKO_ROWS:
+    case UpgradeID::AUTO_PLINKO:
+    case UpgradeID::AUTO_SELL_THRESHOLD:
+    case UpgradeID::CREDIT_MULT:
+    case UpgradeID::BULK_PROCESS:
+        return SkillTreeSection::PLINKO;
+
+    case UpgradeID::METEOR_DAMAGE:
+    case UpgradeID::METEOR_SIZE:
+        return SkillTreeSection::MISC;
+
+    default:
+        return SkillTreeSection::SHIP;
+    }
+}
+
 namespace {
+
+const char* sectionTabLabel(SkillTreeSection s) {
+    switch (s) {
+    case SkillTreeSection::SHIP:      return "Ship";
+    case SkillTreeSection::ASTEROIDS: return "Asteroids";
+    case SkillTreeSection::PLINKO:    return "Plinko";
+    case SkillTreeSection::MISC:      return "Keukenlaatje";
+    default:                          return "?";
+    }
+}
 
 const UpgradeNodeDef* findNodeById(UpgradeID id) {
     for (const auto& n : SKILL_TREE_NODES) {
@@ -97,12 +142,87 @@ void SkillTreeScreen::resetScroll() {
     updateScrollLimits();
 }
 
+bool SkillTreeScreen::nodeInActiveSection(const UpgradeNodeDef& node) const {
+    return skillTreeSectionOf(node.id) == m_activeSection;
+}
+
+float SkillTreeScreen::sectionTabBarHeight() const {
+    return std::round(36.f * m_uiScale);
+}
+
+float SkillTreeScreen::contentTop() const {
+    return m_y + sectionTabBarHeight();
+}
+
+float SkillTreeScreen::contentHeight() const {
+    return std::max(0.f, m_h - sectionTabBarHeight());
+}
+
+int SkillTreeScreen::sectionTabAt(sf::Vector2f pos) const {
+    if (pos.y < m_y || pos.y >= contentTop())
+        return -1;
+    const float tabW = m_w / static_cast<float>(SkillTreeSection::COUNT);
+    const int   idx  = static_cast<int>((pos.x - m_x) / tabW);
+    if (idx < 0 || idx >= static_cast<int>(SkillTreeSection::COUNT))
+        return -1;
+    return idx;
+}
+
+void SkillTreeScreen::drawSectionTabs(sf::RenderTarget& target) const {
+    const float tabH = sectionTabBarHeight();
+    const float tabW =
+        m_w / static_cast<float>(SkillTreeSection::COUNT);
+    const unsigned fs = fontSz(12);
+
+    for (int i = 0; i < static_cast<int>(SkillTreeSection::COUNT); ++i) {
+        const auto    sec     = static_cast<SkillTreeSection>(i);
+        const bool    active  = (sec == m_activeSection);
+        const float   tx      = m_x + tabW * static_cast<float>(i);
+        sf::RectangleShape tab({ tabW, tabH });
+        tab.setPosition({ tx, m_y });
+        tab.setFillColor(active ? sf::Color(35, 48, 82, 255)
+                                : sf::Color(18, 22, 38, 255));
+        tab.setOutlineColor(active ? sf::Color(100, 160, 255, 220)
+                                   : sf::Color(45, 55, 85, 180));
+        tab.setOutlineThickness(active ? 2.f : 1.f);
+        target.draw(tab);
+
+        sf::Text lbl(*m_font);
+        lbl.setString(sectionTabLabel(sec));
+        lbl.setCharacterSize(fs);
+        lbl.setStyle(active ? sf::Text::Bold : sf::Text::Regular);
+        lbl.setFillColor(active ? sf::Color(200, 220, 255)
+                                : sf::Color(110, 120, 150));
+        const auto lb = lbl.getLocalBounds();
+        lbl.setPosition({
+            tx + (tabW - lb.size.x) * 0.5f - lb.position.x,
+            m_y + (tabH - lb.size.y) * 0.5f - lb.position.y });
+        target.draw(lbl);
+    }
+
+    sf::RectangleShape sep(sf::Vector2f{ m_w, 1.f });
+    sep.setPosition({ m_x, contentTop() - 1.f });
+    sep.setFillColor(sf::Color(55, 70, 110, 200));
+    target.draw(sep);
+}
+
 void SkillTreeScreen::updateScrollLimits() const {
     int maxGX = 0;
     int maxGY = 0;
+    bool any = false;
     for (const auto& n : SKILL_TREE_NODES) {
+        if (!nodeInActiveSection(n))
+            continue;
+        any = true;
         maxGX = std::max(maxGX, n.gridX);
         maxGY = std::max(maxGY, n.gridY);
+    }
+    if (!any) {
+        m_contentW = viewportW();
+        m_contentH = viewportH();
+        m_minScrollX = 0.f;
+        m_minScrollY = 0.f;
+        return;
     }
     m_contentW =
         panelPad() + static_cast<float>(maxGX) * gridStepX() + nodeW() + panelPad();
@@ -125,7 +245,7 @@ float SkillTreeScreen::viewportW() const {
 
 float SkillTreeScreen::viewportH() const {
     const float bar = scrollBarThickness();
-    return std::max(0.f, m_h - (scrollNeededX() ? bar : 0.f));
+    return std::max(0.f, contentHeight() - (scrollNeededX() ? bar : 0.f));
 }
 
 bool SkillTreeScreen::scrollNeededX() const {
@@ -135,7 +255,7 @@ bool SkillTreeScreen::scrollNeededX() const {
 
 bool SkillTreeScreen::scrollNeededY() const {
     const float bar = scrollBarThickness();
-    return m_contentH > m_h - bar + 0.5f;
+    return m_contentH > contentHeight() - bar + 0.5f;
 }
 
 sf::FloatRect SkillTreeScreen::hTrackBounds() const {
@@ -143,7 +263,8 @@ sf::FloatRect SkillTreeScreen::hTrackBounds() const {
         return {};
     const float bar = scrollBarThickness();
     const float vBar = scrollNeededY() ? bar : 0.f;
-    return { { m_x, m_y + m_h - bar }, { m_w - vBar, bar } };
+    return { { m_x, contentTop() + contentHeight() - bar },
+             { m_w - vBar, bar } };
 }
 
 sf::FloatRect SkillTreeScreen::vTrackBounds() const {
@@ -151,7 +272,8 @@ sf::FloatRect SkillTreeScreen::vTrackBounds() const {
         return {};
     const float bar = scrollBarThickness();
     const float hBar = scrollNeededX() ? bar : 0.f;
-    return { { m_x + m_w - bar, m_y }, { bar, m_h - hBar } };
+    return { { m_x + m_w - bar, contentTop() },
+             { bar, contentHeight() - hBar } };
 }
 
 sf::FloatRect SkillTreeScreen::hThumbBounds() const {
@@ -244,7 +366,8 @@ void SkillTreeScreen::drawScrollBars(sf::RenderTarget& target) const {
 sf::Vector2f SkillTreeScreen::nodeScreenPos(const UpgradeNodeDef& node) const {
     return {
         m_x + panelPad() + static_cast<float>(node.gridX) * gridStepX() + m_scrollX,
-        m_y + panelPad() + static_cast<float>(node.gridY) * gridStepY() + m_scrollY,
+        contentTop() + panelPad()
+            + static_cast<float>(node.gridY) * gridStepY() + m_scrollY,
     };
 }
 
@@ -266,9 +389,12 @@ void SkillTreeScreen::draw(sf::RenderTarget& target,
 
     m_hoveredNode = nullptr;
 
+    drawSectionTabs(target);
     drawConnections(target, state);
 
     for (const auto& node : SKILL_TREE_NODES) {
+        if (!nodeInActiveSection(node))
+            continue;
         if (!state.isNodeVisible(node))
             continue;
         drawNode(target, node, state, seeThroughMiningBackdrop);
@@ -283,13 +409,17 @@ void SkillTreeScreen::draw(sf::RenderTarget& target,
 void SkillTreeScreen::drawConnections(sf::RenderTarget& target,
                                        const GameState&  state) const {
     for (const auto& node : SKILL_TREE_NODES) {
+        if (!nodeInActiveSection(node))
+            continue;
         if (!state.isNodeVisible(node))
             continue;
         if (node.requireId == UpgradeID::UPGRADE_COUNT)
             continue;
 
         const UpgradeNodeDef* parent = findNodeById(node.requireId);
-        if (!parent || !state.isNodeVisible(*parent))
+        if (!parent || !nodeInActiveSection(*parent))
+            continue;
+        if (!state.isNodeVisible(*parent))
             continue;
 
         sf::Vector2f from = nodeScreenPos(*parent);
@@ -323,7 +453,8 @@ void SkillTreeScreen::drawNode(sf::RenderTarget&     target,
 
     if (rect.position.x + rect.size.x < m_x || rect.position.x > m_x + m_w)
         return;
-    if (rect.position.y + rect.size.y < m_y || rect.position.y > m_y + m_h)
+    if (rect.position.y + rect.size.y < contentTop()
+        || rect.position.y > contentTop() + contentHeight())
         return;
 
     const bool unlocked = state.isNodeUnlocked(node);
@@ -429,6 +560,11 @@ void SkillTreeScreen::drawNode(sf::RenderTarget&     target,
             std::string needs = "Needs: " + reqDef.name;
             if (node.requireLevel > 1)
                 needs += " lv" + std::to_string(node.requireLevel);
+            if (!nodeInActiveSection(*req))
+                needs += " ("
+                    + std::string(sectionTabLabel(
+                        skillTreeSectionOf(req->id)))
+                    + ")";
             sf::Text reqText(*m_font);
             reqText.setString(needs);
             reqText.setCharacterSize(fontSz(10));
@@ -509,7 +645,19 @@ void SkillTreeScreen::drawTooltip(sf::RenderTarget&     target,
 }
 
 bool SkillTreeScreen::handleClick(sf::Vector2f pos, GameState& state) {
+    const int tab = sectionTabAt(pos);
+    if (tab >= 0) {
+        const auto next = static_cast<SkillTreeSection>(tab);
+        if (next != m_activeSection) {
+            m_activeSection = next;
+            resetScroll();
+        }
+        return true;
+    }
+
     for (const auto& node : SKILL_TREE_NODES) {
+        if (!nodeInActiveSection(node))
+            continue;
         if (!state.isNodeVisible(node))
             continue;
         if (!state.isNodeUnlocked(node))
@@ -538,6 +686,9 @@ void SkillTreeScreen::handleScroll(float delta, sf::Vector2f /*pos*/,
 }
 
 bool SkillTreeScreen::handlePointerDown(sf::Vector2f pos) {
+    if (sectionTabAt(pos) >= 0)
+        return false;
+
     updateScrollLimits();
     m_dragAxis = 0;
 
