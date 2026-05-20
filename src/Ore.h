@@ -40,6 +40,7 @@ public:
                 sf::Vector2f    collectorPos,
                 float           collectRadius,
                 double&         oreOut,
+                float&          fuelOut,
                 std::array<double, ORE_TIER_COUNT>* oreByTierOut,
                 int             bulkMultiplier,
                 ParticleSystem& particles);

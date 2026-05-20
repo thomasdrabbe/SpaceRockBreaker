@@ -628,7 +628,7 @@ int main() {
     // State 2: update (of fallback download-check) -> compact progress-venster.
     sf::RenderWindow window(
         sf::VideoMode(sf::Vector2u{ 480u, 180u }),
-        sf::String{ L"Space Rock Breaker — Launcher" },
+        sf::String{ L"Space Rock Breaker Launcher" },
         sf::Style::None);
     window.setFramerateLimit(60);
 

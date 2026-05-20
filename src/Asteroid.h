@@ -38,6 +38,13 @@ public:
     /// 0–3: normale sprite-variant; 4 = key; 5 = boss (`assets/asteroids/*.png`).
     int           spriteVariant  = 0;
     float         bossPhase      = 0.f;
+    int           bossPhaseStage    = 1;
+    bool          phase2Triggered   = false;
+    bool          phase3Triggered   = false;
+    float         bossShootTimer    = 0.f;
+    float         bossMoveDirTimer  = 0.f;
+    sf::Vector2f  bossMoveDir       = { 0.f, 1.f };
+    bool          isMiniBoss        = false;
     /// Sleutel-asteroïde: >=0 = vast aantal keys bij vernietiging; -1 = willekeur 1–3.
     int           keyPickupCount = -1;
 
@@ -59,6 +66,14 @@ public:
                    float hpMult, OreTier lootTier,
                    float radiusScale = 1.f);
 
+    void spawnMiniBoss(sf::Vector2f pos,
+                       float hpMult, OreTier lootTier);
+
+    void spawnBossProjectile(sf::Vector2f origin,
+                             sf::Vector2f direction,
+                             float hpMult, OreTier tier,
+                             float radiusScale = 1.f);
+
     void spawnMeteor(sf::Vector2f p, sf::Vector2f v,
                       float hpMult, OreTier maxOreTier,
                       float radiusScale = 1.f);
@@ -75,7 +90,10 @@ public:
                       const sf::Font*     labelFont          = nullptr,
                       const sf::Texture*  keyIconTex         = nullptr,
                       const sf::Texture*  bossTex            = nullptr,
-                      bool                tintedSpriteBody   = false) const;
+                      bool                tintedSpriteBody   = false,
+                      float               panelOx            = -1.f,
+                      float               panelOy            = -1.f,
+                      float               panelW             = -1.f) const;
     void draw(sf::RenderTarget& target,
                float               animTime   = 0.f,
                const sf::Font*     labelFont  = nullptr,
@@ -88,6 +106,7 @@ private:
     void buildShape();
     void buildKeyOctagon();
     void buildBossShape();
+    void buildMiniBossShape();
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -119,7 +138,9 @@ public:
     void setMeteorRadiusScale(float scale) { m_meteorRadiusScale = scale; }
     void setFieldRadiusScale(float scale) { m_fieldRadiusScale = scale; }
     void update(float dt, float ox, float oy, float areaW, float areaH,
-                sf::Vector2f playerPos);
+                sf::Vector2f playerPos, float hpMult = 1.f,
+                OreTier maxTier = OreTier::IRON,
+                bool phase3SalvoActive = false);
     /// Alleen meteoren integreren + opruimen (bv. mining-tab gepauzeerd op Easy).
     void updateMeteorsOnly(float dt, float ox, float oy, float areaW,
                            float areaH, sf::Vector2f playerPos);
@@ -143,6 +164,16 @@ public:
 
     /// Actieve zone-boss op het veld (voor boss-muziek).
     bool hasLivingBoss() const;
+
+    Asteroid* getBoss();
+    void spawnBossProjectile(sf::Vector2f origin,
+                             sf::Vector2f direction,
+                             OreTier      tier, float hpMult);
+    void spawnMiniBoss(sf::Vector2f pos, float hpMult, OreTier tier);
+
+    void tickBossShooting(float dt, sf::Vector2f playerPos,
+                          float hpMult, OreTier maxTier,
+                          bool phase3SalvoActive);
 
 private:
     std::array<Asteroid, MAX_ASTEROIDS> m_pool;

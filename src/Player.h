@@ -25,6 +25,19 @@ public:
     void  resetHp();
     void  updateHpRegen(float dt);
 
+    float fuel()    const { return m_fuel; }
+    float maxFuel() const { return m_maxFuel; }
+    float fuelRatio() const {
+        return m_maxFuel > 0.f ? m_fuel / m_maxFuel : 0.f;
+    }
+    void addFuel(float amount);
+    void drainFuel(float amount);
+    bool outOfFuel() const { return m_fuel <= 0.f; }
+    void setMaxFuel(float newMax) {
+        m_maxFuel = newMax;
+        m_fuel    = std::min(m_fuel, m_maxFuel);
+    }
+
     /// nullptr = vector fallback (development zonder texture).
     void setShipSprite(const sf::Texture* tex, float targetH = 112.f);
 
@@ -39,6 +52,10 @@ public:
                 float            panelTop,
                 float            panelW,
                 float            panelH,
+                float            fuelPassiveDrain,
+                float            fuelMoveDrain,
+                float            fuelShootDrain,
+                float            fuelTurretDrain,
                 AsteroidManager& asteroids,
                 BulletManager&   bullets,
                 ParticleSystem&  particles);
@@ -56,6 +73,8 @@ private:
 
     float m_hp    = 100.f;
     float m_maxHp = 100.f;
+    float m_fuel    = 100.f;
+    float m_maxFuel = 100.f;
     static constexpr float HP_REGEN_PER_SEC = 5.f;
 
     const sf::Texture* m_shipTex   = nullptr;

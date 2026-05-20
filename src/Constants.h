@@ -60,6 +60,9 @@ enum class UpgradeID {
     /// Na easter egg (alle shower-meteoren door torret-kogels): asteroïden raken.
     METEOR_DAMAGE,
     METEOR_SIZE,
+    FUEL_CAPACITY,
+    FUEL_EFFICIENCY,
+    FUEL_ON_KILL,
     UPGRADE_COUNT   // sentinel
 
 };
@@ -105,7 +108,7 @@ constexpr int ORE_TIER_COUNT = static_cast<int>(OreTier::ORE_TIER_COUNT);
 
 inline double oreTierBaseValue(OreTier tier) {
     constexpr std::array<double, ORE_TIER_COUNT> kBaseValues = {
-        1.0, 3.0, 8.0, 20.0, 55.0, 140.0, 380.0, 1000.0
+        1.0, 5.0, 30.0, 200.0, 1500.0, 12000.0, 100000.0, 1000000.0
     };
     const int ti = std::clamp(static_cast<int>(tier), 0, ORE_TIER_COUNT - 1);
     return kBaseValues[static_cast<std::size_t>(ti)];
@@ -150,7 +153,7 @@ constexpr float TAB_BAR_H    = 46.f;
 // ─── Save ─────────────────────────────────────────────────────
 const std::string SAVE_FILE = "srb_save.bin"; // legacy (wordt naar slot 0 gemigreerd)
 constexpr int     SAVE_SLOT_COUNT = 3;
-constexpr int     SAVE_VERSION    = 18;
+constexpr int     SAVE_VERSION    = 19;
 /// Aantal `upgradeLevels`-entries in saves vóór METEOR_DAMAGE / METEOR_SIZE.
 constexpr int     LEGACY_UPGRADE_SAVE_COUNT_V16 = 26;
 

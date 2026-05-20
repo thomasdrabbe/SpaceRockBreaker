@@ -160,6 +160,49 @@ void drawKeyAsteroidIcon(sf::RenderTarget&      target,
     target.draw(bit, worldTf);
 }
 
+void updateBossChase(Asteroid& a, float dt, sf::Vector2f playerPos, float speedPx) {
+    a.bossMoveDirTimer -= dt;
+    if (a.bossMoveDirTimer <= 0.f) {
+        a.bossMoveDirTimer = 1.2f;
+        sf::Vector2f toP = playerPos - a.pos;
+        if (length(toP) > 8.f)
+            toP = normalize(toP);
+        else
+            toP = { 0.f, 1.f };
+        const sf::Vector2f tan{ -toP.y, toP.x };
+        const float        jitter = randFloat(-0.35f, 0.35f);
+        a.bossMoveDir = normalize(toP + tan * jitter);
+    }
+    a.vel      = a.bossMoveDir * speedPx;
+    a.pos     += a.vel * dt;
+    a.bossPhase += dt * 2.05f;
+    a.rotation += a.rotationRate * 0.35f * dt;
+}
+
+int bossPhaseFromRatio(float hpRatio) {
+    if (hpRatio <= 0.33f)
+        return 3;
+    if (hpRatio <= 0.66f)
+        return 2;
+    return 1;
+}
+
+float bossChaseSpeed(int phase) {
+    if (phase >= 3)
+        return 120.f;
+    if (phase == 2)
+        return 90.f;
+    return 60.f;
+}
+
+float bossShootInterval(int phase) {
+    if (phase >= 3)
+        return 1.8f;
+    if (phase == 2)
+        return 2.5f;
+    return 4.f;
+}
+
 } // anonymous namespace
 
 // ═════════════════════════════════════════════════════════════
@@ -184,7 +227,14 @@ void Asteroid::spawn(AsteroidTier t,
     isKeyAsteroid = false;
     isBoss        = false;
     isMeteor      = false;
+    isMiniBoss    = false;
     bossPhase     = 0.f;
+    bossPhaseStage    = 1;
+    phase2Triggered   = false;
+    phase3Triggered   = false;
+    bossShootTimer    = 0.f;
+    bossMoveDirTimer  = 0.f;
+    bossMoveDir       = { 0.f, 1.f };
     keyPickupCount = -1;
     tier         = t;
     oreTier      = ot;
@@ -254,10 +304,17 @@ void Asteroid::spawnBoss(float ox, float oy, float areaW, float areaH,
     const auto& otd = ORE_TIER_TABLE[static_cast<int>(lootTier)];
 
     isBoss        = true;
+    isMiniBoss    = false;
     isKeyAsteroid = false;
     isMeteor      = false;
     keyPickupCount = -1;
     bossPhase     = randFloat(0.f, 2.f * PI);
+    bossPhaseStage    = 1;
+    phase2Triggered   = false;
+    phase3Triggered   = false;
+    bossShootTimer    = 0.f;
+    bossMoveDirTimer  = 0.f;
+    bossMoveDir       = { 0.f, 1.f };
     tier          = t;
     oreTier       = lootTier;
     rarity        = OreRarity::LEGENDARY;
@@ -278,6 +335,80 @@ void Asteroid::spawnBoss(float ox, float oy, float areaW, float areaH,
     oreDrop.count = ORE_COUNT_BY_SIZE[static_cast<int>(t)] * 5;
 
     buildBossShape();
+}
+
+// ═════════════════════════════════════════════════════════════
+//  Asteroid::spawnMiniBoss
+// ═════════════════════════════════════════════════════════════
+void Asteroid::spawnMiniBoss(sf::Vector2f p, float hpMult, OreTier lootTier) {
+    const auto& td  = TIER_TABLE[static_cast<int>(AsteroidTier::LARGE)];
+    const auto& otd = ORE_TIER_TABLE[static_cast<int>(lootTier)];
+
+    isMiniBoss    = true;
+    isBoss        = false;
+    isKeyAsteroid = false;
+    isMeteor      = false;
+    keyPickupCount = -1;
+    bossPhase     = randFloat(0.f, 2.f * PI);
+    bossPhaseStage    = 1;
+    phase2Triggered   = false;
+    phase3Triggered   = false;
+    bossShootTimer    = 0.f;
+    bossMoveDirTimer  = 0.f;
+    bossMoveDir       = { 0.f, 1.f };
+    tier          = AsteroidTier::LARGE;
+    oreTier       = lootTier;
+    rarity        = OreRarity::EPIC;
+    pos           = p;
+    vel           = { 0.f, 0.f };
+    radius        = (td.radiusMin + td.radiusMax) * 0.5f;
+    maxHp         = td.baseHp * hpMult * 2.f;
+    hp            = maxHp;
+    color         = sf::Color(140, 40, 120);
+    rotation      = randFloat(0.f, 360.f);
+    rotationRate  = randFloat(-22.f, 22.f);
+    alive         = true;
+    spriteVariant = randInt(0, 3);
+
+    oreDrop.color = otd.oreColor;
+    oreDrop.value = otd.baseValue;
+    oreDrop.count = ORE_COUNT_BY_SIZE[static_cast<int>(AsteroidTier::LARGE)];
+
+    buildMiniBossShape();
+}
+
+void Asteroid::spawnBossProjectile(sf::Vector2f origin,
+                                  sf::Vector2f direction,
+                                  float hpMult, OreTier tier,
+                                  float radiusScale) {
+    direction = normalize(direction);
+    spawn(AsteroidTier::SMALL, origin, direction * 280.f, hpMult, tier,
+          radiusScale);
+    rarity = OreRarity::RARE;
+    color  = sf::Color(180, 80, 80);
+    radius = randFloat(10.f, 16.f) * radiusScale;
+    maxHp  = 20.f * hpMult;
+    hp     = maxHp;
+    const auto& otd = ORE_TIER_TABLE[static_cast<int>(tier)];
+    oreDrop.color = otd.oreColor;
+    oreDrop.value = otd.baseValue;
+    oreDrop.count = 1;
+    buildShape();
+}
+
+void Asteroid::buildMiniBossShape() {
+    constexpr int N = 8;
+    shape.setPointCount(static_cast<std::size_t>(N));
+    for (int i = 0; i < N; i++) {
+        float angle = (i / static_cast<float>(N)) * 2.f * PI;
+        float rMul  = (i % 2 == 0) ? 1.02f : 0.78f;
+        shape.setPoint(static_cast<std::size_t>(i),
+                       { std::cos(angle) * radius * rMul,
+                         std::sin(angle) * radius * rMul });
+    }
+    shape.setFillColor(sf::Color(95, 25, 70));
+    shape.setOutlineColor(sf::Color(220, 80, 200));
+    shape.setOutlineThickness(3.5f);
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -415,31 +546,14 @@ bool Asteroid::hit(float damage, ParticleSystem& particles) {
 void Asteroid::update(float dt, sf::Vector2f playerPos) {
     if (!alive) return;
 
-    if (isBoss) {
-        constexpr float chase   = 52.f;
-        constexpr float wobble  = 135.f;
-        constexpr float maxSp   = 98.f;
-
-        sf::Vector2f toP = playerPos - pos;
-        float        d    = length(toP);
-        if (d > 8.f)
-            toP = normalize(toP);
-        else
-            toP = { 0.f, 1.f };
-
-        sf::Vector2f tan{ -toP.y, toP.x };
-        float        sw = std::sin(bossPhase);
-        bossPhase += dt * 2.05f;
-
-        vel += toP * chase * dt;
-        vel += tan * (wobble * sw * dt);
-
-        float sp = length(vel);
-        if (sp > maxSp)
-            vel *= (maxSp / sp);
-
-        pos      += vel * dt;
-        rotation += rotationRate * 0.35f * dt;
+    if (isBoss || isMiniBoss) {
+        const float hpRatio =
+            maxHp > 0.f ? (hp / maxHp) : 1.f;
+        const int phase = isBoss ? bossPhaseFromRatio(hpRatio) : 1;
+        bossPhaseStage = phase;
+        const float spd =
+            isBoss ? bossChaseSpeed(phase) : 45.f;
+        updateBossChase(*this, dt, playerPos, spd);
     } else {
         pos      += vel * dt;
         rotation += rotationRate * (isMeteor ? 1.4f : 1.f) * dt;
@@ -505,15 +619,70 @@ void Asteroid::drawOverlays(sf::RenderTarget& target,
                             const sf::Font*     labelFont,
                             const sf::Texture*  keyIconTex,
                             const sf::Texture*  bossTex,
-                            bool                tintedSpriteBody) const {
+                            bool                tintedSpriteBody,
+                            float               panelOx,
+                            float               panelOy,
+                            float               panelW) const {
     (void)tintedSpriteBody;
-    (void)labelFont;
     (void)bossTex;
     if (!alive)
         return;
 
     sf::Transform tf;
     tf.translate(pos).rotate(sf::degrees(rotation));
+
+    if (isBoss && panelW > 0.f && labelFont) {
+        const float hpRatio = maxHp > 0.f ? (hp / maxHp) : 0.f;
+        const int   phase   = bossPhaseFromRatio(hpRatio);
+        const float barW    = panelW * 0.5f;
+        const float barH    = 10.f;
+        const float barX    = panelOx + (panelW - barW) * 0.5f;
+        const float barY    = panelOy + 6.f;
+
+        sf::Color barCol;
+        const char* phaseLabel;
+        if (phase >= 3) {
+            barCol      = sf::Color(255, 90, 50);
+            phaseLabel  = "PHASE 3 — METEOR BARRAGE";
+        } else if (phase >= 2) {
+            barCol      = sf::Color(180, 60, 220);
+            phaseLabel  = "PHASE 2 — SUMMONING";
+        } else {
+            barCol      = sf::Color(220, 50, 50);
+            phaseLabel  = "PHASE 1";
+        }
+
+        sf::RectangleShape bg({ barW, barH });
+        bg.setPosition({ barX, barY });
+        bg.setFillColor(sf::Color(30, 10, 20, 210));
+        target.draw(bg);
+
+        sf::RectangleShape fg({ barW * hpRatio, barH });
+        fg.setPosition({ barX, barY });
+        fg.setFillColor(barCol);
+        target.draw(fg);
+
+        const float m66 = barX + barW * 0.66f;
+        const float m33 = barX + barW * 0.33f;
+        sf::RectangleShape mk66({ 2.f, barH + 2.f });
+        mk66.setPosition({ m66, barY - 1.f });
+        mk66.setFillColor(sf::Color(255, 230, 60, 220));
+        target.draw(mk66);
+        sf::RectangleShape mk33({ 2.f, barH + 2.f });
+        mk33.setPosition({ m33, barY - 1.f });
+        mk33.setFillColor(sf::Color(255, 230, 60, 220));
+        target.draw(mk33);
+
+        sf::Text lbl(*labelFont);
+        lbl.setString(phaseLabel);
+        lbl.setCharacterSize(13);
+        lbl.setStyle(sf::Text::Bold);
+        lbl.setFillColor(sf::Color(255, 220, 200));
+        const sf::FloatRect lb = lbl.getLocalBounds();
+        lbl.setOrigin({ lb.position.x + lb.size.x * 0.5f, lb.position.y + lb.size.y });
+        lbl.setPosition({ barX + barW * 0.5f, barY - 4.f });
+        target.draw(lbl);
+    }
 
     if (isKeyAsteroid) {
         float pulse = 0.5f + 0.5f * std::sin(animTime * 2.8f);
@@ -534,7 +703,7 @@ void Asteroid::drawOverlays(sf::RenderTarget& target,
         }
     }
 
-    if (hp < maxHp && !isMeteor) {
+    if (hp < maxHp && !isMeteor && !isBoss) {
         float barW   = radius * 2.f;
         float filled = barW * (hp / maxHp);
         float barY   = pos.y - radius - 8.f;
@@ -679,7 +848,9 @@ void AsteroidManager::updateMeteorsOnly(float dt, float ox, float oy,
 }
 
 void AsteroidManager::update(float dt, float ox, float oy, float areaW,
-                              float areaH, sf::Vector2f playerPos) {
+                              float areaH, sf::Vector2f playerPos,
+                              float hpMult, OreTier maxTier,
+                              bool phase3SalvoActive) {
     m_alive = 0;
     const float bottom = oy + areaH;
     for (auto& a : m_pool) {
@@ -688,10 +859,20 @@ void AsteroidManager::update(float dt, float ox, float oy, float areaW,
             tickOneMeteor(a, dt, ox, oy, areaW, areaH, playerPos);
         } else {
             a.update(dt, playerPos);
-            a.bounceWalls(ox, oy, ox + areaW, bottom);
+            if (!a.isBoss && !a.isMiniBoss)
+                a.bounceWalls(ox, oy, ox + areaW, bottom);
+            else {
+                const float l = ox + a.radius;
+                const float r = ox + areaW - a.radius;
+                const float t = oy + a.radius;
+                const float b = bottom - a.radius;
+                a.pos.x = clamp(a.pos.x, l, r);
+                a.pos.y = clamp(a.pos.y, t, b);
+            }
         }
         m_alive++;
     }
+    tickBossShooting(dt, playerPos, hpMult, maxTier, phase3SalvoActive);
 }
 
 void AsteroidManager::clearMeteorSpawnQueue() {
@@ -983,6 +1164,58 @@ bool AsteroidManager::hasLivingBoss() const {
         if (a.alive && a.isBoss)
             return true;
     return false;
+}
+
+Asteroid* AsteroidManager::getBoss() {
+    for (auto& a : m_pool)
+        if (a.alive && a.isBoss)
+            return &a;
+    return nullptr;
+}
+
+void AsteroidManager::spawnBossProjectile(sf::Vector2f origin,
+                                           sf::Vector2f direction,
+                                           OreTier      tier, float hpMult) {
+    Asteroid* a = claim();
+    if (!a)
+        return;
+    a->spawnBossProjectile(origin, direction, hpMult, tier, m_fieldRadiusScale);
+    refreshAliveCount();
+}
+
+void AsteroidManager::spawnMiniBoss(sf::Vector2f pos, float hpMult,
+                                     OreTier tier) {
+    Asteroid* a = claim();
+    if (!a)
+        return;
+    a->spawnMiniBoss(pos, hpMult, tier);
+    refreshAliveCount();
+}
+
+void AsteroidManager::tickBossShooting(float dt, sf::Vector2f playerPos,
+                                        float hpMult, OreTier maxTier,
+                                        bool phase3SalvoActive) {
+    for (auto& a : m_pool) {
+        if (!a.alive || !a.isBoss)
+            continue;
+        const float hpRatio = a.maxHp > 0.f ? (a.hp / a.maxHp) : 1.f;
+        const int   phase   = bossPhaseFromRatio(hpRatio);
+        if (phase >= 3 && phase3SalvoActive)
+            continue;
+
+        a.bossShootTimer -= dt;
+        const float interval = bossShootInterval(phase);
+        if (a.bossShootTimer > 0.f)
+            continue;
+
+        a.bossShootTimer = interval;
+        sf::Vector2f dir = playerPos - a.pos;
+        if (length(dir) > 1.f)
+            dir = normalize(dir);
+        else
+            dir = { 0.f, 1.f };
+        spawnBossProjectile(a.pos, dir, maxTier, hpMult);
+    }
 }
 
 Asteroid* AsteroidManager::nearest(sf::Vector2f from, float maxDist,

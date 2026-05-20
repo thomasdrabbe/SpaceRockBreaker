@@ -171,6 +171,13 @@ public:
     /// Basis 2.8s; stijgt met Bullet Range-upgrade (kogels vliegen verder).
     float bulletLifetimeSec() const;
 
+    float maxFuel()         const;
+    float fuelPassiveDrain() const;
+    float fuelMoveDrain()   const;
+    float fuelShootDrain()  const;
+    float fuelOnKill()      const;
+    float fuelTurretDrain() const;
+
     float oreValueMult()      const;
     float autoCollectRadius() const;
     float oreLuckBonus()      const;

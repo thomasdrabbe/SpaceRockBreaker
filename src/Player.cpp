@@ -23,6 +23,14 @@ void Player::resetHp() {
     m_hp = m_maxHp;
 }
 
+void Player::addFuel(float amount) {
+    m_fuel = std::min(m_maxFuel, m_fuel + amount);
+}
+
+void Player::drainFuel(float amount) {
+    m_fuel = std::max(0.f, m_fuel - amount);
+}
+
 void Player::updateHpRegen(float dt) {
     if (m_hp < m_maxHp)
         m_hp = std::min(m_maxHp, m_hp + HP_REGEN_PER_SEC * dt);
@@ -66,26 +74,45 @@ void Player::update(float            dt,
                      float            panelTop,
                      float            panelW,
                      float            panelH,
+                     float            fuelPassiveDrain,
+                     float            fuelMoveDrain,
+                     float            fuelShootDrain,
+                     float            fuelTurretDrain,
                      AsteroidManager& asteroids,
                      BulletManager&   bullets,
                      ParticleSystem&  particles) {
 
+    const bool canAct = !outOfFuel();
+
+    drainFuel(fuelPassiveDrain * dt);
+    drainFuel(fuelTurretDrain * dt);
+
     // ── WASD beweging ─────────────────────────────────────
     sf::Vector2f move{ 0.f, 0.f };
 
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::W))
-        move.y -= 1.f;
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::S))
-        move.y += 1.f;
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::A))
-        move.x -= 1.f;
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D))
-        move.x += 1.f;
+    if (canAct) {
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::W))
+            move.y -= 1.f;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::S))
+            move.y += 1.f;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::A))
+            move.x -= 1.f;
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D))
+            move.x += 1.f;
+    }
 
-    if (length(move) > 0.f)
+    if (length(move) > 0.f) {
         move = normalize(move);
+        drainFuel(fuelMoveDrain * dt);
+    }
 
-    pos += move * speed * dt;
+    const float fr = fuelRatio();
+    if (fr < 0.25f) {
+        const float speedMult = 0.3f + fr * 2.8f;
+        pos += move * speed * speedMult * dt;
+    } else {
+        pos += move * speed * dt;
+    }
 
     // ── Check asteroid collision ──────────────────────────
     m_hitThisFrame = false;
@@ -131,8 +158,9 @@ void Player::update(float            dt,
 
     // ── Vuren ─────────────────────────────────────────────
     fireTimer -= dt;
-    if (fireTimer <= 0.f && target) {
+    if (canAct && fireTimer <= 0.f && target) {
         fireTimer = fireInterval;
+        drainFuel(fuelShootDrain);
 
         bool  isCrit   = chance(critChance);
         float finalDmg = isCrit ? damage * critMult : damage;

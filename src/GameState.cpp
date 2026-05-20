@@ -84,6 +84,9 @@ GameState::upgradeCatalog = {{
       400.0,
       1.70,
       10 },
+    { "Fuel Tank",       "+20% max fuel per level",        80.0,  1.55, 0 },
+    { "Fuel Efficiency", "-8% fuel drain per level",       100.0, 1.60, 0 },
+    { "Fuel on Kill",    "+0.5 fuel per asteroid destroyed", 90.0, 1.50, 0 },
 }};
 static_assert(
     GameState::upgradeCatalog.size()
@@ -443,6 +446,34 @@ int GameState::splitShot() const {
 float GameState::bulletLifetimeSec() const {
     constexpr float base = 2.8f;
     return base * (1.f + 0.08f * levelOf(UpgradeID::BULLET_RANGE));
+}
+
+float GameState::maxFuel() const {
+    return 100.f * (1.f + levelOf(UpgradeID::FUEL_CAPACITY) * 0.20f);
+}
+
+float GameState::fuelPassiveDrain() const {
+    const float base = 3.f;
+    const float eff  = 1.f - levelOf(UpgradeID::FUEL_EFFICIENCY) * 0.08f;
+    return base * std::max(0.2f, eff);
+}
+
+float GameState::fuelMoveDrain() const {
+    const float base = 2.f;
+    const float eff  = 1.f - levelOf(UpgradeID::FUEL_EFFICIENCY) * 0.05f;
+    return base * std::max(0.1f, eff);
+}
+
+float GameState::fuelShootDrain() const {
+    return 0.3f;
+}
+
+float GameState::fuelOnKill() const {
+    return 1.5f + levelOf(UpgradeID::FUEL_ON_KILL) * 0.5f;
+}
+
+float GameState::fuelTurretDrain() const {
+    return 0.4f * static_cast<float>(turretCount());
 }
 
 float GameState::oreValueMult() const {

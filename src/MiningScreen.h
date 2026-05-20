@@ -45,6 +45,7 @@ public:
     void init(sf::Font& font,
               float panelX, float panelY,
               float panelW, float panelH,
+              float uiScale,
               const sf::Texture* keyIconTex = nullptr);
 
     /// creditsEarned : credits verdiend via Plinko (niet hier)
@@ -77,8 +78,12 @@ public:
                        GameState& state);
     void clearAll();
     void prepareNewRun();
+    void initPlayerFuel(const GameState& state);
 
     bool pullBossReturnToBase();
+    bool pullBossPhase2();
+    bool pullBossPhase3();
+    bool pullFuelEmpty();
     /// Boss verslagen maar nog loot op het veld — mining moet door simuleren.
     bool bossReturnPending() const { return m_pendingBossReturnToBase; }
 
@@ -103,6 +108,7 @@ private:
     float        m_y    = 0.f;
     float        m_w    = 0.f;
     float        m_h    = 0.f;
+    float        m_uiScale = 1.f;
 
     // ── Entities ──────────────────────────────────────────
     AsteroidManager m_asteroids;
@@ -182,6 +188,13 @@ private:
     int                    m_meteorShowerTurretKills = 0;
     bool                   m_meteorEasterEggNotify = false;
 
+    bool  m_bossPhase2Spawned  = false;
+    bool  m_bossPhase3Active   = false;
+    float m_bossMeteorTimer    = 0.f;
+    bool  m_pendingBossPhase2  = false;
+    bool  m_pendingBossPhase3  = false;
+    bool  m_pullFuelEmpty      = false;
+
     void resetMeteorShowerSchedule();
 
     // ── Collision ─────────────────────────────────────────
@@ -201,7 +214,7 @@ private:
     void drawCollectRing(sf::RenderTarget& target,
                          const GameState&  state)  const;
     void drawHUD(sf::RenderTarget& target, const GameState&  state,
-    float             warpCharge) const;
+                 float warpCharge, float animTime) const;
 
 
     static int targetAsteroidCount(int turrets);

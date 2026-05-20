@@ -80,6 +80,7 @@ void MiningScreen::setAudioBus(IAudioBus* audioBus) {
 void MiningScreen::init(sf::Font& font,
                          float panelX, float panelY,
                          float panelW, float panelH,
+                         float uiScale,
                          const sf::Texture* keyIconTex) {
     m_font       = &font;
     m_keyIconTex = keyIconTex;
@@ -87,6 +88,7 @@ void MiningScreen::init(sf::Font& font,
     m_y    = panelY;
     m_w    = panelW;
     m_h    = panelH;
+    m_uiScale = std::max(0.5f, uiScale);
 
     m_collectorPos = { m_x + m_w * 0.5f,
                        m_y + m_h * 0.5f };
@@ -99,11 +101,12 @@ void MiningScreen::init(sf::Font& font,
     loadNebulaPngTextures();
     loadAsteroidTextures();
 
+    const float shipH = 112.f * m_uiScale;
     if (m_playerShipTex.loadFromFile(resolveAssetPath("assets/player_ship.png"))) {
         m_playerShipTex.setSmooth(true);
-        m_player.setShipSprite(&m_playerShipTex, m_h * 0.03f);
+        m_player.setShipSprite(&m_playerShipTex, shipH);
     } else
-        m_player.setShipSprite(nullptr, m_h * 0.03f);
+        m_player.setShipSprite(nullptr, shipH);
 }
 
 void MiningScreen::loadNebulaPngTextures() {
@@ -207,7 +210,8 @@ void MiningScreen::drawAsteroidsWithSprites(sf::RenderTarget& target,
             a.drawShape(target, animTime, m_keyIconTex, nullptr);
         }
 
-        a.drawOverlays(target, animTime, m_font, m_keyIconTex, nullptr, true);
+        a.drawOverlays(target, animTime, m_font, m_keyIconTex, nullptr, true,
+                       m_x, m_y, m_w);
     }
 }
 
@@ -587,6 +591,7 @@ void MiningScreen::update(float      dt,
                             float      warpChargeStars) {
     //
     m_player.clearHit();
+    m_player.speed = 220.f * m_uiScale;
     // ── Sync turrets ──────────────────────────────────────
     syncTurrets(state);
 
@@ -613,6 +618,10 @@ void MiningScreen::update(float      dt,
                     state.splitShot(),
                     state.bulletLifetimeSec(),
                     m_x, m_y, m_w, m_h,
+                    state.fuelPassiveDrain(),
+                    state.fuelMoveDrain(),
+                    state.fuelShootDrain(),
+                    state.fuelTurretDrain(),
                     m_asteroids,
                     m_bullets,
                     m_particles);
@@ -642,13 +651,59 @@ void MiningScreen::update(float      dt,
         spawnTarget = 0;
     const float meteorSizeBonus =
         1.f + static_cast<float>(state.levelOf(UpgradeID::METEOR_SIZE)) * 0.15f;
-    m_asteroids.setMeteorRadiusScale(meteorSizeBonus);
-    const float screenScale = m_h / 900.f;
-    m_asteroids.setFieldRadiusScale(screenScale);
+    m_asteroids.setMeteorRadiusScale(meteorSizeBonus * m_uiScale);
+    m_asteroids.setFieldRadiusScale(m_uiScale);
     m_asteroids.maintainField(spawnTarget, m_x, m_y, m_w, m_h, asteroidHp,
                               state.maxOreTier());
     m_asteroids.tickMeteorSpawnQueue();
-    m_asteroids.update(dt, m_x, m_y, m_w, m_h, m_player.pos);
+    m_asteroids.update(dt, m_x, m_y, m_w, m_h, m_player.pos, asteroidHp,
+                       state.maxOreTier(), m_bossPhase3Active);
+
+    if (m_asteroids.hasLivingBoss()) {
+        Asteroid* boss = m_asteroids.getBoss();
+        if (boss) {
+            const float hpRatio =
+                boss->maxHp > 0.f ? (boss->hp / boss->maxHp) : 1.f;
+
+            if (hpRatio <= 0.66f && !m_bossPhase2Spawned) {
+                m_bossPhase2Spawned = true;
+                m_pendingBossPhase2 = true;
+                const sf::Vector2f left =
+                    boss->pos + sf::Vector2f(-boss->radius * 2.f, 0.f);
+                const sf::Vector2f right =
+                    boss->pos + sf::Vector2f(boss->radius * 2.f, 0.f);
+                m_asteroids.spawnMiniBoss(left, asteroidHp, state.maxOreTier());
+                m_asteroids.spawnMiniBoss(right, asteroidHp, state.maxOreTier());
+            }
+
+            if (hpRatio <= 0.33f) {
+                if (!m_bossPhase3Active) {
+                    m_bossPhase3Active  = true;
+                    m_pendingBossPhase3 = true;
+                }
+                m_bossMeteorTimer -= dt;
+                if (m_bossMeteorTimer <= 0.f) {
+                    m_bossMeteorTimer = 1.8f;
+                    sf::Vector2f toPlayer = m_player.pos - boss->pos;
+                    if (length(toPlayer) > 1.f)
+                        toPlayer = normalize(toPlayer);
+                    else
+                        toPlayer = { 0.f, 1.f };
+                    for (int i = -2; i <= 2; i++) {
+                        const float spread = static_cast<float>(i) * 0.25f;
+                        sf::Vector2f dir = normalize({
+                            toPlayer.x + spread,
+                            toPlayer.y + std::abs(spread) * 0.3f });
+                        m_asteroids.spawnBossProjectile(
+                            boss->pos, dir, state.maxOreTier(), asteroidHp);
+                    }
+                }
+            }
+        }
+    }
+
+    if (m_player.outOfFuel())
+        m_pullFuelEmpty = true;
 
     // ── Turrets ───────────────────────────────────────────
     m_turrets.update(dt,
@@ -671,19 +726,22 @@ void MiningScreen::update(float      dt,
 
     // ── Ore collectie (alleen ore, geen credits) ──────────
     double oreThisFrame = 0.0;
+    float  fuelThisFrame = 0.f;
     m_ores.update(dt,
                   m_collectorPos,
-                  state.autoCollectRadius(),
+                  state.autoCollectRadius() * m_uiScale,
                   oreThisFrame,
+                  fuelThisFrame,
                   &oreByTierEarned,
                   state.bulkProcess(),
                   m_particles);
     oreEarned += oreThisFrame;
+    m_player.addFuel(fuelThisFrame);
 
     int keysThisFrame = 0;
     m_keyPickups.update(dt,
                         m_collectorPos,
-                        state.autoCollectRadius(),
+                        state.autoCollectRadius() * m_uiScale,
                         keysThisFrame,
                         m_particles);
     if (keysThisFrame > 0) {
@@ -799,6 +857,17 @@ void MiningScreen::emitAsteroidDestroyedLoot(Asteroid& asteroid,
         }
         state.registerBossDefeated();
         m_pendingBossReturnToBase = true;
+    } else if (asteroid.isMiniBoss) {
+        const int count =
+            asteroid.oreDrop.count * asteroid.rarityDropMult() * 2;
+        m_ores.drop(
+            asteroid.pos,
+            asteroid.oreDrop.color,
+            asteroid.oreDrop.value * bzMult,
+            count,
+            asteroid.oreTier,
+            state.oreLuckBonus(),
+            m_particles);
     } else {
         int count = asteroid.oreDrop.count * asteroid.rarityDropMult();
         m_ores.drop(
@@ -828,8 +897,12 @@ void MiningScreen::resolveCollisions(GameState& state) {
 
             bullet.alive = false;
 
+            const bool wasBoss = asteroid.isBoss;
             bool destroyed = asteroid.hit(bullet.damage, m_particles);
             if (destroyed) {
+                m_player.addFuel(state.fuelOnKill());
+                if (wasBoss)
+                    m_player.addFuel(state.fuelOnKill() * 3.f);
                 if (asteroid.isMeteor && bullet.fromTurret) {
                     ++m_meteorShowerTurretKills;
                     if (!state.meteorDestroyerUnlocked
@@ -875,6 +948,7 @@ void MiningScreen::resolveMeteorAsteroidImpacts(GameState& state) {
 
             const bool destroyed = asteroid.hit(dmg, m_particles);
             if (destroyed) {
+                m_player.addFuel(state.fuelOnKill());
                 m_audio->play(Sfx::Explosion);
                 emitAsteroidDestroyedLoot(asteroid, state);
             }
@@ -916,6 +990,12 @@ void MiningScreen::clearAll() {
 void MiningScreen::prepareNewRun() {
     clearAll();
     m_pendingKeyDrop = 0;
+    m_bossPhase2Spawned = false;
+    m_bossPhase3Active  = false;
+    m_bossMeteorTimer   = 0.f;
+    m_pendingBossPhase2 = false;
+    m_pendingBossPhase3 = false;
+    m_pullFuelEmpty     = false;
     m_player.init(m_x + m_w * 0.5f, m_y + m_h * 0.5f);
     m_lastTurretCnt   = -1;
     m_lastNebulaZone  = -1;
@@ -923,6 +1003,29 @@ void MiningScreen::prepareNewRun() {
     m_lastNebulaRarity = OreRarity::COMMON;
     m_nebulaCachedIw   = -1;
     m_nebulaCachedIh   = -1;
+}
+
+void MiningScreen::initPlayerFuel(const GameState& state) {
+    m_player.setMaxFuel(state.maxFuel());
+    m_player.addFuel(state.maxFuel());
+}
+
+bool MiningScreen::pullBossPhase2() {
+    const bool v = m_pendingBossPhase2;
+    m_pendingBossPhase2 = false;
+    return v;
+}
+
+bool MiningScreen::pullBossPhase3() {
+    const bool v = m_pendingBossPhase3;
+    m_pendingBossPhase3 = false;
+    return v;
+}
+
+bool MiningScreen::pullFuelEmpty() {
+    const bool v = m_pullFuelEmpty;
+    m_pullFuelEmpty = false;
+    return v;
 }
 
 bool MiningScreen::pullBossReturnToBase() {
@@ -1070,7 +1173,7 @@ void MiningScreen::draw(sf::RenderTarget& target,
     target.setView(oldView);
 
     // ── HUD (buiten clipped view) ─────────────────────────
-    drawHUD(target, state, warpCharge);
+    drawHUD(target, state, warpCharge, animTime);
 
 }
 
@@ -1228,25 +1331,26 @@ void MiningScreen::drawWarpFlashOverlay(sf::RenderTarget& target,
 //  drawCollector
 // ─────────────────────────────────────────────────────────────
 void MiningScreen::drawCollector(sf::RenderTarget& target) const {
-    // Outer ring
-    sf::CircleShape outer(18.f);
-    outer.setOrigin({ 18.f, 18.f });
+    const float s = m_uiScale;
+    const float outerR = 18.f * s;
+    sf::CircleShape outer(outerR);
+    outer.setOrigin({ outerR, outerR });
     outer.setPosition(m_collectorPos);
     outer.setFillColor(sf::Color(20, 30, 60, 200));
     outer.setOutlineColor(sf::Color(80, 140, 255, 200));
-    outer.setOutlineThickness(3.f);
+    outer.setOutlineThickness(std::max(1.5f, 3.f * s));
     target.draw(outer);
 
-    // Inner core
-    sf::CircleShape inner(9.f);
-    inner.setOrigin({ 9.f, 9.f });
+    const float innerR = 9.f * s;
+    sf::CircleShape inner(innerR);
+    inner.setOrigin({ innerR, innerR });
     inner.setPosition(m_collectorPos);
     inner.setFillColor(sf::Color(100, 160, 255, 230));
     target.draw(inner);
 
-    // Centre dot
-    sf::CircleShape dot(3.5f);
-    dot.setOrigin({ 3.5f, 3.5f });
+    const float dotR = 3.5f * s;
+    sf::CircleShape dot(dotR);
+    dot.setOrigin({ dotR, dotR });
     dot.setPosition(m_collectorPos);
     dot.setFillColor(sf::Color(220, 235, 255));
     target.draw(dot);
@@ -1257,14 +1361,14 @@ void MiningScreen::drawCollector(sf::RenderTarget& target) const {
 // ─────────────────────────────────────────────────────────────
 void MiningScreen::drawCollectRing(sf::RenderTarget& target,
                                     const GameState&  state) const {
-    float r = state.autoCollectRadius();
+    const float r = state.autoCollectRadius() * m_uiScale;
 
     sf::CircleShape ring(r);
     ring.setOrigin({ r, r });
     ring.setPosition(m_collectorPos);
     ring.setFillColor(sf::Color::Transparent);
     ring.setOutlineColor(sf::Color(80, 140, 255, 35));
-    ring.setOutlineThickness(1.5f);
+    ring.setOutlineThickness(std::max(1.f, 1.5f * m_uiScale));
     target.draw(ring);
 }
 
@@ -1273,9 +1377,53 @@ void MiningScreen::drawCollectRing(sf::RenderTarget& target,
 // ─────────────────────────────────────────────────────────────
 void MiningScreen::drawHUD(sf::RenderTarget& target,
                              const GameState&  state,
-                             float             warpCharge) const {
+                             float             warpCharge,
+                             float             animTime) const {
     if (!m_font)
         return;
+
+    const float scale     = m_uiScale;
+    const float fuelRatio = m_player.fuelRatio();
+    const float fBarW     = std::round(120.f * scale);
+    const float fBarH     = std::round(10.f * scale);
+    const float fBarX     = m_x + std::round(8.f * scale);
+    const float fBarY     = m_y + std::round(8.f * scale);
+
+    sf::RectangleShape fuelBg({ fBarW, fBarH });
+    fuelBg.setPosition({ fBarX, fBarY });
+    fuelBg.setFillColor(sf::Color(40, 25, 10, 200));
+    target.draw(fuelBg);
+
+    const uint8_t fr =
+        static_cast<uint8_t>(255.f * (1.f - fuelRatio));
+    const uint8_t fg =
+        static_cast<uint8_t>(180.f * fuelRatio);
+    sf::RectangleShape fuelFill({ fBarW * fuelRatio, fBarH });
+    fuelFill.setPosition({ fBarX, fBarY });
+    fuelFill.setFillColor(sf::Color(fr, fg, 20, 220));
+    target.draw(fuelFill);
+
+    sf::Text fuelLabel(*m_font);
+    fuelLabel.setString("FUEL");
+    fuelLabel.setCharacterSize(static_cast<unsigned>(fBarH * 1.1f));
+    fuelLabel.setFillColor(sf::Color(200, 160, 80));
+    fuelLabel.setPosition({ fBarX - std::round(36.f * scale), fBarY });
+    target.draw(fuelLabel);
+
+    if (fuelRatio < 0.25f) {
+        sf::Text warn(*m_font);
+        warn.setString("LOW FUEL!");
+        warn.setCharacterSize(static_cast<unsigned>(14.f * scale));
+        warn.setStyle(sf::Text::Bold);
+        warn.setFillColor(sf::Color(
+            255, 80, 40,
+            static_cast<uint8_t>(180 + 75 * std::sin(animTime * 6.f))));
+        const sf::FloatRect wb = warn.getLocalBounds();
+        warn.setPosition({
+            m_x + m_w * 0.5f - wb.size.x * 0.5f,
+            m_y + m_h * 0.5f - std::round(60.f * scale) });
+        target.draw(warn);
+    }
 
     // ── Warp UI ───────────────────────────────────────────────
     if (state.warpDriveUnlocked()) {

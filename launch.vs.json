@@ -6,14 +6,14 @@
       "type": "default",
       "project": "CMakeLists.txt",
       "projectTarget": "SpaceRockBreaker",
-      "name": "SpaceRockBreaker (Debug)",
-      "currentDir": "${projectDir}/build/Debug"
+      "name": "SpaceRockBreaker (macOS Release)",
+      "currentDir": "${projectDir}/build-macos"
     },
     {
       "type": "default",
       "project": "CMakeLists.txt",
       "projectTarget": "SpaceRockBreaker",
-      "name": "SpaceRockBreaker (Release)",
+      "name": "SpaceRockBreaker (Windows Release)",
       "currentDir": "${projectDir}/build/Release"
     }
   ]

@@ -60,12 +60,13 @@ void OreManager::drop(sf::Vector2f    pos,
 //  update
 // ═════════════════════════════════════════════════════════════
 void OreManager::update(float           dt,
-                          sf::Vector2f    collectorPos,
-                          float           collectRadius,
-                          double&         oreOut,
-                          std::array<double, ORE_TIER_COUNT>* oreByTierOut,
-                          int             bulkMultiplier,
-                          ParticleSystem& particles) {
+                        sf::Vector2f    collectorPos,
+                        float           collectRadius,
+                        double&         oreOut,
+                        float&          fuelOut,
+                        std::array<double, ORE_TIER_COUNT>* oreByTierOut,
+                        int             bulkMultiplier,
+                        ParticleSystem& particles) {
     m_alive = 0;
 
     for (auto& o : m_pool) {
@@ -96,6 +97,7 @@ void OreManager::update(float           dt,
             if (distance(o.pos, collectorPos) < 8.f) {
                 const double gain = o.value * static_cast<double>(bulkMultiplier);
                 oreOut += gain;
+                fuelOut += 0.2f;
                 if (oreByTierOut) {
                     (*oreByTierOut)[static_cast<std::size_t>(o.tier)] += gain;
                 }
