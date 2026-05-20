@@ -338,6 +338,16 @@ static std::string fetchRemoteVersionText() {
 
     // Vraag meerdere mirrors op. Sommige endpoints kunnen tijdelijk achterlopen
     // door CDN-cache; we kiezen later de hoogste geldige semver.
+    // refs/heads/main werkt direct na public maken; /main/ kan minuten achterlopen.
+    tryEndpoint(
+        L"raw.githubusercontent.com",
+        LR"(/thomasdrabbe/SpaceRockBreaker/refs/heads/main/version.txt)"
+            + cacheBust,
+        "raw-refs+cachebust");
+    tryEndpoint(
+        L"raw.githubusercontent.com",
+        LR"(/thomasdrabbe/SpaceRockBreaker/refs/heads/main/version.txt)",
+        "raw-refs");
     tryEndpoint(
         L"raw.githubusercontent.com",
         LR"(/thomasdrabbe/SpaceRockBreaker/main/version.txt)" + cacheBust,
@@ -649,23 +659,26 @@ int main() {
         downloaded.store(0);
         total.store(0);
 
+        const std::wstring ts = L"?ts=" + std::to_wstring(GetTickCount64());
+        const std::wstring verW(remoteVer.begin(), remoteVer.end());
         std::vector<std::wstring> candidates;
-        if (!remoteVer.empty()) {
+        auto pushZip = [&](const wchar_t* branchPath) {
+            if (!remoteVer.empty()) {
+                candidates.push_back(
+                    std::wstring(branchPath)
+                    + L"/installer_output/SpaceRockBreaker_" + verW + L".zip" + ts);
+                candidates.push_back(
+                    std::wstring(branchPath) + L"/SpaceRockBreaker_" + verW
+                    + L".zip" + ts);
+            }
             candidates.push_back(
-                L"/thomasdrabbe/SpaceRockBreaker/main/installer_output/SpaceRockBreaker_"
-                + std::wstring(remoteVer.begin(), remoteVer.end())
-                + L".zip?ts=" + std::to_wstring(GetTickCount64()));
+                std::wstring(branchPath)
+                + L"/installer_output/SpaceRockBreaker.zip" + ts);
             candidates.push_back(
-                L"/thomasdrabbe/SpaceRockBreaker/main/SpaceRockBreaker_"
-                + std::wstring(remoteVer.begin(), remoteVer.end())
-                + L".zip?ts=" + std::to_wstring(GetTickCount64()));
-        }
-        candidates.push_back(
-            LR"(/thomasdrabbe/SpaceRockBreaker/main/installer_output/SpaceRockBreaker.zip?ts=)"
-            + std::to_wstring(GetTickCount64()));
-        candidates.push_back(
-            LR"(/thomasdrabbe/SpaceRockBreaker/main/SpaceRockBreaker.zip?ts=)"
-            + std::to_wstring(GetTickCount64()));
+                std::wstring(branchPath) + L"/SpaceRockBreaker.zip" + ts);
+        };
+        pushZip(L"/thomasdrabbe/SpaceRockBreaker/refs/heads/main");
+        pushZip(L"/thomasdrabbe/SpaceRockBreaker/main");
 
         for (const auto& p : candidates) {
             downloaded.store(0);
