@@ -215,6 +215,13 @@ inline std::string saveSlotPath(int slot) {
 // ─── Run (mining) vs basis (hub) ────────────────────────────
 enum class RunMode { BASE, RUNNING };
 
+/// Waarom een mining-run eindigt (terug naar basis).
+enum class RunEndReason : std::uint8_t {
+    NONE = 0,
+    FUEL_EMPTY,
+    ASTEROID_HIT,
+};
+
 // ─── Key asteroid ───────────────────────────────────────────
 constexpr float KEY_ASTEROID_SPAWN_DELAY_SEC = 30.f;
 

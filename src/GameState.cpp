@@ -87,7 +87,7 @@ GameState::upgradeCatalog = {{
     { "Fuel Tank",       "+20% max fuel per level",        80.0,  1.55, 0 },
     { "Fuel Efficiency", "-8% fuel drain per level",       100.0, 1.60, 0 },
     { "Fuel on Kill",    "+0.5 fuel per asteroid destroyed", 90.0, 1.50, 8 },
-    { "Fuel on Pickup",  "+0.12 fuel per ore collected",   85.0,  1.48, 5 },
+    { "Fuel on Pickup",  "+0.05 fuel per ore collected",   85.0,  1.48, 5 },
     { "Warp Fuel Refill","+10% full fuel chance on warp",  120.0, 1.55, 5 },
     { "Turret Calibration", "+25% turret damage per level", 260.0, 1.75, 0 },
     { "Turret Overcharge",  "+0.3 turret shots/sec per level", 310.0, 1.80, 0 },
@@ -535,6 +535,12 @@ int GameState::shieldExtraHits() const {
     return levelOf(UpgradeID::SHIELD_MULTI_HIT);
 }
 
+int GameState::shieldCollisionBudget() const {
+    if (levelOf(UpgradeID::SHIELD_HP) <= 0)
+        return 0;
+    return 1 + shieldExtraHits();
+}
+
 bool GameState::warpCollectsLooseOre() const {
     return levelOf(UpgradeID::WARP_ORE_BONUS) > 0;
 }
@@ -607,7 +613,7 @@ float GameState::fuelOnKill() const {
 }
 
 float GameState::fuelOnPickup() const {
-    return 0.2f + levelOf(UpgradeID::FUEL_ON_PICKUP) * 0.12f;
+    return 0.08f + levelOf(UpgradeID::FUEL_ON_PICKUP) * 0.05f;
 }
 
 float GameState::warpFuelRefillChance() const {

@@ -30,17 +30,10 @@ class IAudioBus;
 class MiningScreen {
 public:
     bool playerHit() const;
-    void playerTakeDamage(float dmg, const GameState& state) {
-        m_player.applyDamage(dmg,
-                             state.shieldMaxHp(),
-                             state.shieldRechargePerSec(),
-                             state.shieldRechargeDelaySec(),
-                             state.shieldExtraHits());
-    }
-    void resetPlayerHp() { m_player.resetHp(); }
-    bool playerHpZero() const { return m_player.hp() <= 0.f; }
-    float playerHp() const { return m_player.hp(); }
-    float playerMaxHp() const { return m_player.maxHp(); }
+    /// true = schild-buffer verbruikt; false = run moet eindigen (asteroïde-hit).
+    bool tryAbsorbAsteroidCollision(const GameState& state);
+    int  shieldBumpsRemaining() const { return m_shieldBumpsLeft; }
+    int  shieldBumpsMax() const { return m_shieldBumpsMax; }
 
     /// Eénmalige melding na Meteor Destroyer-unlock (hele meteor-shower vernietigd).
     bool pullMeteorEasterEgg();
@@ -91,7 +84,7 @@ public:
     bool pullBossReturnToBase();
     bool pullBossPhase2();
     bool pullBossPhase3();
-    bool pullFuelEmpty();
+    bool pullRunEnd(RunEndReason& reasonOut);
     /// Boss verslagen maar nog loot op het veld — mining moet door simuleren.
     bool bossReturnPending() const { return m_pendingBossReturnToBase; }
 
@@ -206,7 +199,9 @@ private:
     float m_bossMeteorTimer    = 0.f;
     bool  m_pendingBossPhase2  = false;
     bool  m_pendingBossPhase3  = false;
-    bool  m_pullFuelEmpty      = false;
+    RunEndReason m_pullRunEnd = RunEndReason::NONE;
+    int          m_shieldBumpsLeft = 0;
+    int          m_shieldBumpsMax  = 0;
 
     void resetMeteorShowerSchedule();
 

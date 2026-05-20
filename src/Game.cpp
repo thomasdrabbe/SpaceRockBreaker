@@ -643,43 +643,17 @@ void Game::update(float dt) {
             if (m_hitCooldown > 0.f) {
                 m_hitCooldown -= dt;
             } else if (m_mining.playerHit()) {
-                m_mining.playerTakeDamage(30.f, m_state);
                 m_hitCooldown = PLAYER_HIT_HP_COOLDOWN;
                 m_mining.particles().emitExplosion(
                     m_mining.playerPos(),
                     28.f, sf::Color(255, 120, 80), 18);
 
-                if (m_mining.playerHpZero()) {
-                    m_state.loseLife();
-                    m_mining.resetPlayerHp();
-                    m_hitCooldown = m_state.hitInvulnerabilitySec();
-                    m_mining.particles().emitExplosion(
-                        m_mining.playerPos(),
-                        40.f, sf::Color(255, 80, 60), 30);
-
-                    if (m_state.isGameOver()) {
-                        if (!m_audio->playGameOverMusicOnce())
-                            m_audio->play(Sfx::GameOver);
-                        m_state.gameOver();
-                        syncMiningSystemsFromState(true, true);
-                        moveRunToBaseState();
-                        pushNotif("GAME OVER - terug naar zone 1",
-                                  sf::Color(255, 60, 60));
-                    } else {
-                        if (m_activeTab != Tab::MINING
-                            && m_state.difficulty != Difficulty::Easy) {
-                            m_hitFlashTimer = 0.4f;
-                        }
-                        pushNotif("Leven verloren!  " +
-                                  std::to_string(m_state.lives) + " over",
-                                  sf::Color(255, 120, 60));
-                    }
-                } else {
+                if (m_mining.tryAbsorbAsteroidCollision(m_state)) {
                     pushNotif(
-                        "Schade! "
-                        + std::to_string(static_cast<int>(m_mining.playerHp()))
-                        + " HP",
-                        sf::Color(255, 180, 60));
+                        "Schild geraakt! Nog "
+                        + std::to_string(m_mining.shieldBumpsRemaining())
+                        + " buffer(s)",
+                        sf::Color(120, 200, 255));
                 }
             }
 
@@ -716,12 +690,22 @@ void Game::update(float dt) {
                 pushNotif("PHASE 3 - METEOR BARRAGE!",
                           sf::Color(255, 80, 60));
 
-            if (m_mining.pullFuelEmpty()) {
+            RunEndReason runEnd = RunEndReason::NONE;
+            if (m_mining.pullRunEnd(runEnd)) {
                 collectRunOreToState();
                 syncMiningSystemsFromState(false);
                 moveRunToBaseState();
-                pushNotif("Fuel op - terug naar basis",
-                          sf::Color(255, 140, 40));
+                if (runEnd == RunEndReason::FUEL_EMPTY) {
+                    pushNotif("Fuel op - terug naar basis",
+                              sf::Color(255, 140, 40));
+                } else if (runEnd == RunEndReason::ASTEROID_HIT) {
+                    pushNotif("Botsing met asteroïde - terug naar basis",
+                              sf::Color(255, 90, 70));
+                    if (m_activeTab != Tab::MINING
+                        && m_state.difficulty != Difficulty::Easy) {
+                        m_hitFlashTimer = 0.4f;
+                    }
+                }
             }
 
             if (m_mining.pullBossReturnToBase()) {
@@ -1108,8 +1092,6 @@ void Game::render() {
 
     drawForegroundTab();
 
-    if (m_activeTab == Tab::MINING && m_runMode == RunMode::RUNNING)
-        drawLives();
     drawSidePanel();
     drawSidePanelAuxButtons();
     m_notifications.draw(m_window, m_font, m_tabH + std::round(10.f * m_scale));

@@ -187,6 +187,7 @@ public:
     float shieldRechargePerSec() const;
     float shieldRechargeDelaySec() const;
     int   shieldExtraHits()   const;
+    int   shieldCollisionBudget() const;
     bool  warpCollectsLooseOre() const;
     bool  autoWarpEnabled()   const;
     float explosiveAsteroidChance() const;

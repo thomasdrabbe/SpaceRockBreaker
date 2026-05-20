@@ -596,13 +596,6 @@ void MiningScreen::update(float      dt,
     //
     m_player.clearHit();
     m_player.speed = state.shipSpeed() * m_uiScale;
-    m_player.updateShield(dt,
-                          state.shieldMaxHp(),
-                          state.shieldRechargePerSec(),
-                          state.shieldRechargeDelaySec(),
-                          state.shieldExtraHits());
-    if (state.shieldMaxHp() > 0.f && m_player.shieldMaxHp() <= 0.f)
-        m_player.resetHp();
     // ── Sync turrets / satellites ─────────────────────────
     syncTurrets(state);
     syncSatellites(state);
@@ -716,7 +709,7 @@ void MiningScreen::update(float      dt,
     }
 
     if (m_player.outOfFuel())
-        m_pullFuelEmpty = true;
+        m_pullRunEnd = RunEndReason::FUEL_EMPTY;
 
     // ── Turrets ───────────────────────────────────────────
     m_turrets.update(dt,
@@ -1112,7 +1105,9 @@ void MiningScreen::prepareNewRun() {
     m_bossMeteorTimer   = 0.f;
     m_pendingBossPhase2 = false;
     m_pendingBossPhase3 = false;
-    m_pullFuelEmpty     = false;
+    m_pullRunEnd        = RunEndReason::NONE;
+    m_shieldBumpsLeft   = 0;
+    m_shieldBumpsMax    = 0;
     m_player.init(m_x + m_w * 0.5f, m_y + m_h * 0.5f);
     m_lastTurretCnt   = -1;
     m_lastNebulaZone  = -1;
@@ -1126,6 +1121,8 @@ void MiningScreen::initPlayerFuel(const GameState& state) {
     m_player.resetHp();
     m_player.setMaxFuel(state.maxFuel());
     m_player.addFuel(state.maxFuel());
+    m_shieldBumpsMax  = state.shieldCollisionBudget();
+    m_shieldBumpsLeft = m_shieldBumpsMax;
 }
 
 void MiningScreen::refillFullFuel(const GameState& state) {
@@ -1145,10 +1142,22 @@ bool MiningScreen::pullBossPhase3() {
     return v;
 }
 
-bool MiningScreen::pullFuelEmpty() {
-    const bool v = m_pullFuelEmpty;
-    m_pullFuelEmpty = false;
-    return v;
+bool MiningScreen::pullRunEnd(RunEndReason& reasonOut) {
+    if (m_pullRunEnd == RunEndReason::NONE)
+        return false;
+    reasonOut    = m_pullRunEnd;
+    m_pullRunEnd = RunEndReason::NONE;
+    return true;
+}
+
+bool MiningScreen::tryAbsorbAsteroidCollision(const GameState& state) {
+    (void)state;
+    if (m_shieldBumpsLeft > 0) {
+        --m_shieldBumpsLeft;
+        return true;
+    }
+    m_pullRunEnd = RunEndReason::ASTEROID_HIT;
+    return false;
 }
 
 bool MiningScreen::pullBossReturnToBase() {
@@ -1560,6 +1569,28 @@ void MiningScreen::drawFuelBarAbovePlayer(sf::RenderTarget& target,
                            barY - gap - std::round(14.f * scale) });
         target.draw(warn);
     }
+
+    if (m_shieldBumpsMax > 0) {
+        const float dotR   = std::round(4.f * scale);
+        const float dotGap = std::round(6.f * scale);
+        const float dotsY  = barY + barH + std::round(10.f * scale);
+        const float rowW =
+            static_cast<float>(m_shieldBumpsMax) * (dotR * 2.f + dotGap)
+            - dotGap;
+        float cx = m_player.pos.x - rowW * 0.5f + dotR;
+        for (int i = 0; i < m_shieldBumpsMax; ++i) {
+            const bool filled = i < m_shieldBumpsLeft;
+            sf::CircleShape dot(dotR);
+            dot.setOrigin({ dotR, dotR });
+            dot.setPosition({ cx, dotsY });
+            dot.setFillColor(filled ? sf::Color(90, 180, 255, 240)
+                                    : sf::Color(35, 45, 70, 200));
+            dot.setOutlineColor(sf::Color(120, 200, 255, filled ? 220 : 90));
+            dot.setOutlineThickness(std::max(1.f, 1.2f * scale));
+            target.draw(dot);
+            cx += dotR * 2.f + dotGap;
+        }
+    }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1632,24 +1663,6 @@ void MiningScreen::drawHUD(sf::RenderTarget& target,
     zoneLabel.setFillColor(sf::Color(180, 210, 255));
     zoneLabel.setPosition({ m_x + 8.f, m_y + 8.f });
     target.draw(zoneLabel);
-
-    if (state.shieldMaxHp() > 0.f) {
-        const float sw = 70.f;
-        const float sh = 6.f;
-        const float sx = m_x + 8.f;
-        const float sy = m_y + 28.f;
-        sf::RectangleShape sbg(sf::Vector2f{ sw, sh });
-        sbg.setPosition({ sx, sy });
-        sbg.setFillColor(sf::Color(20, 30, 50, 180));
-        target.draw(sbg);
-        const float ratio = m_player.shieldMaxHp() > 0.f
-            ? m_player.shieldHp() / m_player.shieldMaxHp()
-            : 0.f;
-        sf::RectangleShape sfill(sf::Vector2f{ sw * ratio, sh });
-        sfill.setPosition({ sx, sy });
-        sfill.setFillColor(sf::Color(80, 180, 255, 220));
-        target.draw(sfill);
-    }
 
     if (state.isBonusZone) {
         static const char* const rNames[] = {

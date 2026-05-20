@@ -194,8 +194,6 @@ void Player::update(float            dt,
     pos.x = clamp(pos.x, panelLeft + padSide, panelLeft + panelW - padSide);
     pos.y = clamp(pos.y, panelTop + padTop, panelTop + panelH - padSide);
 
-    updateHpRegen(dt);
-
     // ── Auto-aim ──────────────────────────────────────────
     Asteroid* target = asteroids.pickTarget(targetMode, pos);
 
