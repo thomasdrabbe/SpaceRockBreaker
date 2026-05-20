@@ -208,5 +208,6 @@ private:
     float         m_fieldRadiusScale  = 1.f;
 
     bool spawnOneQueuedMeteor();
+    void finishMeteorQueueIfDone();
     Asteroid* claim();
 };

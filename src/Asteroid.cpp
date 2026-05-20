@@ -876,9 +876,17 @@ void AsteroidManager::update(float dt, float ox, float oy, float areaW,
 }
 
 void AsteroidManager::clearMeteorSpawnQueue() {
-    m_meteorQueueActive  = false;
-    m_meteorQueueTotal   = 0;
-    m_meteorQueueSpawned = 0;
+    m_meteorQueueActive        = false;
+    m_meteorQueueTotal         = 0;
+    m_meteorQueueSpawned       = 0;
+    m_lastMeteorSwarmSpawned   = 0;
+}
+
+void AsteroidManager::finishMeteorQueueIfDone() {
+    if (m_meteorQueueSpawned < m_meteorQueueTotal)
+        return;
+    m_meteorQueueActive      = false;
+    m_lastMeteorSwarmSpawned = livingMeteorCount();
 }
 
 int AsteroidManager::livingMeteorCount() const {
@@ -1028,16 +1036,16 @@ bool AsteroidManager::spawnOneQueuedMeteor() {
     }
 
     Asteroid* a = claim();
-    if (!a)
+    if (!a) {
+        ++m_meteorQueueSpawned;
+        finishMeteorQueueIfDone();
         return false;
+    }
 
     a->spawnMeteor(pos, m_meteorQueueVel, m_meteorQueueHpMult,
                    m_meteorQueueMaxOre, m_meteorRadiusScale);
     ++m_meteorQueueSpawned;
-    if (m_meteorQueueSpawned >= m_meteorQueueTotal) {
-        m_meteorQueueActive = false;
-        m_lastMeteorSwarmSpawned = m_meteorQueueSpawned;
-    }
+    finishMeteorQueueIfDone();
     refreshAliveCount();
     return true;
 }
@@ -1045,7 +1053,10 @@ bool AsteroidManager::spawnOneQueuedMeteor() {
 void AsteroidManager::tickMeteorSpawnQueue() {
     if (!m_meteorQueueActive)
         return;
-    spawnOneQueuedMeteor();
+    for (int guard = 0; guard < 32 && m_meteorQueueActive; ++guard) {
+        if (!spawnOneQueuedMeteor())
+            break;
+    }
 }
 
 void AsteroidManager::draw(sf::RenderTarget& target,

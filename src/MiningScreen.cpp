@@ -795,6 +795,15 @@ void MiningScreen::tickMeteorShower(float dt, GameState& state,
     const float interval = state.meteorShowerIntervalSec();
     m_meteorTimeToNext -= dt;
     if (m_meteorTimeToNext <= 0.f) {
+        const bool showerStillActive =
+            m_meteorShowerTracking
+            && (m_asteroids.meteorSpawnQueueActive()
+                || m_asteroids.livingMeteorCount() > 0);
+        if (showerStillActive) {
+            m_meteorTimeToNext = 0.5f;
+            return;
+        }
+
         m_meteorShowerSpawnCount = state.meteorShowerMeteorCount();
         m_meteorShowerKills      = 0;
         m_meteorShowerTracking   = true;
@@ -900,13 +909,14 @@ void MiningScreen::resolveCollisions(GameState& state) {
 
             bullet.alive = false;
 
-            const bool wasBoss = asteroid.isBoss;
+            const bool wasBoss  = asteroid.isBoss;
+            const bool wasMeteor = asteroid.isMeteor;
             bool destroyed = asteroid.hit(bullet.damage, m_particles);
             if (destroyed) {
                 m_player.addFuel(state.fuelOnKill());
                 if (wasBoss)
                     m_player.addFuel(state.fuelOnKill() * 3.f);
-                if (asteroid.isMeteor && m_meteorShowerTracking)
+                if (wasMeteor && m_meteorShowerTracking)
                     ++m_meteorShowerKills;
                 if (asteroid.isBoss)
                     m_audio->play(Sfx::BossExplode);
@@ -992,12 +1002,12 @@ void MiningScreen::tryCompleteMeteorShowerChallenge(GameState& state) {
     if (m_asteroids.livingMeteorCount() > 0)
         return;
 
-    const int spawned = m_asteroids.lastMeteorSwarmSpawned();
-    if (spawned < 1) {
+    const int target = m_asteroids.lastMeteorSwarmSpawned();
+    if (m_meteorShowerKills < 1) {
         m_meteorShowerTracking = false;
         return;
     }
-    if (m_meteorShowerKills < spawned)
+    if (target > 0 && m_meteorShowerKills < target)
         return;
 
     state.meteorDestroyerUnlocked = true;
