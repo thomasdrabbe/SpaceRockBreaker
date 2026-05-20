@@ -1,5 +1,97 @@
-Space Rock Breaker — upgrade roadmap (design spec).
-Full roadmap implemented in 1.1.50 (save v23).
-See skill tree + chest tab in game for all nodes.
+╔══════════════════════════════════════════════════════════════════════════════════════╗
+║         SPACE ROCK BREAKER — UPGRADE ROADMAP (geïmplementeerd v1.1.50+)             ║
+║         Beschrijvingen · Skill Tree · Kosten — sync met game-code                    ║
+╚══════════════════════════════════════════════════════════════════════════════════════╝
 
-Out of scope: missiles, afterburner, reflective shield, etc. (see full spec in chat).
+Status: alle items hieronder zijn in de game (save v23+), behalve de sectie
+"BEWUST NIET MEEGENOMEN".
+
+Notatie:  { naam, beschrijving, baseCost, costMult, maxLevel }
+SkillTree: { UpgradeID, gridX, gridY, vereiste UpgradeID, requireLevel }
+
+Let op: één node per rastercel. Waar het design-doc twee nodes op dezelfde
+(x,y) had, staat de targeting-tak één rij hoger (rij 0) boven de turret-tak (rij 1).
+
+══════════════════════════════════════════════════════════════════════════════════════
+  🚀  SHIP / MOVEMENT
+══════════════════════════════════════════════════════════════════════════════════════
+
+  SHIP_SPEED          SkillTree: (0,3) — WARP_DRIVE lv1
+  SPEED_EFFICIENCY    SkillTree: (0,5) — SHIP_SPEED lv3
+
+══════════════════════════════════════════════════════════════════════════════════════
+  🎯  AUTO-AIM / TARGETING
+══════════════════════════════════════════════════════════════════════════════════════
+
+  TARGET_PRIORITY     Design (4,1) → game (4,0) — TURRET_COUNT lv2
+  SEEKING_BULLETS     Design (5,1) → game (5,0) — TARGET_PRIORITY lv2
+
+  Gedrag:
+    • Nearest altijd (zonder upgrade)
+    • Lv1–4: Boss / Key / Ore tier / Lowest HP
+    • Mining: < > knoppen bij TARGET_PRIORITY lv1+
+    • targetMode opgeslagen in save
+
+  TURRET_DAMAGE       (4,1) — TURRET_COUNT lv1
+  TURRET_FIRE_RATE    (5,1) — TURRET_DAMAGE lv2
+  TURRET_FUEL_DRAIN   (6,1) — TURRET_FIRE_RATE lv2
+
+══════════════════════════════════════════════════════════════════════════════════════
+  ⭐  SATELLITE
+══════════════════════════════════════════════════════════════════════════════════════
+
+  SATELLITE           (7,1) — TURRET_FUEL_DRAIN lv2
+
+══════════════════════════════════════════════════════════════════════════════════════
+  🛡️  SHIELD
+══════════════════════════════════════════════════════════════════════════════════════
+
+  SHIELD_HP           (0,6) — FUEL_ON_KILL lv1   [FUEL_ON_KILL in game: (4,5)]
+  SHIELD_RECHARGE     (1,6) — SHIELD_HP lv2
+  SHIELD_DELAY        (2,6) — SHIELD_RECHARGE lv2
+  SHIELD_MULTI_HIT    (3,6) — SHIELD_DELAY lv3
+
+══════════════════════════════════════════════════════════════════════════════════════
+  🌀  WARP
+══════════════════════════════════════════════════════════════════════════════════════
+
+  WARP_ORE_BONUS      (1,4) — WARP_DRIVE lv3
+  AUTO_WARP           (0,4) — WARP_DRIVE lv5
+  [PLINKO_BALLS verschoven naar (0,5) i.p.v. (0,4)]
+
+══════════════════════════════════════════════════════════════════════════════════════
+  🪨  ASTEROID / MINING
+══════════════════════════════════════════════════════════════════════════════════════
+
+  ORE_ON_KILL         (3,2) — ORE_LUCK lv2   [UNLOCK_BRONZE → (2,2)]
+  EXPLOSIVE_ASTEROIDS (5,6) — ASTEROID_HP lv3
+  CHAIN_REACTION      (6,6) — EXPLOSIVE_ASTEROIDS lv3
+
+══════════════════════════════════════════════════════════════════════════════════════
+  🤖  AUTOMATION
+══════════════════════════════════════════════════════════════════════════════════════
+
+  AUTO_SELL_THRESHOLD (4,4) — AUTO_PLINKO lv3
+
+══════════════════════════════════════════════════════════════════════════════════════
+  🌀  CHEST — PLINKO_REFINER_PEG
+══════════════════════════════════════════════════════════════════════════════════════
+
+  PLINKO_REFINER_PEG  — chest tab, oranje peg-ring, tier +1 op hit
+
+══════════════════════════════════════════════════════════════════════════════════════
+  ❌  BEWUST NIET MEEGENOMEN
+══════════════════════════════════════════════════════════════════════════════════════
+
+  Missiles, Afterburner, Inertia Dampener, Reflective Shield, Shield Pulse,
+  Warp Trail Damage, Bouncy Asteroids, Magnetic Ore, Auto Fuel Warning,
+  Defensive Missiles
+
+══════════════════════════════════════════════════════════════════════════════════════
+  Zoeken in de skill tree
+══════════════════════════════════════════════════════════════════════════════════════
+
+  • Target Priority: kolom 4, rij 0 (boven Turret Calibration)
+  • Turret-tak: rij 1, kolommen 4–7
+  • Shield: rij 6, kolommen 0–3
+  • Warp QoL: rij 4, kolommen 0–1 (Autopilot / Vacuum Warp)
