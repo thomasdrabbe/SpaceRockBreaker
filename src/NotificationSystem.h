@@ -18,6 +18,7 @@ public:
               float topInset = 0.f) const;
 
     bool hasBadgeFor(int tabIndex) const;
+    void setTabBadge(int tabIndex);
     void clearBadge(int tabIndex);
 
     static constexpr int kMaxVisible = 5;

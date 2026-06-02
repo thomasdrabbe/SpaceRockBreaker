@@ -202,9 +202,9 @@ void UnlockSystem::update(GameState&           state,
             "Zone 2 bereikt! Weapon-upgrades in de skill tree.",
             sf::Color(255, 180, 140),
             4.f,
-            -1);
+            static_cast<int>(Tab::SKILL_TREE));
         markDone(UnlockPhase::WEAPONS);
-        effects.focusSkillTreeTab();
+        effects.setTabBadge(Tab::SKILL_TREE);
     }
 
     if (!state.unlockPhaseDone[toIndex(UnlockPhase::MINING)]
@@ -225,7 +225,7 @@ void UnlockSystem::update(GameState&           state,
             4.f,
             static_cast<int>(Tab::SKILL_TREE));
         markDone(UnlockPhase::AUTO_PLINKO);
-        effects.focusSkillTreeTab();
+        effects.setTabBadge(Tab::SKILL_TREE);
     }
 
     if (!state.unlockPhaseDone[toIndex(UnlockPhase::CHESTS)]
@@ -268,7 +268,7 @@ void UnlockSystem::update(GameState&           state,
             sf::Color(255, 180, 140),
             4.5f,
             static_cast<int>(Tab::SKILL_TREE));
-        effects.focusSkillTreeTab();
+        effects.setTabBadge(Tab::SKILL_TREE);
     }
 
     effects.setKeyAsteroidsEnabled(state.keyAsteroidsEnabled);

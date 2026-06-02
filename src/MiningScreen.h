@@ -85,6 +85,11 @@ public:
     bool pullBossPhase2();
     bool pullBossPhase3();
     bool pullRunEnd(RunEndReason& reasonOut);
+    void enterRunEndHold(RunEndReason reason);
+    void clearRunEndHold();
+    [[nodiscard]] bool inRunEndHold() const {
+        return m_runEndHoldReason != RunEndReason::NONE;
+    }
     /// Boss verslagen maar nog loot op het veld — mining moet door simuleren.
     bool bossReturnPending() const { return m_pendingBossReturnToBase; }
 
@@ -199,7 +204,8 @@ private:
     float m_bossMeteorTimer    = 0.f;
     bool  m_pendingBossPhase2  = false;
     bool  m_pendingBossPhase3  = false;
-    RunEndReason m_pullRunEnd = RunEndReason::NONE;
+    RunEndReason m_pullRunEnd       = RunEndReason::NONE;
+    RunEndReason m_runEndHoldReason = RunEndReason::NONE;
     int          m_shieldBumpsLeft = 0;
     int          m_shieldBumpsMax  = 0;
 

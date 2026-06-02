@@ -42,6 +42,11 @@ bool NotificationSystem::hasBadgeFor(int tabIndex) const {
     return m_tabBadges[static_cast<std::size_t>(tabIndex)];
 }
 
+void NotificationSystem::setTabBadge(int tabIndex) {
+    if (tabIndex >= 0 && tabIndex < TAB_COUNT)
+        m_tabBadges[static_cast<std::size_t>(tabIndex)] = true;
+}
+
 void NotificationSystem::clearBadge(int tabIndex) {
     if (tabIndex < 0 || tabIndex >= TAB_COUNT)
         return;

@@ -7,7 +7,7 @@
 ; - Handmatig Inno-compilen? Zorg dat deze string gelijk blijft aan version.txt.
 
 #define AppName      "Space Rock Breaker"
-#define AppVersion   "1.1.57"
+#define AppVersion   "1.1.59"
 #define AppPublisher "Chef Survival"
 #define AppExeName   "SpaceRockLauncher.exe"
 #define GameExeName  "SpaceRockBreaker.exe"

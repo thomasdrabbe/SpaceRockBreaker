@@ -21,7 +21,7 @@ class IUnlockEffects {
 public:
     virtual ~IUnlockEffects() = default;
     virtual void setTabVisible(Tab tab, bool visible) = 0;
-    virtual void focusSkillTreeTab() = 0;
+    virtual void setTabBadge(Tab tab) = 0;
     virtual void setKeyAsteroidsEnabled(bool enabled) = 0;
 };
 

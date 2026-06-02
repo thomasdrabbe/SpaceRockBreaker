@@ -593,7 +593,19 @@ void MiningScreen::update(float      dt,
                             double&    oreEarned,
                             std::array<double, ORE_TIER_COUNT>& oreByTierEarned,
                             float      warpChargeStars) {
-    //
+    if (m_runEndHoldReason != RunEndReason::NONE) {
+        m_particles.update(dt);
+        m_bullets.update(dt, m_x, m_y, m_w, m_h, state.seekingHomingDegPerFrame(),
+                         &m_asteroids, state.targetMode);
+        const float hpMult = std::max(
+            0.1f, 1.f - state.levelOf(UpgradeID::ASTEROID_HP) * 0.1f);
+        const float asteroidHp =
+            hpMult * state.levelHpMult() * state.difficultyAsteroidHpMult();
+        m_asteroids.update(dt, m_x, m_y, m_w, m_h, m_player.pos, asteroidHp,
+                           state.maxOreTier(), m_bossPhase3Active);
+        return;
+    }
+
     m_player.clearHit();
     m_player.speed = state.shipSpeed() * m_uiScale;
     // ── Sync turrets / satellites ─────────────────────────
@@ -1106,6 +1118,7 @@ void MiningScreen::prepareNewRun() {
     m_pendingBossPhase2 = false;
     m_pendingBossPhase3 = false;
     m_pullRunEnd        = RunEndReason::NONE;
+    m_runEndHoldReason  = RunEndReason::NONE;
     m_shieldBumpsLeft   = 0;
     m_shieldBumpsMax    = 0;
     m_player.init(m_x + m_w * 0.5f, m_y + m_h * 0.5f);
@@ -1150,8 +1163,19 @@ bool MiningScreen::pullRunEnd(RunEndReason& reasonOut) {
     return true;
 }
 
+void MiningScreen::enterRunEndHold(RunEndReason reason) {
+    m_runEndHoldReason = reason;
+    m_pullRunEnd       = RunEndReason::NONE;
+}
+
+void MiningScreen::clearRunEndHold() {
+    m_runEndHoldReason = RunEndReason::NONE;
+}
+
 bool MiningScreen::tryAbsorbAsteroidCollision(const GameState& state) {
     (void)state;
+    if (m_runEndHoldReason != RunEndReason::NONE)
+        return true;
     if (m_shieldBumpsLeft > 0) {
         --m_shieldBumpsLeft;
         return true;

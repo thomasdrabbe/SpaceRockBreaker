@@ -652,7 +652,7 @@ bool SkillTreeScreen::handleClick(sf::Vector2f pos, GameState& state) {
             m_activeSection = next;
             resetScroll();
         }
-        return true;
+        return false;
     }
 
     for (const auto& node : SKILL_TREE_NODES) {

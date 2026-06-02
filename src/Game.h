@@ -27,7 +27,8 @@ public:
 
     void setTabVisible(Tab t, bool visible);
     bool isTabVisible(Tab t) const;
-    void focusSkillTreeTab();
+    void markTabBadge(Tab t);
+    void tryStartRunFromBase();
 
 private:
     // ── Window ────────────────────────────────────────────
@@ -90,6 +91,15 @@ private:
     // Onkwetsbaar na hit (duur hangt van moeilijkheid af)
     float m_hitCooldown = 0.f;
     float m_oreFusionTimer = 0.f;
+    /// Korte blokkade na tab-wissel (voorkomt per ongeluk upgrade-koop).
+    float m_uiClickSuppressRemain = 0.f;
+    RunEndReason m_lastRunEndReason = RunEndReason::NONE;
+    RunEndReason m_runEndOutroReason = RunEndReason::NONE;
+    float        m_runEndOutroRemain = 0.f;
+    static constexpr float RUN_END_OUTRO_SEC = 1.0f;
+    void beginRunEndOutro(RunEndReason reason);
+    void finishRunEndOutro();
+    void drawRunEndOutroOverlay() const;
 
     bool m_mainMenuPickDifficulty = false;
     struct SaveSlotPreview {
