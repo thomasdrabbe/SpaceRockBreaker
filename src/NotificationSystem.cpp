@@ -20,6 +20,18 @@ void NotificationSystem::push(const std::string& message,
     e.holdSec  = std::max(0.1f, duration);
     e.badgeTab = badgeTab;
     e.elapsed  = 0.f;
+    if (!m_queue.empty()) {
+        const Entry& last = m_queue.back();
+        if (last.message == message && last.elapsed < 1.5f) {
+            m_queue.back().holdSec =
+                std::max(m_queue.back().holdSec, duration);
+            m_queue.back().elapsed = 0.f;
+            m_queue.back().color   = color;
+            if (badgeTab >= 0 && badgeTab < TAB_COUNT)
+                m_tabBadges[static_cast<std::size_t>(badgeTab)] = true;
+            return;
+        }
+    }
     m_queue.push_back(std::move(e));
     while (static_cast<int>(m_queue.size()) > kMaxVisible)
         m_queue.pop_front();

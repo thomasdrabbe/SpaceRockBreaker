@@ -243,6 +243,11 @@ constexpr int     BOSS_ZONE_INTERVAL    = 5;
 constexpr int     AUTO_PLINKO_UNLOCK_ZONE = FIRST_BOSS_ZONE + BOSS_ZONE_INTERVAL;
 /// Gratis boss-auto na 1e boss: zelfde 1 bal, maar dit veelvoud op fire-interval.
 constexpr float   AUTO_PLINKO_HALF_INTERVAL_MULT = 2.f;
+/// BAL4: max skill-kopen per hub-bezoek (voor prestige +3).
+constexpr int     HUB_UPGRADE_BUY_LIMIT_BASE       = 10;
+constexpr int     HUB_UPGRADE_BUY_LIMIT_PER_PRESTIGE = 3;
+/// BAL3: upgrade-prijzen stijgen licht per verslagen boss.
+constexpr double  BAL3_UPGRADE_COST_PER_BOSS = 0.06;
 /// Zone-knoppen per rij op het basis-paneel (meerdere rijen vanaf zone 6+).
 constexpr int     START_ZONE_BUTTONS_PER_ROW = 8;
 /// Max zones in start-kiezer (voorkomt freeze bij corrupte save).

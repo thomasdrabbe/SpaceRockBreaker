@@ -940,7 +940,8 @@ double GameState::costOf(UpgradeID id) const {
     }
     if (id == UpgradeID::PLINKO_BALLS && lv >= 5)
         return 2.0 * std::pow(1.18, static_cast<double>(lv));
-    return upgradeCost(def.baseCost, def.costMult, lv);
+    return upgradeCost(def.baseCost, def.costMult, lv)
+        * upgradePriceBalanceMult();
 }
 double GameState::costOf(PrestigeUpgradeID id) const {
     if (!prestigeIdInRange(id))
@@ -964,6 +965,8 @@ bool GameState::canBuy(UpgradeID id) const {
     const auto& def = upgradeCatalog[static_cast<std::size_t>(static_cast<int>(id))];
     const int   maxLv = effectiveMaxLevel(id);
     if (maxLv > 0 && levelOf(id) >= maxLv)
+        return false;
+    if (hubUpgradesRemaining() <= 0)
         return false;
     return credits >= costOf(id);
 }
@@ -1017,6 +1020,39 @@ void GameState::endRunRestoreZone() {
         currentLevel   = levelBeforeRun;
         levelBeforeRun = 0;
     }
+    resetHubUpgradeBudget();
+}
+
+void GameState::resetHubUpgradeBudget() {
+    upgradesBoughtThisHub = 0;
+}
+
+int GameState::bossesDefeatedCount() const {
+    if (nextBossMilestone <= FIRST_BOSS_ZONE)
+        return 0;
+    return (nextBossMilestone - FIRST_BOSS_ZONE) / BOSS_ZONE_INTERVAL;
+}
+
+double GameState::upgradePriceBalanceMult() const {
+    return 1.0 + BAL3_UPGRADE_COST_PER_BOSS
+               * static_cast<double>(bossesDefeatedCount());
+}
+
+int GameState::hubUpgradeBuyLimit() const {
+    return HUB_UPGRADE_BUY_LIMIT_BASE
+        + prestigeCount * HUB_UPGRADE_BUY_LIMIT_PER_PRESTIGE;
+}
+
+int GameState::hubUpgradesRemaining() const {
+    return std::max(0, hubUpgradeBuyLimit() - upgradesBoughtThisHub);
+}
+
+double GameState::estimatedBossCrystalReward() const {
+    const int z = nextBossMilestone;
+    const double bonus =
+        4.0 + static_cast<double>(z) * 0.8
+        + std::floor(std::sqrt(static_cast<double>(z)));
+    return std::max(4.0, bonus);
 }
 
 void GameState::doWarp() {
@@ -1082,6 +1118,7 @@ void GameState::buy(UpgradeID id) {
     if (!upgradeIdInRange(id) || !canBuy(id)) return;
     spendCredits(costOf(id));
     upgradeLevels[static_cast<std::size_t>(static_cast<int>(id))]++;
+    upgradesBoughtThisHub++;
 }
 void GameState::buy(PrestigeUpgradeID id) {
     if (!prestigeIdInRange(id) || !canBuy(id)) return;
@@ -1110,6 +1147,7 @@ void GameState::doPrestige() {
     const auto         savedGemCapBreaks = gemCapBreaks;
     const auto         savedGemEverFound = gemEverFound;
     const auto         savedGemsBeforeReset = gems;
+    const int          savedHighestZone     = highestZoneReached;
 
     addCrystals(crystalsOnPrestige());
     prestigeCount++;
@@ -1146,6 +1184,9 @@ void GameState::doPrestige() {
                 savedGemsBeforeReset[static_cast<std::size_t>(i)]
                 * keepFrac);
     }
+    if (savedHighestZone
+            >= GEM_DEFS[static_cast<int>(GemType::OBSIDIAN)].unlockZone)
+        addGem(GemType::OBSIDIAN, 1);
 
     for (int i = 0; i < keep &&
          i < static_cast<int>(UpgradeID::UPGRADE_COUNT); i++) {
@@ -1308,8 +1349,10 @@ GemType GameState::rollWarpGem() const {
         if (highestZoneReached < GEM_DEFS[i].unlockZone)
             continue;
         available[n] = i;
-        const float w = std::pow(2.8f, static_cast<float>(n));
-        weights[n]   = w;
+        float w = std::pow(2.8f, static_cast<float>(n));
+        if (i == static_cast<int>(GemType::OBSIDIAN))
+            w *= 0.35f;
+        weights[n] = w;
         totalW += w;
         n++;
     }
@@ -1438,6 +1481,33 @@ bool GameState::buyCapBreak(UpgradeID id) {
         return false;
     const GemType gem = gemTypeForUpgrade(id);
     if (!spendGems(gem, capBreakGemCost(id)))
+        return false;
+    gemCapBreaks[static_cast<std::size_t>(static_cast<int>(id))]++;
+    return true;
+}
+
+bool GameState::canCapBreakObsidian(UpgradeID id) const {
+    if (!upgradeIdInRange(id))
+        return false;
+    const auto& def =
+        upgradeCatalog[static_cast<std::size_t>(static_cast<int>(id))];
+    if (def.maxLevel <= 0)
+        return false;
+    const int breaks =
+        gemCapBreaks[static_cast<std::size_t>(static_cast<int>(id))];
+    if (breaks >= 3)
+        return false;
+    if (levelOf(id) < def.maxLevel + breaks)
+        return false;
+    if (highestZoneReached < GEM_DEFS[static_cast<int>(GemType::OBSIDIAN)].unlockZone)
+        return false;
+    return gemCount(GemType::OBSIDIAN) >= 1;
+}
+
+bool GameState::buyCapBreakObsidian(UpgradeID id) {
+    if (!canCapBreakObsidian(id))
+        return false;
+    if (!spendGems(GemType::OBSIDIAN, 1))
         return false;
     gemCapBreaks[static_cast<std::size_t>(static_cast<int>(id))]++;
     return true;

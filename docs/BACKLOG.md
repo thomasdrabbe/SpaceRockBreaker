@@ -30,21 +30,21 @@ Living document for planned work. Check off items as they ship.
 | ID | Item | Size | Prio | Status |
 |----|------|------|------|--------|
 | UX1 | Laatste run-reden op basis ("Fuel op" / "Botsing") | S | P2 | done |
-| UX2 | Warp-doel zichtbaar (ore X/Y, boss gate) | S | P2 | planned |
-| UX3 | Shortcuts op knoppen ([Space], tabs 1–5) | S | P2 | planned |
+| UX2 | Warp-doel zichtbaar (ore X/Y, boss gate) | S | P2 | done |
+| UX3 | Shortcuts op knoppen ([Space], tabs 1–5) | S | P2 | done |
 | UX4 | Na run-end: Mining-tab + pulse Start (geen auto Skill Tree) | S | P2 | done |
-| UX5 | Notificatie-queue / minder spam | M | P3 | planned |
+| UX5 | Notificatie-queue / minder spam | M | P3 | done |
 | UX6 | Tab-click bug (duplicate of B1) | — | — | merged → B1 |
-| UX7 | Skill tree: afford/grey node styling | M | P2 | planned |
-| UX8 | Locked tooltip met andere sectie-tab | S | P2 | partial |
-| UX9 | Highlight volgende logische upgrade na koop | M | P3 | planned |
-| UX10 | Plinko: grote Balls x/y + ore cost | S | P2 | overlaps U2 |
-| UX11 | Side panel: volgende boss + crystal preview | S | P2 | planned |
-| UX12 | Waarschuwing ore bijna vol (auto-Plinko) | S | P3 | planned |
-| UX13 | Shield buffer uitleg bij schip | S | P3 | planned |
-| UX14 | Target mode altijd zichtbaar in side panel | S | P2 | planned |
-| UX15 | Pauze-menu: duidelijke Terug/Hervat | S | P3 | planned |
-| UX16 | Zone-kiezer: aanbevolen zone | M | P3 | planned |
+| UX7 | Skill tree: afford/grey node styling | M | P2 | done |
+| UX8 | Locked tooltip met andere sectie-tab | S | P2 | done |
+| UX9 | Highlight volgende logische upgrade na koop | M | P3 | done |
+| UX10 | Plinko: grote Balls x/y + ore cost | S | P2 | done |
+| UX11 | Side panel: volgende boss + crystal preview | S | P2 | done |
+| UX12 | Waarschuwing ore bijna vol (auto-Plinko) | S | P3 | done |
+| UX13 | Shield buffer uitleg bij schip | S | P3 | done |
+| UX14 | Target mode altijd zichtbaar in side panel | S | P2 | done |
+| UX15 | Pauze-menu: duidelijke Terug/Hervat | S | P3 | done |
+| UX16 | Zone-kiezer: aanbevolen zone | M | P3 | done |
 
 ## D — Balans (na 1e boss te makkelijk)
 
@@ -54,8 +54,8 @@ Living document for planned work. Check off items as they ship.
 | BAL1b | Ore tier zone-gates + plinko/credit soft caps | S | P1 | done |
 | GEM | Gem drops, cap-break, crafting, save v24 | L | P1 | done |
 | BAL2 | Auto-Plinko: halve na 1e boss, vol na 2e | S | P1 | done |
-| BAL3 | Upgrade-prijzen / credits na boss temperen | M | P2 | planned |
-| BAL4 | Max upgrades per terugkeer basis (soft cap) | M | P3 | planned |
+| BAL3 | Upgrade-prijzen / credits na boss temperen | M | P2 | done |
+| BAL4 | Max upgrades per terugkeer basis (soft cap) | M | P3 | done |
 
 ## E — Gameplay / platform (deels live)
 
@@ -65,17 +65,17 @@ Living document for planned work. Check off items as they ship.
 | G2 | Fuel on Pickup genert | — | — | done |
 | G3 | Target Priority side panel | — | — | done (1.1.53+) |
 | G4 | Skill tree secties + scroll | — | — | done (1.1.55+) |
-| G5 | Sectie-indeling Ship/Asteroids/Plinko/Keukenlaatje | M | P2 | partial (tabs) |
+| G5 | Sectie-indeling Ship/Asteroids/Plinko/Keukenlaatje | M | P2 | done |
 | G6 | Roadmap upgrades (missiles, …) | L | P3 | see UPGRADE_ROADMAP.txt |
 | R1 | Windows CI + launcher zip | — | — | done (1.1.57) |
 | R2 | macOS .app lokaal | — | — | done |
-| R3 | macOS auto-update launcher | L | P3 | planned |
+| R3 | macOS auto-update launcher | L | P3 | done (`scripts/macos-update-launcher.sh`) |
 
 ---
 
-## Implementatie-volgorde
+## Implementatie-volgorde (historisch)
 
 1. A: B1, UX21, G7, U1, U2  
-2. B: T1–T3 (deelt badge/highlight systeem met UX21)  
-3. C: UX1–UX4  
-4. D: BAL1–BAL3  
+2. B: T1–T3  
+3. C: UX1–UX16  
+4. D: BAL1–BAL4, GEM UI/crafting/Obsidian  

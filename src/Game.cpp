@@ -569,6 +569,21 @@ void Game::update(float dt) {
         m_state.processOreFusion();
     }
 
+    if (m_runMode == RunMode::BASE
+        && m_state.levelOf(UpgradeID::AUTO_SELL_THRESHOLD) > 0) {
+        const double th = m_state.autoSellOreThreshold();
+        if (th > 0.0 && m_state.ore >= th * 0.82 && m_state.ore < th) {
+            m_oreCapWarnCooldown -= dt;
+            if (m_oreCapWarnCooldown <= 0.f) {
+                m_oreCapWarnCooldown = 10.f;
+                pushNotif("Ore bijna op auto-Plinko drempel — drop of koop",
+                          sf::Color(255, 190, 100), 3.f);
+            }
+        } else {
+            m_oreCapWarnCooldown = 0.f;
+        }
+    }
+
     double creditsEarned = 0.0;
     double oreEarned     = 0.0;
     std::array<double, ORE_TIER_COUNT> oreByTierEarned{};
@@ -1171,6 +1186,8 @@ void Game::onMouseClick(sf::Vector2f pos, sf::Mouse::Button btn) {
 
     switch (m_activeTab) {
         case Tab::SKILL_TREE: {
+            if (handleGemWorkbenchClick(pos))
+                break;
             const bool shift =
                 sf::Keyboard::isKeyPressed(sf::Keyboard::Key::LShift)
                 || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::RShift);
@@ -1178,7 +1195,8 @@ void Game::onMouseClick(sf::Vector2f pos, sf::Mouse::Button btn) {
                 syncMiningSystemsFromState(true);
                 m_audio->play(Sfx::UiClick);
                 if (shift)
-                    pushNotif("Cap-break gekocht!", sf::Color(200, 160, 255));
+                    pushNotif("Cap-break / Obsidian gebruikt!",
+                              sf::Color(200, 160, 255));
                 else
                     pushNotif("Upgrade gekocht!", sf::Color(120, 220, 255));
             }
@@ -1314,6 +1332,12 @@ void Game::onKeyPress(sf::Keyboard::Key key, bool ctrl, bool shift) {
                           sf::Color(255, 200, 60));
             break;
 
+        case K::B:
+            if (shouldShowRunRetreatButton()) {
+                m_audio->play(Sfx::UiClick);
+                retreatRunToBase();
+            }
+            break;
 
         default: break;
     }
@@ -1545,6 +1569,7 @@ void Game::resetNewGameUi() {
     m_mining.clearRunEndHold();
     m_tutorial = TutorialPhase::TAB_SKILL;
     m_notifications.setTabBadge(static_cast<int>(Tab::SKILL_TREE));
+    m_selectedStartZone = 1;
 }
 
 void Game::drawTabBar() const {
@@ -1628,6 +1653,7 @@ void Game::drawForegroundTab() const {
         case Tab::PLINKO:   drawPlinkoTab(st); break;
         case Tab::SKILL_TREE:
             m_skillTree.draw(m_window, m_state, st);
+            drawGemWorkbench(st);
             break;
         case Tab::CHESTS:   m_chest.draw(m_window, m_state, st); break;
         case Tab::PRESTIGE: drawPrestigeScreen();            break;
@@ -1763,8 +1789,24 @@ void Game::drawSidePanel() const {
         }
         line("Moeilijkheid", dl, dc);
     }
-    line("Boss bij", "Z " + std::to_string(m_state.nextBossMilestone),
-         sf::Color(255, 170, 190));
+    {
+        std::ostringstream boss;
+        boss << "Z " << m_state.nextBossMilestone << "  +"
+             << formatBig(m_state.estimatedBossCrystalReward()) << " cr";
+        line("Volgende boss", boss.str(), sf::Color(255, 170, 190));
+    }
+    if (m_runMode == RunMode::BASE) {
+        line("Hub kooplimiet",
+             std::to_string(m_state.hubUpgradesRemaining()) + " / "
+                 + std::to_string(m_state.hubUpgradeBuyLimit()),
+             sf::Color(180, 200, 255));
+    }
+    if (m_state.shieldCollisionBudget() > 0) {
+        line("Schild buffers",
+             std::to_string(m_state.shieldCollisionBudget())
+                 + " (extra hits)",
+             sf::Color(120, 200, 255));
+    }
     {
         const float skipAux = sidePanelAuxReservedHeight();
         if (skipAux > 0.f)
@@ -1800,7 +1842,7 @@ void Game::drawSidePanel() const {
 }
 
 bool Game::shouldShowTargetPriorityPanel() const {
-    return m_activeTab == Tab::MINING && !m_showMainMenu
+    return !m_showMainMenu
         && m_state.levelOf(UpgradeID::TARGET_PRIORITY) >= 1;
 }
 
@@ -2331,6 +2373,7 @@ void Game::handleMainMenuClick(sf::Vector2f pos) {
                     GameUnlockEffects unlockFx(*this, m_mining);
                     m_unlockSystem.update(m_state, m_notifications, unlockFx);
                     clampActiveTabToVisibility();
+                    m_selectedStartZone = recommendedStartZone();
                 } else {
                     pushNotif("Geen save in dit slot.",
                               sf::Color(255, 100, 80));
@@ -2578,9 +2621,9 @@ void Game::drawPauseOverlay() const {
 
     struct BtnDef { std::string label; sf::Color color; };
     const BtnDef btns[] = {
-        { "Doorgaan  [Escape]", sf::Color( 80, 160, 255) },
-        { "Opslaan   [P]",      sf::Color( 80, 220, 120) },
-        { "Main Menu",          sf::Color(255, 100,  80) },
+        { "Hervat  [Escape]", sf::Color( 80, 160, 255) },
+        { "Opslaan [P]",      sf::Color( 80, 220, 120) },
+        { "Hoofdmenu",        sf::Color(255, 100,  80) },
     };
 
     for (int i = 0; i < 3; i++) {
@@ -2669,29 +2712,37 @@ void Game::drawMiningStartZoneButtons(int selectedZone) const {
     const float labelY = layout.blockTopY - std::round(18.f * m_scale);
     const unsigned fLeg =
         static_cast<unsigned>(std::round(13.f * m_scale));
-    drawText("Startzone (bereikt via warp):",
-             cx - fLeg * 5.8f,
+    drawText("Startzone (* = aanbevolen):",
+             cx - fLeg * 6.2f,
              labelY,
              fLeg,
              sf::Color(150, 175, 210));
 
     const unsigned fBtn =
         static_cast<unsigned>(std::round(13.f * m_scale));
+    const int recZone = recommendedStartZone();
     for (int z = 1; z <= layout.visibleCount; ++z) {
         const sf::FloatRect rb = startZoneButtonRect(z, cx, layout);
         const bool selected = (z == selectedZone);
+        const bool recommended = (z == recZone);
         sf::RectangleShape btn(rb.size);
         btn.setPosition(rb.position);
         btn.setFillColor(selected
                              ? sf::Color(55, 90, 150, 240)
-                             : sf::Color(28, 38, 68, 220));
+                             : (recommended
+                                    ? sf::Color(40, 55, 85, 230)
+                                    : sf::Color(28, 38, 68, 220)));
         btn.setOutlineColor(selected
                                 ? sf::Color(140, 210, 255, 240)
-                                : sf::Color(70, 100, 150, 180));
+                                : (recommended
+                                       ? sf::Color(255, 200, 80, 220)
+                                       : sf::Color(70, 100, 150, 180)));
         btn.setOutlineThickness(selected ? 2.f : 1.f);
         m_window.draw(btn);
 
         std::string label = "Z" + std::to_string(z);
+        if (recommended && !selected)
+            label += "*";
         drawText(label,
                  rb.position.x + rb.size.x * 0.5f - fBtn * 0.55f,
                  rb.position.y + rb.size.y * 0.5f - fBtn * 0.45f,
@@ -3008,7 +3059,7 @@ void Game::drawSidePanelAuxButtons() const {
         m_window.draw(btn);
         unsigned fs =
             static_cast<unsigned>(std::round(15.f * m_scale));
-        drawText("Terug naar basis (run stoppen)",
+        drawText("Terug naar basis [B]",
                  rb.position.x + 14.f,
                  rb.position.y + rb.size.y * 0.5f - fs * 0.45f,
                  fs, sf::Color(200, 230, 255), true);
@@ -3149,6 +3200,110 @@ void Game::drawText(const std::string& str,
     txt.setFillColor(color);
     txt.setPosition({ x, y });
     m_window.draw(txt);
+}
+
+// ═════════════════════════════════════════════════════════════
+//  Gem workbench (skill tree tab)
+// ═════════════════════════════════════════════════════════════
+int Game::recommendedStartZone() const {
+    return std::clamp(m_state.highestZoneReached, 1,
+                      START_ZONE_PICKER_MAX_ZONES);
+}
+
+namespace {
+
+sf::FloatRect gemCraftButtonRect(float panelX, float panelY, float panelW,
+                                float panelH, float scale, int craftIndex) {
+    const float barH = std::round(54.f * scale);
+    const float y    = panelY + panelH - barH - 2.f;
+    const int   n    = GEM_TYPE_COUNT_INT - 1;
+    const float gap  = std::round(6.f * scale);
+    const float btnW =
+        (panelW - gap * static_cast<float>(n + 1))
+        / static_cast<float>(std::max(1, n));
+    return { { panelX + gap + btnW * static_cast<float>(craftIndex)
+               + gap * static_cast<float>(craftIndex),
+               y + 6.f },
+             { btnW, barH - 10.f } };
+}
+
+} // namespace
+
+void Game::drawGemWorkbench(bool seeThroughMiningBackdrop) const {
+    const float barH = std::round(54.f * m_scale);
+    const float y    = m_cntY + m_cntH - barH;
+
+    sf::RectangleShape bar(sf::Vector2f{ m_cntW, barH });
+    bar.setPosition({ m_cntX, y });
+    bar.setFillColor(hubBackdropTint(sf::Color(14, 12, 28, 245),
+                                     seeThroughMiningBackdrop));
+    bar.setOutlineColor(sf::Color(80, 60, 120, 200));
+    bar.setOutlineThickness(1.f);
+    m_window.draw(bar);
+
+    const unsigned fHdr =
+        static_cast<unsigned>(std::round(12.f * m_scale));
+    const unsigned fBtn =
+        static_cast<unsigned>(std::round(11.f * m_scale));
+    drawText("Gems: 5x laag -> 1x hoog  |  Shift+max node = cap-break",
+             m_cntX + 10.f, y + 4.f, fHdr, sf::Color(160, 150, 200));
+
+    for (int i = 0; i < GEM_TYPE_COUNT_INT - 1; ++i) {
+        const auto from = static_cast<GemType>(i);
+        const auto to   = static_cast<GemType>(i + 1);
+        const bool can  = m_state.isGemCraftable(from);
+        const sf::FloatRect rb =
+            gemCraftButtonRect(m_cntX, m_cntY, m_cntW, m_cntH, m_scale, i);
+
+        sf::RectangleShape btn(rb.size);
+        btn.setPosition(rb.position);
+        btn.setFillColor(can ? sf::Color(40, 30, 70, 240)
+                             : sf::Color(22, 20, 35, 200));
+        btn.setOutlineColor(can ? GEM_DEFS[i + 1].glowColor
+                                : sf::Color(50, 45, 70));
+        btn.setOutlineThickness(1.f);
+        m_window.draw(btn);
+
+        std::ostringstream lbl;
+        lbl << GEM_DEFS[i].name[0] << " x" << m_state.gemCount(from)
+            << " -> " << GEM_DEFS[i + 1].name;
+        drawText(lbl.str(),
+                 rb.position.x + 6.f,
+                 rb.position.y + rb.size.y * 0.5f - fBtn * 0.45f,
+                 fBtn,
+                 can ? sf::Color(220, 210, 255) : sf::Color(90, 85, 110));
+        (void)to;
+    }
+
+    if (m_state.gemCount(GemType::OBSIDIAN) > 0) {
+        std::ostringstream obs;
+        obs << "Obsidian x" << m_state.gemCount(GemType::OBSIDIAN)
+            << " (prestige cap-break)";
+        drawText(obs.str(),
+                 m_cntX + m_cntW - std::round(220.f * m_scale),
+                 y + barH - fHdr - 4.f,
+                 fHdr,
+                 sf::Color(180, 120, 255));
+    }
+}
+
+bool Game::handleGemWorkbenchClick(sf::Vector2f pos) {
+    for (int i = 0; i < GEM_TYPE_COUNT_INT - 1; ++i) {
+        const sf::FloatRect rb =
+            gemCraftButtonRect(m_cntX, m_cntY, m_cntW, m_cntH, m_scale, i);
+        if (!rb.contains(pos))
+            continue;
+        const auto from = static_cast<GemType>(i);
+        if (!m_state.isGemCraftable(from))
+            return true;
+        if (m_state.craftGem(from)) {
+            m_audio->play(Sfx::UiClick);
+            pushNotif(std::string("Craft: ") + GEM_DEFS[i + 1].name + "!",
+                      sf::Color(200, 160, 255));
+        }
+        return true;
+    }
+    return false;
 }
 
 // ═════════════════════════════════════════════════════════════

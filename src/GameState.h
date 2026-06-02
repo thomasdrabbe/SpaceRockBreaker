@@ -123,6 +123,15 @@ public:
     bool isZoneReachable(int zone) const;
     void beginRunAtZone(int startZone);
     void endRunRestoreZone();
+    void resetHubUpgradeBudget();
+
+    [[nodiscard]] int     bossesDefeatedCount() const;
+    [[nodiscard]] double upgradePriceBalanceMult() const;
+    [[nodiscard]] int     hubUpgradeBuyLimit() const;
+    [[nodiscard]] int     hubUpgradesRemaining() const;
+    [[nodiscard]] double estimatedBossCrystalReward() const;
+
+    int upgradesBoughtThisHub = 0;
 
     /// Zone 10+ bereikt of 2e boss verslagen (prestige telt ook).
     bool isAutoPlinkoUnlocked() const;
@@ -279,6 +288,8 @@ public:
     [[nodiscard]] bool gemMatchesUpgrade(UpgradeID id, GemType gem) const;
     [[nodiscard]] bool canCapBreak(UpgradeID id) const;
     bool buyCapBreak(UpgradeID id);
+    [[nodiscard]] bool canCapBreakObsidian(UpgradeID id) const;
+    bool buyCapBreakObsidian(UpgradeID id);
     bool craftGem(GemType from);
     [[nodiscard]] bool isGemCraftable(GemType from) const;
     [[nodiscard]] float gemCollectionBonus() const;

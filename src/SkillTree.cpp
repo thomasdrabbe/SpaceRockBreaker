@@ -168,7 +168,21 @@ int SkillTreeScreen::sectionTabAt(sf::Vector2f pos) const {
     return idx;
 }
 
-void SkillTreeScreen::drawSectionTabs(sf::RenderTarget& target) const {
+bool SkillTreeScreen::sectionHasAffordableUpgrade(
+    SkillTreeSection section, const GameState& state) const {
+    for (const auto& node : SKILL_TREE_NODES) {
+        if (skillTreeSectionOf(node.id) != section)
+            continue;
+        if (!state.isNodeVisible(node) || !state.isNodeUnlocked(node))
+            continue;
+        if (state.canBuy(node.id))
+            return true;
+    }
+    return false;
+}
+
+void SkillTreeScreen::drawSectionTabs(sf::RenderTarget& target,
+                                      const GameState&  state) const {
     const float tabH = sectionTabBarHeight();
     const float tabW =
         m_w / static_cast<float>(SkillTreeSection::COUNT);
@@ -198,6 +212,16 @@ void SkillTreeScreen::drawSectionTabs(sf::RenderTarget& target) const {
             tx + (tabW - lb.size.x) * 0.5f - lb.position.x,
             m_y + (tabH - lb.size.y) * 0.5f - lb.position.y });
         target.draw(lbl);
+
+        if (sectionHasAffordableUpgrade(sec, state) && !active) {
+            const float br = 5.f * m_uiScale;
+            sf::CircleShape dot(br);
+            dot.setOrigin({ br, br });
+            dot.setPosition({ tx + tabW - 10.f * m_uiScale,
+                              m_y + 9.f * m_uiScale });
+            dot.setFillColor(sf::Color(255, 90, 90));
+            target.draw(dot);
+        }
     }
 
     sf::RectangleShape sep(sf::Vector2f{ m_w, 1.f });
@@ -389,7 +413,7 @@ void SkillTreeScreen::draw(sf::RenderTarget& target,
 
     m_hoveredNode = nullptr;
 
-    drawSectionTabs(target);
+    drawSectionTabs(target, state);
     drawConnections(target, state);
 
     for (const auto& node : SKILL_TREE_NODES) {
@@ -482,9 +506,11 @@ void SkillTreeScreen::drawNode(sf::RenderTarget&     target,
     else if (bought)
         bgColor = sf::Color(15, 40, 70, 230);
     else if (affordable)
-        bgColor = sf::Color(20, 25, 50, 230);
+        bgColor = sf::Color(22, 32, 62, 235);
+    else if (unlocked)
+        bgColor = sf::Color(14, 16, 28, 210);
     else
-        bgColor = sf::Color(18, 20, 38, 230);
+        bgColor = sf::Color(12, 14, 22, 200);
 
     sf::Color borderColor;
     if (!unlocked)
@@ -495,19 +521,35 @@ void SkillTreeScreen::drawNode(sf::RenderTarget&     target,
         borderColor = sf::Color(120, 180, 255);
     else if (affordable)
         borderColor = sf::Color(80, 140, 255);
+    else if (unlocked)
+        borderColor = sf::Color(45, 55, 75, 180);
     else
-        borderColor = sf::Color(60, 80, 120);
+        borderColor = sf::Color(40, 45, 60);
+
+    const bool highlight =
+        node.id == m_tutorialHighlight && unlocked && !maxed;
 
     const float padIn = 8.f * m_uiScale;
     const float line1 = 8.f * m_uiScale;
     const float line2 = 28.f * m_uiScale;
     const float line3 = 46.f * m_uiScale;
 
+    if (highlight) {
+        sf::RectangleShape glow({ nodeW() + 8.f * m_uiScale,
+                                  nodeH() + 8.f * m_uiScale });
+        glow.setPosition({ pos.x - 4.f * m_uiScale, pos.y - 4.f * m_uiScale });
+        glow.setFillColor(sf::Color(255, 200, 80, 45));
+        glow.setOutlineColor(sf::Color(255, 200, 80, 140));
+        glow.setOutlineThickness(2.f * m_uiScale);
+        target.draw(glow);
+    }
+
     sf::RectangleShape bg({ nodeW(), nodeH() });
     bg.setPosition(pos);
     bg.setFillColor(hubBackdropTint(bgColor, seeThroughMiningBackdrop));
-    bg.setOutlineColor(borderColor);
-    bg.setOutlineThickness((hovered ? 2.5f : 2.f) * m_uiScale);
+    bg.setOutlineColor(highlight ? sf::Color(255, 200, 80) : borderColor);
+    bg.setOutlineThickness(
+        (highlight ? 3.f : (hovered ? 2.5f : 2.f)) * m_uiScale);
     target.draw(bg);
 
     sf::Text name(*m_font);
@@ -629,7 +671,7 @@ void SkillTreeScreen::drawTooltip(sf::RenderTarget&     target,
             static_cast<int>(node.id))];
 
     const float tw = 220.f * m_uiScale;
-    const float th = 96.f * m_uiScale;
+    const float th = 112.f * m_uiScale;
     const float tipPad = 8.f * m_uiScale;
     float tx = nodePos.x + nodeW() + tipPad;
     float ty = nodePos.y;
@@ -678,10 +720,44 @@ void SkillTreeScreen::drawTooltip(sf::RenderTarget&     target,
     costInfo.setFillColor(sf::Color(255, 215, 50));
     costInfo.setPosition({ tx + tipPad, ty + 72.f * m_uiScale });
     target.draw(costInfo);
+
+    if (!state.isNodeUnlocked(node)) {
+        if (const UpgradeNodeDef* req = findNodeById(node.requireId)) {
+            const auto sec = skillTreeSectionOf(req->id);
+            sf::Text secHint(*m_font);
+            secHint.setString(
+                std::string("Tab: ") + sectionTabLabel(sec));
+            secHint.setCharacterSize(fontSz(11));
+            secHint.setFillColor(sf::Color(255, 180, 120));
+            secHint.setPosition({ tx + tipPad, ty + 88.f * m_uiScale });
+            target.draw(secHint);
+        }
+    } else if (!state.canBuy(node.id)
+               && state.hubUpgradesRemaining() <= 0) {
+        sf::Text capHint(*m_font);
+        capHint.setString("Hub-kooplimiet bereikt");
+        capHint.setCharacterSize(fontSz(11));
+        capHint.setFillColor(sf::Color(255, 140, 100));
+        capHint.setPosition({ tx + tipPad, ty + 88.f * m_uiScale });
+        target.draw(capHint);
+    }
 }
 
 void SkillTreeScreen::setTutorialHighlight(UpgradeID id) {
     m_tutorialHighlight = id;
+}
+
+void SkillTreeScreen::highlightNextAffordable(const GameState& state) {
+    for (const auto& node : SKILL_TREE_NODES) {
+        if (!state.isNodeVisible(node) || !state.isNodeUnlocked(node))
+            continue;
+        if (!state.canBuy(node.id))
+            continue;
+        m_tutorialHighlight = node.id;
+        m_activeSection     = skillTreeSectionOf(node.id);
+        return;
+    }
+    m_tutorialHighlight = UpgradeID::UPGRADE_COUNT;
 }
 
 void SkillTreeScreen::setActiveSection(SkillTreeSection section) {
@@ -714,12 +790,16 @@ bool SkillTreeScreen::handleClick(sf::Vector2f pos, GameState& state,
         const int maxLv = state.effectiveMaxLevel(node.id);
         const bool maxed =
             maxLv > 0 && state.levelOf(node.id) >= maxLv;
-        if (shiftHeld && maxed && state.canCapBreak(node.id)) {
-            return state.buyCapBreak(node.id);
+        if (shiftHeld && maxed) {
+            if (state.canCapBreakObsidian(node.id))
+                return state.buyCapBreakObsidian(node.id);
+            if (state.canCapBreak(node.id))
+                return state.buyCapBreak(node.id);
         }
         if (!state.canBuy(node.id))
             continue;
         state.buy(node.id);
+        highlightNextAffordable(state);
         return true;
     }
     return false;

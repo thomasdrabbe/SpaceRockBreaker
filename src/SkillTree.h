@@ -39,6 +39,7 @@ public:
 
     bool handleClick(sf::Vector2f pos, GameState& state, bool shiftHeld = false);
     void setTutorialHighlight(UpgradeID id);
+    void highlightNextAffordable(const GameState& state);
     void setActiveSection(SkillTreeSection section);
     void handleScroll(float delta, sf::Vector2f pos, bool shiftHeld = false);
     /// Scrollbalk of leeg gebied: true = geen node-koop op deze klik.
@@ -83,7 +84,10 @@ private:
     float sectionTabBarHeight() const;
     float contentTop() const;
     float contentHeight() const;
-    void  drawSectionTabs(sf::RenderTarget& target) const;
+    void  drawSectionTabs(sf::RenderTarget& target,
+                          const GameState&  state) const;
+    bool  sectionHasAffordableUpgrade(SkillTreeSection section,
+                                      const GameState& state) const;
     /// Tab-index 0..3, of -1.
     int   sectionTabAt(sf::Vector2f pos) const;
 

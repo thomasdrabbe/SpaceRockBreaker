@@ -180,6 +180,10 @@ private:
     int           miningStartZoneAt(sf::Vector2f pos) const;
     void          drawMiningStartZoneButtons(int selectedZone) const;
     int           m_selectedStartZone = 1;
+    float         m_oreCapWarnCooldown  = 0.f;
+    [[nodiscard]] int recommendedStartZone() const;
+    void          drawGemWorkbench(bool seeThroughMiningBackdrop) const;
+    bool          handleGemWorkbenchClick(sf::Vector2f pos);
     void          drawMiningBasePanel() const;
 
     bool          shouldShowRunRetreatButton() const;
