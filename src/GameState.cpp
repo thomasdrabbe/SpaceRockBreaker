@@ -33,31 +33,31 @@ namespace {
 // ═════════════════════════════════════════════════════════════
 const std::array<UpgradeDef, static_cast<int>(UpgradeID::UPGRADE_COUNT)>
 GameState::upgradeCatalog = {{
-    // Weapons  (hogere basis, iets mildere mult t.o.v. economy — minder “gratis”)
-    { "Gun Damage",        "+8 base damage per shot",         95.0,  1.52, 0 },
-    { "Fire Rate",         "+0.4 shots/sec",                 140.0,  1.56, 0 },
-    { "Turret Count",      "Add 1 turret",                   340.0,  2.08, 0 },
-    { "Crit Chance",       "+5% crit chance",               190.0,  1.64, 0 },
-    { "Crit Multiplier",   "+0.5x crit damage",             230.0,  1.68, 0 },
-    { "Split Shot",        "Bullets split +1",               920.0,  2.28, 0 },
+    // Weapons — strakke caps (gun/fire lv3); gems kunnen later cap-breaken
+    { "Gun Damage",        "+8 base damage per shot",         95.0,  1.52, 3 },
+    { "Fire Rate",         "+0.4 shots/sec",                 140.0,  1.56, 3 },
+    { "Turret Count",      "Add 1 turret",                   340.0,  2.08, 4 },
+    { "Crit Chance",       "+5% crit chance",               190.0,  1.64, 4 },
+    { "Crit Multiplier",   "+0.5x crit damage",             230.0,  1.68, 4 },
+    { "Split Shot",        "Bullets split +1",               920.0,  2.28, 3 },
     // Mining
-    { "Ore Value",         "+20% ore value",                 118.0,  1.57, 0 },
-    { "Collect Radius",    "+30px collect radius",           102.0,  1.48, 0 },
-    { "Ore Luck",          "+5% bonus ore drop",             130.0,  1.62, 0 },
-    { "Asteroid HP",       "-10% asteroid HP",               260.0,  1.75, 0 },
+    { "Ore Value",         "+20% ore value",                 118.0,  1.57, 8 },
+    { "Collect Radius",    "+30px collect radius",           102.0,  1.48, 8 },
+    { "Ore Luck",          "+5% bonus ore drop",             130.0,  1.62, 6 },
+    { "Asteroid HP",       "-10% asteroid HP",               260.0,  1.75, 6 },
     // Plinko
     { "Plinko Rows",       "Add 1 row to Plinko",            275.0,  1.92, 8  },
-    { "Plinko Multiplier", "+10% slot multipliers",          215.0,  1.74, 0  },
-    { "Plinko Balls",      "+1 max ball at once",            118.0,  1.42, 0  },
-    { "Plinko Luck",       "+5% high-slot luck",             178.0,  1.64, 0  },
-    // Economy  (iets zachter mult zodat mid-game niet vastloopt)
-    { "Credit Multiplier", "+25% all credits",               198.0,  1.74, 0 },
-    { "Bulk Processor",    "Convert more ore per drop",      315.0,  1.96, 0 },
+    { "Plinko Multiplier", "+10% slot multipliers",          215.0,  1.74, 8  },
+    { "Plinko Balls",      "+1 max ball at once",            118.0,  1.42, 8  },
+    { "Plinko Luck",       "+5% high-slot luck",             178.0,  1.64, 8  },
+    // Economy
+    { "Credit Multiplier", "+25% all credits",               198.0,  1.74, 8 },
+    { "Bulk Processor",    "Convert more ore per drop",      315.0,  1.96, 6 },
     { "Auto-Plinko",
       "Lv1: unlock auto-drop; elk extra level +1 bal per tick (zelfde interval)",
       540.0,
       2.12,
-      0 },
+      6 },
     // Ore tier unlocks  (maxLevel = 1; vloeiendere curve, minder “muur” eindgame)
     { "Unlock Bronze",     "Spawn Bronze asteroids (3x ore)",     1400.0,  1.0, 1 },
     { "Unlock Silver",     "Spawn Silver asteroids (8x ore)",     6200.0,  1.0, 1 },
@@ -73,7 +73,7 @@ GameState::upgradeCatalog = {{
       35.0,
       1.42,
       5 },
-    { "Bullet Range", "+8% bullet travel time / range", 88.0, 1.50, 0 },
+    { "Bullet Range", "+8% bullet travel time / range", 88.0, 1.50, 6 },
     { "Meteor Damage",
       "Meteors damage asteroids on impact (unlock: destroy a full shower)",
       500.0,
@@ -84,26 +84,26 @@ GameState::upgradeCatalog = {{
       400.0,
       1.70,
       10 },
-    { "Fuel Tank",       "+20% max fuel per level",        80.0,  1.55, 0 },
-    { "Fuel Efficiency", "-8% fuel drain per level",       100.0, 1.60, 0 },
+    { "Fuel Tank",       "+20% max fuel per level",        80.0,  1.55, 8 },
+    { "Fuel Efficiency", "-8% fuel drain per level",       100.0, 1.60, 8 },
     { "Fuel on Kill",    "+0.5 fuel per asteroid destroyed", 90.0, 1.50, 8 },
     { "Fuel on Pickup",  "+0.05 fuel per ore collected",   85.0,  1.48, 5 },
     { "Warp Fuel Refill","+10% full fuel chance on warp",  120.0, 1.55, 5 },
-    { "Turret Calibration", "+25% turret damage per level", 260.0, 1.75, 0 },
-    { "Turret Overcharge",  "+0.3 turret shots/sec per level", 310.0, 1.80, 0 },
+    { "Turret Calibration", "+25% turret damage per level", 260.0, 1.75, 8 },
+    { "Turret Overcharge",  "+0.3 turret shots/sec per level", 310.0, 1.80, 6 },
     { "Turret Cooling",     "-12% fuel drain per active turret", 140.0, 1.60, 5 },
     { "Rich Veins",         "+6% double ore drop on destroy", 160.0, 1.65, 8 },
-    { "Ship Speed",         "+20 movement speed per level",    75.0,  1.50, 0 },
+    { "Ship Speed",         "+20 movement speed per level",    75.0,  1.50, 6 },
     { "Engine Trim",        "-10% fuel drain while moving",    90.0,  1.55, 6 },
     { "Target Priority",    "Unlock targeting modes (< >)",  180.0, 1.80, 4 },
     { "Seeking Rounds",     "+6 deg homing per frame",       380.0, 1.90, 5 },
-    { "Shield Plating",     "+30 shield HP per level",       220.0, 1.65, 0 },
-    { "Shield Capacitor",   "+15% shield recharge rate",     180.0, 1.60, 0 },
+    { "Shield Plating",     "+30 shield HP per level",       220.0, 1.65, 6 },
+    { "Shield Capacitor",   "+15% shield recharge rate",     180.0, 1.60, 6 },
     { "Quick Recovery",     "-0.4s shield recharge delay",   150.0, 1.55, 5 },
     { "Reinforced Shield",  "+1 hit before shield breaks",   420.0, 2.00, 4 },
     { "Vacuum Warp",        "Collect loose ore on warp",     450.0, 1.85, 1 },
     { "Autopilot",          "Auto-warp when ore goal met",   900.0, 2.20, 1 },
-    { "Shrapnel Core",      "+8% chain explosion chance",    340.0, 1.85, 0 },
+    { "Shrapnel Core",      "+8% chain explosion chance",    340.0, 1.85, 6 },
     { "Cascade Protocol",   "Explosions chain (max depth 3)",620.0, 2.10, 5 },
     { "Ore Overflow",       "Auto-Plinko when ore over cap", 480.0, 2.00, 5 },
     { "Satellite Drone",    "+1 orbiting combat drone",     1200.0, 2.50, 4 },
@@ -900,11 +900,8 @@ double GameState::costOf(UpgradeID id) const {
         return std::numeric_limits<double>::infinity();
     const auto& def = upgradeCatalog[static_cast<std::size_t>(static_cast<int>(id))];
     const int   lv  = levelOf(id);
-    if (id == UpgradeID::PLINKO_BALLS) {
-        if (lv < 30)
-            return 2.0 * std::pow(1.15, static_cast<double>(lv));
-        return upgradeCost(10.0, 1.20, std::max(0, lv - 20));
-    }
+    if (id == UpgradeID::PLINKO_BALLS && lv >= 5)
+        return 2.0 * std::pow(1.18, static_cast<double>(lv));
     return upgradeCost(def.baseCost, def.costMult, lv);
 }
 double GameState::costOf(PrestigeUpgradeID id) const {

@@ -58,7 +58,7 @@ enum class UpgradeID {
     CREDIT_MULT,
     BULK_PROCESS,
     AUTO_PLINKO,
-    // Ore tier unlocks (maxLevel = 1 each)
+    // Ore tier unlocks (maxLevel = 1 each; overige upgrades hebben caps in catalog)
     UNLOCK_BRONZE,
     UNLOCK_SILVER,
     UNLOCK_GOLD,
