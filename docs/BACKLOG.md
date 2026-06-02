@@ -21,9 +21,9 @@ Living document for planned work. Check off items as they ship.
 
 | ID | Item | Size | Prio | Status |
 |----|------|------|------|--------|
-| T1 | Tutorial: rode indicators (tab → sectie → node) | L | P1 | planned |
-| T2 | Pad: Skill Tree → Asteroids → Ore Value → Ship → Warp → Mining | — | P1 | planned |
-| T3 | Na basis: hint Start run + Space (G7) | S | P2 | planned |
+| T1 | Tutorial: rode indicators (tab → sectie → node) | L | P1 | done (basis) |
+| T2 | Pad: Skill Tree → Asteroids → Ore Value → Ship → Warp → Mining | — | P1 | done |
+| T3 | Na basis: hint Start run + Space (G7) | S | P2 | done |
 
 ## C — UX polish
 
@@ -32,7 +32,7 @@ Living document for planned work. Check off items as they ship.
 | UX1 | Laatste run-reden op basis ("Fuel op" / "Botsing") | S | P2 | done |
 | UX2 | Warp-doel zichtbaar (ore X/Y, boss gate) | S | P2 | planned |
 | UX3 | Shortcuts op knoppen ([Space], tabs 1–5) | S | P2 | planned |
-| UX4 | Na run-end: Mining-tab + pulse Start (geen auto Skill Tree) | S | P2 | planned |
+| UX4 | Na run-end: Mining-tab + pulse Start (geen auto Skill Tree) | S | P2 | done |
 | UX5 | Notificatie-queue / minder spam | M | P3 | planned |
 | UX6 | Tab-click bug (duplicate of B1) | — | — | merged → B1 |
 | UX7 | Skill tree: afford/grey node styling | M | P2 | planned |
@@ -50,7 +50,9 @@ Living document for planned work. Check off items as they ship.
 
 | ID | Item | Size | Prio | Status |
 |----|------|------|------|--------|
-| BAL1 | Zachtere crystal-curve vroege bosses | S | P1 | planned |
+| BAL1 | Zachtere crystal-curve vroege bosses | S | P1 | done |
+| BAL1b | Ore tier zone-gates + plinko/credit soft caps | S | P1 | done |
+| GEM | Gem drops, cap-break, crafting, save v24 | L | P1 | done |
 | BAL2 | Auto-Plinko unlock later (niet 1e boss) | S | P1 | planned |
 | BAL3 | Upgrade-prijzen / credits na boss temperen | M | P2 | planned |
 | BAL4 | Max upgrades per terugkeer basis (soft cap) | M | P3 | planned |

@@ -338,6 +338,8 @@ Game::Game()
         m_chestTex.setSmooth(!sheet);
     }
 
+    loadGemTextures();
+
     reinitSystems();
 
     migrateLegacySaveIfNeeded();
@@ -401,6 +403,7 @@ void Game::initLayout() {
 void Game::reinitSystems() {
     m_mining.init(m_font, m_cntX, m_cntY, m_cntW, m_cntH, m_scale,
                   m_keyTexLoaded ? &m_keyTex : nullptr);
+    m_mining.setGemTextures(&m_gemTexPtrs);
     if (m_audio)
         m_mining.setAudioBus(m_audio);
     m_skillTree.init(m_font, m_cntX, m_cntY, m_cntW, m_cntH, m_scale);
@@ -557,6 +560,9 @@ void Game::update(float dt) {
         clampActiveTabToVisibility();
     }
 
+    if (m_diskSessionActive && !m_showMainMenu && !m_paused)
+        updateTutorial();
+
     m_oreFusionTimer += dt;
     while (m_oreFusionTimer >= 1.f) {
         m_oreFusionTimer -= 1.f;
@@ -586,6 +592,7 @@ void Game::update(float dt) {
             m_mining.update(dt, m_state, creditsEarned, oreEarned,
                              oreByTierEarned,
                              m_warpCharge);
+            processGemPickupNotifs();
 
             if (m_state.bossCrystalPopup > 0.0) {
                 pushNotif("+ " + formatBig(m_state.bossCrystalPopup)
@@ -713,6 +720,7 @@ void Game::update(float dt) {
                         && m_state.bonusZoneRarity == OreRarity::LEGENDARY;
                     m_state.doWarp();
                     syncMiningSystemsFromState(false);
+                    m_mining.tickPendingGemSpawn(m_state);
                     if (m_state.isBonusZone) {
                         m_mining.spawnBonusZoneKeys(m_state);
                         m_keySpawnedThisZone = true;
@@ -1055,6 +1063,7 @@ void Game::render() {
     if (m_chestLootPopupActive && m_chestLootPopupRemain > 0.f)
         drawChestLootPopup();
     if (m_paused) drawPauseOverlay();
+    drawTutorialOverlay();
     m_window.display();
 }
 
@@ -1151,13 +1160,20 @@ void Game::onMouseClick(sf::Vector2f pos, sf::Mouse::Button btn) {
         return;
 
     switch (m_activeTab) {
-        case Tab::SKILL_TREE:
-            if (m_skillTree.handleClick(pos, m_state)) {
+        case Tab::SKILL_TREE: {
+            const bool shift =
+                sf::Keyboard::isKeyPressed(sf::Keyboard::Key::LShift)
+                || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::RShift);
+            if (m_skillTree.handleClick(pos, m_state, shift)) {
                 syncMiningSystemsFromState(true);
                 m_audio->play(Sfx::UiClick);
-                pushNotif("Upgrade gekocht!", sf::Color(120, 220, 255));
+                if (shift)
+                    pushNotif("Cap-break gekocht!", sf::Color(200, 160, 255));
+                else
+                    pushNotif("Upgrade gekocht!", sf::Color(120, 220, 255));
             }
             break;
+        }
         case Tab::PLINKO:   handlePlinkoClick(pos);   break;
         case Tab::PRESTIGE: handlePrestigeClick(pos); break;
         default: break;
@@ -1337,6 +1353,143 @@ void Game::markTabBadge(Tab t) {
     m_notifications.setTabBadge(static_cast<int>(t));
 }
 
+void Game::loadGemTextures() {
+    for (int i = 0; i < GEM_TYPE_COUNT_INT; ++i) {
+        m_gemTexLoaded[static_cast<std::size_t>(i)] = false;
+        m_gemTexPtrs[static_cast<std::size_t>(i)]   = nullptr;
+        const char* path = GEM_DEFS[i].spritePath;
+        if (!path)
+            continue;
+        if (m_gemTex[static_cast<std::size_t>(i)].loadFromFile(
+                resolveAssetPath(path))) {
+            m_gemTex[static_cast<std::size_t>(i)].setSmooth(true);
+            m_gemTexLoaded[static_cast<std::size_t>(i)] = true;
+            m_gemTexPtrs[static_cast<std::size_t>(i)] =
+                &m_gemTex[static_cast<std::size_t>(i)];
+        }
+    }
+}
+
+void Game::processGemPickupNotifs() {
+    int       count = 0;
+    GemType   type  = GemType::RUBY;
+    bool      isNew = false;
+    m_mining.pullGemPickupNotif(count, type, isNew);
+    if (count <= 0)
+        return;
+    const int ti = static_cast<int>(type);
+    if (ti < 0 || ti >= GEM_TYPE_COUNT_INT)
+        return;
+    const auto& gd = GEM_DEFS[ti];
+    if (isNew) {
+        pushNotif(std::string("Nieuw! ") + gd.name + " - ontsluit "
+                      + gd.category + " upgrades",
+                  gd.glowColor, 4.f);
+    } else {
+        pushNotif(std::string(gd.name) + " ("
+                      + std::to_string(m_state.gemCount(type)) + ")",
+                  gd.color);
+    }
+}
+
+void Game::updateTutorial() {
+    if (m_tutorial == TutorialPhase::DONE
+        || m_tutorial == TutorialPhase::INACTIVE)
+        return;
+
+    switch (m_tutorial) {
+        case TutorialPhase::TAB_SKILL:
+            if (m_activeTab == Tab::SKILL_TREE) {
+                m_tutorial = TutorialPhase::SECTION_ASTEROIDS;
+                m_skillTree.setActiveSection(SkillTreeSection::ASTEROIDS);
+                pushNotif("Tutorial: koop Ore Value in Asteroids",
+                          sf::Color(160, 220, 255), 3.5f);
+            }
+            break;
+        case TutorialPhase::SECTION_ASTEROIDS:
+            if (m_activeTab == Tab::SKILL_TREE
+                && m_skillTree.activeSection()
+                       == SkillTreeSection::ASTEROIDS) {
+                m_tutorial = TutorialPhase::NODE_ORE_VALUE;
+                m_skillTree.setTutorialHighlight(UpgradeID::ORE_VALUE);
+            }
+            break;
+        case TutorialPhase::NODE_ORE_VALUE:
+            if (m_state.levelOf(UpgradeID::ORE_VALUE) > 0) {
+                m_tutorial = TutorialPhase::SECTION_SHIP;
+                m_skillTree.setTutorialHighlight(UpgradeID::UPGRADE_COUNT);
+                m_skillTree.setActiveSection(SkillTreeSection::SHIP);
+                pushNotif("Tutorial: koop Warp Drive in Ship",
+                          sf::Color(160, 220, 255), 3.5f);
+            }
+            break;
+        case TutorialPhase::SECTION_SHIP:
+            if (m_activeTab == Tab::SKILL_TREE
+                && m_skillTree.activeSection() == SkillTreeSection::SHIP) {
+                m_tutorial = TutorialPhase::NODE_WARP_DRIVE;
+                m_skillTree.setTutorialHighlight(UpgradeID::WARP_DRIVE);
+            }
+            break;
+        case TutorialPhase::NODE_WARP_DRIVE:
+            if (m_state.warpDriveUnlocked()) {
+                m_tutorial = TutorialPhase::MINING_START;
+                m_skillTree.setTutorialHighlight(UpgradeID::UPGRADE_COUNT);
+                m_notifications.setTabBadge(static_cast<int>(Tab::MINING));
+                if (m_uiFlow)
+                    m_uiFlow->activateTab(Tab::MINING);
+                else
+                    m_activeTab = Tab::MINING;
+                pushNotif("Tutorial: start een run met [Space]",
+                          sf::Color(120, 220, 255), 4.f);
+            }
+            break;
+        case TutorialPhase::MINING_START:
+            if (m_runMode == RunMode::RUNNING)
+                m_tutorial = TutorialPhase::DONE;
+            break;
+        default:
+            break;
+    }
+}
+
+void Game::drawTutorialOverlay() const {
+    if (m_tutorial == TutorialPhase::DONE
+        || m_tutorial == TutorialPhase::INACTIVE
+        || m_showMainMenu)
+        return;
+
+    const char* hint = "";
+    switch (m_tutorial) {
+        case TutorialPhase::TAB_SKILL:
+            hint = "Open tab Skills (3)";
+            break;
+        case TutorialPhase::SECTION_ASTEROIDS:
+            hint = "Sectie Asteroids";
+            break;
+        case TutorialPhase::NODE_ORE_VALUE:
+            hint = "Koop Ore Value";
+            break;
+        case TutorialPhase::SECTION_SHIP:
+            hint = "Sectie Ship";
+            break;
+        case TutorialPhase::NODE_WARP_DRIVE:
+            hint = "Koop Warp Drive";
+            break;
+        case TutorialPhase::MINING_START:
+            hint = "Start run [Space]";
+            break;
+        default:
+            break;
+    }
+    if (!hint[0])
+        return;
+
+    const unsigned fs =
+        static_cast<unsigned>(std::round(14.f * m_scale));
+    drawText(hint, m_cntX + 16.f, m_cntY + 8.f, fs,
+             sf::Color(255, 220, 120), true);
+}
+
 void Game::tryStartRunFromBase() {
     if (m_runMode != RunMode::BASE || m_activeTab != Tab::MINING)
         return;
@@ -1352,6 +1505,8 @@ void Game::tryStartRunFromBase() {
         m_runFlow->startRun(startZ);
     pushNotif(std::string("Run gestart - ") + m_state.levelLabel(),
               sf::Color(120, 220, 255));
+    if (m_tutorial == TutorialPhase::MINING_START)
+        m_tutorial = TutorialPhase::DONE;
 }
 
 void Game::clampActiveTabToVisibility() {
@@ -1378,6 +1533,8 @@ void Game::resetNewGameUi() {
     m_runEndOutroRemain = 0.f;
     m_runEndOutroReason = RunEndReason::NONE;
     m_mining.clearRunEndHold();
+    m_tutorial = TutorialPhase::TAB_SKILL;
+    m_notifications.setTabBadge(static_cast<int>(Tab::SKILL_TREE));
 }
 
 void Game::drawTabBar() const {
@@ -1561,6 +1718,22 @@ void Game::drawSidePanel() const {
         "Keys",
         std::to_string(m_state.keys),
         sf::Color(255, 220, 140));
+    {
+        std::ostringstream gs;
+        int shown = 0;
+        for (int i = 0; i < GEM_TYPE_COUNT_INT && shown < 4; ++i) {
+            const int c = m_state.gemCount(static_cast<GemType>(i));
+            if (c <= 0)
+                continue;
+            if (shown > 0)
+                gs << "  ";
+            gs << GEM_DEFS[i].name[0] << GEM_DEFS[i].name[1] << ":"
+               << c;
+            shown++;
+        }
+        if (shown > 0)
+            line("Gems", gs.str(), sf::Color(200, 180, 255));
+    }
     line("Run",
          m_runMode == RunMode::BASE ? "Basis" : "Actief",
          sf::Color(140, 200, 255));
@@ -2900,6 +3073,10 @@ void Game::finishRunEndOutro() {
         pushNotif("Botsing met asteroïde - terug naar basis",
                   sf::Color(255, 90, 70));
     }
+    if (m_uiFlow)
+        m_uiFlow->activateTab(Tab::MINING);
+    else
+        m_activeTab = Tab::MINING;
 }
 
 void Game::drawRunEndOutroOverlay() const {

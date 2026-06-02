@@ -37,7 +37,9 @@ public:
               const GameState&  state,
               bool              seeThroughMiningBackdrop = false) const;
 
-    bool handleClick(sf::Vector2f pos, GameState& state);
+    bool handleClick(sf::Vector2f pos, GameState& state, bool shiftHeld = false);
+    void setTutorialHighlight(UpgradeID id);
+    void setActiveSection(SkillTreeSection section);
     void handleScroll(float delta, sf::Vector2f pos, bool shiftHeld = false);
     /// Scrollbalk of leeg gebied: true = geen node-koop op deze klik.
     bool handlePointerDown(sf::Vector2f pos);
@@ -60,6 +62,7 @@ private:
     mutable float m_scrollY = 0.f;
     mutable sf::Vector2f m_mousePos{ -1.f, -1.f };
     mutable const UpgradeNodeDef* m_hoveredNode = nullptr;
+    UpgradeID m_tutorialHighlight = UpgradeID::UPGRADE_COUNT;
 
     static constexpr float NODE_W       = 160.f;
     static constexpr float NODE_H       = 72.f;

@@ -105,7 +105,51 @@ enum class PrestigeUpgradeID {
     CRYSTAL_ECONOMY,
     CRYSTAL_PLINKO,
     CRYSTAL_RETENTION,
+    GEM_VAULT,
     PRESTIGE_UPGRADE_COUNT
+};
+
+// ─── Gems (cap-break + crafting) ─────────────────────────────
+enum class GemType : std::uint8_t {
+    RUBY = 0,
+    SAPPHIRE,
+    EMERALD,
+    TOPAZ,
+    AMETHYST,
+    AQUAMARINE,
+    DIAMOND,
+    OBSIDIAN,
+    GEM_TYPE_COUNT
+};
+
+constexpr int GEM_TYPE_COUNT_INT = static_cast<int>(GemType::GEM_TYPE_COUNT);
+
+struct GemDef {
+    const char* name;
+    const char* category;
+    int         unlockZone;
+    sf::Color   color;
+    sf::Color   glowColor;
+    const char* spritePath;
+};
+
+inline constexpr GemDef GEM_DEFS[GEM_TYPE_COUNT_INT] = {
+    { "Ruby",       "Weapons",   1,  sf::Color(220,  40,  60), sf::Color(255, 120, 140),
+      "assets/gems/gem_ruby.png" },
+    { "Sapphire",   "Fuel",      5,  sf::Color( 50, 100, 220), sf::Color(100, 160, 255),
+      "assets/gems/gem_sapphire.png" },
+    { "Emerald",    "Mining",   10,  sf::Color( 40, 180,  80), sf::Color(100, 240, 140),
+      "assets/gems/gem_emerald.png" },
+    { "Topaz",      "Economy",  15,  sf::Color(220, 140,  30), sf::Color(255, 200,  80),
+      "assets/gems/gem_topaz.png" },
+    { "Amethyst",   "Plinko",   20,  sf::Color(150,  50, 220), sf::Color(210, 130, 255),
+      "assets/gems/gem_amethyst.png" },
+    { "Aquamarine", "Warp",     30,  sf::Color( 50, 200, 190), sf::Color(120, 240, 230),
+      "assets/gems/gem_aquamarine.png" },
+    { "Diamond",    "Universal", 50, sf::Color(210, 240, 255), sf::Color(255, 255, 255),
+      "assets/gems/gem_diamond.png" },
+    { "Obsidian",   "Prestige", 75, sf::Color( 40,  20,  60), sf::Color(140,  60, 255),
+      nullptr },
 };
 
 // ─── Asteroid tiers (size/hp) ─────────────────────────────────
@@ -166,7 +210,8 @@ constexpr int MAX_ASTEROIDS    = 80;
 constexpr int ASTEROID_POOL_EVENT_HEADROOM = 20;
 constexpr int MAX_BULLETS      = 300;
 constexpr int MAX_ORE          = 1000;
-constexpr int MAX_KEY_PICKUPS = 64;
+constexpr int MAX_KEY_PICKUPS  = 64;
+constexpr int MAX_GEM_PICKUPS  = 4;
 constexpr int MAX_PARTICLES    = 600;
 constexpr int MAX_PLINKO_BALLS = 200;
 
@@ -184,7 +229,7 @@ constexpr float TAB_BAR_H    = 46.f;
 // ─── Save ─────────────────────────────────────────────────────
 const std::string SAVE_FILE = "srb_save.bin"; // legacy (wordt naar slot 0 gemigreerd)
 constexpr int     SAVE_SLOT_COUNT = 3;
-constexpr int     SAVE_VERSION    = 23;
+constexpr int     SAVE_VERSION    = 24;
 /// `upgradeLevels` in saves vóór volledige upgrade-roadmap batch 2.
 constexpr int     LEGACY_UPGRADE_SAVE_COUNT_V22 = 37;
 /// `upgradeLevels` in saves vóór TURRET_* / ORE_ON_KILL.

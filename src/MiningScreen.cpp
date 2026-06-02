@@ -777,6 +777,26 @@ void MiningScreen::update(float      dt,
         m_pendingKeyDrop += keysThisFrame;
     }
 
+    int gemsThisFrame = 0;
+    GemType gemType   = GemType::RUBY;
+    m_gemPickups.update(dt,
+                        m_collectorPos,
+                        state.autoCollectRadius() * m_uiScale,
+                        gemsThisFrame,
+                        gemType,
+                        m_particles);
+    if (gemsThisFrame > 0) {
+        const bool isNew =
+            !state.gemEverFound[static_cast<std::size_t>(
+                static_cast<int>(gemType))];
+        state.addGem(gemType, gemsThisFrame);
+        m_gemPickNotifCount = gemsThisFrame;
+        m_gemPickNotifType  = gemType;
+        m_gemPickNotifNew   = isNew;
+    }
+
+    tickPendingGemSpawn(state);
+
     // ── Particles ─────────────────────────────────────────
     if (state.isBonusZone
         && state.bonusZoneRarity == OreRarity::LEGENDARY) {
@@ -899,6 +919,7 @@ void MiningScreen::emitAsteroidDestroyedLoot(Asteroid& asteroid,
                 m_particles);
         }
         state.registerBossDefeated();
+        spawnGemPickup(state, asteroid.pos);
         m_pendingBossReturnToBase = true;
     } else if (asteroid.isMiniBoss) {
         const int count =
@@ -1058,9 +1079,54 @@ void MiningScreen::collectAllOre(double& oreOut,
 // ═════════════════════════════════════════════════════════════
 //  clearAll
 // ═════════════════════════════════════════════════════════════
+void MiningScreen::setGemTextures(
+    const std::array<const sf::Texture*, GEM_TYPE_COUNT_INT>* tex) {
+    m_gemPickups.setTextures(tex);
+}
+
+void MiningScreen::spawnGemPickup(GameState& state, sf::Vector2f pos) {
+    if (state.pendingGemDrop < 0)
+        return;
+    const GemType type =
+        static_cast<GemType>(state.pendingGemDrop);
+    if (m_gemPickups.aliveCount() > 0)
+        return;
+    m_gemPickups.drop(pos, type, m_particles);
+    state.pendingGemDrop = -1;
+}
+
+void MiningScreen::tickPendingGemSpawn(GameState& state) {
+    if (state.pendingGemDrop < 0)
+        return;
+    if (m_gemPickups.aliveCount() > 0)
+        return;
+    const float gx = randFloat(m_x + m_w * 0.15f, m_x + m_w * 0.85f);
+    const float gy = randFloat(m_y + m_h * 0.15f, m_y + m_h * 0.85f);
+    spawnGemPickup(state, { gx, gy });
+}
+
+void MiningScreen::collectAllGems(GameState& state) {
+    int       count = 0;
+    GemType   type  = GemType::RUBY;
+    m_gemPickups.collectAll(count, type);
+    if (count > 0)
+        state.addGem(type, count);
+}
+
+void MiningScreen::pullGemPickupNotif(int&     countOut,
+                                      GemType& typeOut,
+                                      bool&    isNewOut) {
+    countOut = m_gemPickNotifCount;
+    typeOut  = m_gemPickNotifType;
+    isNewOut = m_gemPickNotifNew;
+    m_gemPickNotifCount = 0;
+    m_gemPickNotifNew   = false;
+}
+
 void MiningScreen::clearAll() {
     m_ores.clearAll();
     m_keyPickups.clearAll();
+    m_gemPickups.clearAll();
     for (auto& b : m_bullets.all()) b.alive = false;
     for (auto& a : m_asteroids.all()) a.alive = false;
     m_asteroids.clearMeteorSpawnQueue();
@@ -1318,6 +1384,7 @@ void MiningScreen::draw(sf::RenderTarget& target,
     drawAsteroidsWithSprites(target, animTime);
     m_ores.draw(target);
     m_keyPickups.draw(target, m_keyIconTex);
+    m_gemPickups.draw(target);
     m_bullets.draw(target);
     m_turrets.draw(target);
     m_satellites.draw(target);

@@ -121,6 +121,7 @@ GameState::prestigeCatalog = {{
     { "Crystal Economy", "+15% all credits permanently", 1.0, 1.80, 0 },
     { "Crystal Plinko",  "+15% plinko multipliers",      1.0, 1.80, 0 },
     { "Deep Retention",  "Keep 2 extra upgrades/level",  3.0, 2.50, 0 },
+    { "Gem Vault",       "Keep 20% of gems on prestige per level", 5.0, 3.50, 3 },
 }};
 static_assert(GameState::prestigeCatalog.size()
                   == static_cast<std::size_t>(
@@ -447,7 +448,7 @@ int GameState::oreWarpRequirement() const {
 // ═════════════════════════════════════════════════════════════
 float GameState::gunDamage() const {
     return (10.f + levelOf(UpgradeID::GUN_DAMAGE) * 8.f)
-           * _crystalDamageBonus();
+           * _crystalDamageBonus() * gemCollectionBonus();
 }
 
 float GameState::fireRatePerSec() const {
@@ -634,7 +635,8 @@ float GameState::fuelTurretDrain() const {
 
 float GameState::oreValueMult() const {
     return (1.f + levelOf(UpgradeID::ORE_VALUE) * 0.2f)
-           * _crystalMiningBonus() * bonusZoneOreValueMult();
+           * _crystalMiningBonus() * bonusZoneOreValueMult()
+           * gemCollectionBonus();
 }
 
 float GameState::autoCollectRadius() const {
@@ -653,7 +655,7 @@ int GameState::plinkoRows() const {
 float GameState::plinkoMultBonus() const {
     const int lv = levelOf(UpgradeID::PLINKO_MULT)
                  + levelOfChest(ChestUpgradeID::PLINKO_MULT_CHEST);
-    return (1.f + lv * 0.10f) * _crystalPlinkoBonus();
+    return (1.f + lv * 0.10f) * _crystalPlinkoBonus() * gemCollectionBonus();
 }
 
 int GameState::maxPlinkoBalls() const {
@@ -669,13 +671,17 @@ float GameState::plinkoLuck() const {
 
 double GameState::plinkoBallOreCost() const {
     const double o = std::max(0.0, ore);
-    const double extra = std::max(0.0, o - 5000.0);
-    return 1.0 + std::min(3.0, extra / 12000.0);
+    const double excess = std::max(0.0, o - 200.0);
+    return 1.0 + std::min(4.0, excess / 2000.0);
 }
 
 float GameState::creditMult() const {
-    return (1.f + levelOf(UpgradeID::CREDIT_MULT) * 0.25f)
-           * _crystalEconomyBonus();
+    const float raw = (1.f + levelOf(UpgradeID::CREDIT_MULT) * 0.25f)
+                    * _crystalEconomyBonus()
+                    * gemCollectionBonus();
+    if (raw <= 4.0f)
+        return raw;
+    return 4.0f + std::log2(1.f + (raw - 4.0f)) * 0.5f;
 }
 
 int GameState::bulkProcess() const {
@@ -900,6 +906,12 @@ double GameState::costOf(UpgradeID id) const {
         return std::numeric_limits<double>::infinity();
     const auto& def = upgradeCatalog[static_cast<std::size_t>(static_cast<int>(id))];
     const int   lv  = levelOf(id);
+    if (def.maxLevel > 0 && lv >= def.maxLevel) {
+        const double mult = 2.2 + 0.35 * static_cast<double>(
+            gemCapBreaks[static_cast<std::size_t>(static_cast<int>(id))]);
+        return upgradeCost(def.baseCost * mult, def.costMult * 1.12,
+                           lv - def.maxLevel);
+    }
     if (id == UpgradeID::PLINKO_BALLS && lv >= 5)
         return 2.0 * std::pow(1.18, static_cast<double>(lv));
     return upgradeCost(def.baseCost, def.costMult, lv);
@@ -918,8 +930,13 @@ bool GameState::canBuy(UpgradeID id) const {
     if ((id == UpgradeID::METEOR_DAMAGE || id == UpgradeID::METEOR_SIZE)
         && !meteorDestroyerUnlocked)
         return false;
+    if (id >= UpgradeID::UNLOCK_BRONZE && id <= UpgradeID::UNLOCK_IRIDIUM
+        && !isOreTierUnlockAvailable(id))
+        return false;
     const auto& def = upgradeCatalog[static_cast<std::size_t>(static_cast<int>(id))];
-    if (def.maxLevel > 0 && levelOf(id) >= def.maxLevel) return false;
+    const int   maxLv = effectiveMaxLevel(id);
+    if (maxLv > 0 && levelOf(id) >= maxLv)
+        return false;
     return credits >= costOf(id);
 }
 bool GameState::canBuy(PrestigeUpgradeID id) const {
@@ -963,6 +980,7 @@ void GameState::beginRunAtZone(int startZone) {
     oreThisLevel       = 0.0;
     isBonusZone        = false;
     bonusZoneRarity    = OreRarity::COMMON;
+    warpStreak         = 0;
     registerZoneReached(z);
 }
 
@@ -995,6 +1013,7 @@ void GameState::doWarp() {
         bonusZoneRarity = OreRarity::COMMON;
     }
     registerZoneReached(currentLevel);
+    tryRollWarpGemDrop();
 }
 
 namespace {
@@ -1019,12 +1038,14 @@ void GameState::registerBossDefeated() {
     const int z = nextBossMilestone;
     if (z == FIRST_BOSS_ZONE)
         pendingAutoPlinkoBossNotif = true;
-    double bonus = 6.0 + static_cast<double>(z) * 2.0
-                 + std::floor(std::sqrt(static_cast<double>(z * z)));
-    const double gain = std::max(8.0, bonus);
+    const double bonus =
+        4.0 + static_cast<double>(z) * 0.8
+        + std::floor(std::sqrt(static_cast<double>(z)));
+    const double gain = std::max(4.0, bonus);
     addCrystals(gain);
     bossCrystalPopup  = gain;
     nextBossMilestone = nextBossZoneAfter(z);
+    grantBossGemDrop();
 }
 
 void GameState::buy(UpgradeID id) {
@@ -1056,6 +1077,9 @@ void GameState::doPrestige() {
     const auto         savedUnlock = unlockPhaseDone;
     const bool         savedKeyAst = keyAsteroidsEnabled;
     const bool         savedMeteor = meteorDestroyerUnlocked;
+    const auto         savedGemCapBreaks = gemCapBreaks;
+    const auto         savedGemEverFound = gemEverFound;
+    const auto         savedGemsBeforeReset = gems;
 
     addCrystals(crystalsOnPrestige());
     prestigeCount++;
@@ -1077,6 +1101,21 @@ void GameState::doPrestige() {
     keyAsteroidsEnabled = savedKeyAst;
     meteorDestroyerUnlocked = savedMeteor;
     lives               = maxLives();
+    gemCapBreaks        = savedGemCapBreaks;
+    gemEverFound        = savedGemEverFound;
+    warpStreak          = 0;
+    pendingGemDrop      = -1;
+    gems.fill(0);
+    const int vaultLv =
+        prestigeLevels[static_cast<int>(PrestigeUpgradeID::GEM_VAULT)];
+    if (vaultLv > 0) {
+        const float keepFrac =
+            static_cast<float>(vaultLv) * 0.20f;
+        for (int i = 0; i < GEM_TYPE_COUNT_INT; ++i)
+            gems[static_cast<std::size_t>(i)] = static_cast<int>(
+                savedGemsBeforeReset[static_cast<std::size_t>(i)]
+                * keepFrac);
+    }
 
     for (int i = 0; i < keep &&
          i < static_cast<int>(UpgradeID::UPGRADE_COUNT); i++) {
@@ -1176,6 +1215,249 @@ void GameState::processOreFusion() {
 }
 
 // ═════════════════════════════════════════════════════════════
+//  Ore tier zone gates
+// ═════════════════════════════════════════════════════════════
+int GameState::oreTierUnlockRequiredZone(UpgradeID id) const {
+    static constexpr struct { UpgradeID id; int zone; } kZoneGates[] = {
+        { UpgradeID::UNLOCK_BRONZE,   1  },
+        { UpgradeID::UNLOCK_SILVER,   4  },
+        { UpgradeID::UNLOCK_GOLD,     8  },
+        { UpgradeID::UNLOCK_DIAMOND,  14 },
+        { UpgradeID::UNLOCK_PLATINUM, 22 },
+        { UpgradeID::UNLOCK_TITANIUM, 35 },
+        { UpgradeID::UNLOCK_IRIDIUM,  55 },
+    };
+    for (const auto& g : kZoneGates)
+        if (g.id == id)
+            return g.zone;
+    return 0;
+}
+
+bool GameState::isOreTierUnlockAvailable(UpgradeID id) const {
+    const int need = oreTierUnlockRequiredZone(id);
+    if (need <= 0)
+        return true;
+    return highestZoneReached >= need;
+}
+
+// ═════════════════════════════════════════════════════════════
+//  Gems
+// ═════════════════════════════════════════════════════════════
+void GameState::addGem(GemType type, int count) {
+    const int ti = static_cast<int>(type);
+    if (ti < 0 || ti >= GEM_TYPE_COUNT_INT || count <= 0)
+        return;
+    gems[static_cast<std::size_t>(ti)] += count;
+    gemEverFound[static_cast<std::size_t>(ti)] = true;
+}
+
+bool GameState::spendGems(GemType type, int count) {
+    const int ti = static_cast<int>(type);
+    if (ti < 0 || ti >= GEM_TYPE_COUNT_INT || count <= 0)
+        return false;
+    if (gems[static_cast<std::size_t>(ti)] < count)
+        return false;
+    gems[static_cast<std::size_t>(ti)] -= count;
+    return true;
+}
+
+int GameState::gemCount(GemType type) const {
+    const int ti = static_cast<int>(type);
+    if (ti < 0 || ti >= GEM_TYPE_COUNT_INT)
+        return 0;
+    return gems[static_cast<std::size_t>(ti)];
+}
+
+GemType GameState::rollWarpGem() const {
+    int   available[GEM_TYPE_COUNT_INT];
+    float weights[GEM_TYPE_COUNT_INT];
+    int   n      = 0;
+    float totalW = 0.f;
+
+    for (int i = 0; i < GEM_TYPE_COUNT_INT; ++i) {
+        if (highestZoneReached < GEM_DEFS[i].unlockZone)
+            continue;
+        available[n] = i;
+        const float w = std::pow(2.8f, static_cast<float>(n));
+        weights[n]   = w;
+        totalW += w;
+        n++;
+    }
+    if (n <= 0)
+        return GemType::RUBY;
+
+    const float roll = randFloat(0.f, totalW);
+    float       cum  = 0.f;
+    for (int i = n - 1; i >= 0; --i) {
+        cum += weights[i];
+        if (roll < cum)
+            return static_cast<GemType>(available[i]);
+    }
+    return static_cast<GemType>(available[0]);
+}
+
+void GameState::tryRollWarpGemDrop() {
+    float gemChance = 0.12f;
+    gemChance += static_cast<float>(warpStreak) * 0.015f;
+    if (isBonusZone) {
+        const int ri = static_cast<int>(bonusZoneRarity);
+        gemChance += 0.02f + static_cast<float>(ri) * 0.03f;
+    }
+    gemChance = std::min(gemChance, 0.65f);
+    warpStreak++;
+    if (randFloat(0.f, 1.f) < gemChance)
+        pendingGemDrop = static_cast<int>(rollWarpGem());
+}
+
+void GameState::grantBossGemDrop() {
+    pendingGemDrop = static_cast<int>(rollWarpGem());
+}
+
+int GameState::effectiveMaxLevel(UpgradeID id) const {
+    if (!upgradeIdInRange(id))
+        return 0;
+    const auto& def =
+        upgradeCatalog[static_cast<std::size_t>(static_cast<int>(id))];
+    if (def.maxLevel <= 0)
+        return 0;
+    const int extra =
+        gemCapBreaks[static_cast<std::size_t>(static_cast<int>(id))];
+    return def.maxLevel + std::clamp(extra, 0, 3);
+}
+
+GemType GameState::gemTypeForUpgrade(UpgradeID id) const {
+    switch (id) {
+        case UpgradeID::GUN_DAMAGE:
+        case UpgradeID::FIRE_RATE:
+        case UpgradeID::TURRET_COUNT:
+        case UpgradeID::CRIT_CHANCE:
+        case UpgradeID::CRIT_MULT:
+        case UpgradeID::SPLIT_SHOT:
+            return GemType::RUBY;
+        case UpgradeID::FUEL_CAPACITY:
+        case UpgradeID::FUEL_EFFICIENCY:
+        case UpgradeID::FUEL_ON_KILL:
+        case UpgradeID::FUEL_ON_PICKUP:
+        case UpgradeID::FUEL_WARP_REFILL:
+        case UpgradeID::SPEED_EFFICIENCY:
+        case UpgradeID::SHIP_SPEED:
+            return GemType::SAPPHIRE;
+        case UpgradeID::ORE_VALUE:
+        case UpgradeID::AUTO_COLLECT_RADIUS:
+        case UpgradeID::ORE_LUCK:
+        case UpgradeID::ASTEROID_HP:
+        case UpgradeID::ORE_ON_KILL:
+            return GemType::EMERALD;
+        case UpgradeID::CREDIT_MULT:
+        case UpgradeID::BULK_PROCESS:
+        case UpgradeID::AUTO_PLINKO:
+            return GemType::TOPAZ;
+        case UpgradeID::PLINKO_ROWS:
+        case UpgradeID::PLINKO_MULT:
+        case UpgradeID::PLINKO_BALLS:
+        case UpgradeID::PLINKO_LUCK:
+            return GemType::AMETHYST;
+        case UpgradeID::WARP_DRIVE:
+        case UpgradeID::BULLET_RANGE:
+        case UpgradeID::WARP_ORE_BONUS:
+        case UpgradeID::AUTO_WARP:
+            return GemType::AQUAMARINE;
+        default:
+            return GemType::DIAMOND;
+    }
+}
+
+bool GameState::gemMatchesUpgrade(UpgradeID id, GemType gem) const {
+    if (gem == GemType::DIAMOND) {
+        const auto& def =
+            upgradeCatalog[static_cast<std::size_t>(static_cast<int>(id))];
+        return def.maxLevel > 0;
+    }
+    return gemTypeForUpgrade(id) == gem;
+}
+
+int GameState::capBreakGemCost(UpgradeID id) const {
+    const int breaks =
+        gemCapBreaks[static_cast<std::size_t>(static_cast<int>(id))];
+    if (breaks <= 0)
+        return 5;
+    if (breaks == 1)
+        return 10;
+    return 20;
+}
+
+bool GameState::canCapBreak(UpgradeID id) const {
+    if (!upgradeIdInRange(id))
+        return false;
+    const auto& def =
+        upgradeCatalog[static_cast<std::size_t>(static_cast<int>(id))];
+    if (def.maxLevel <= 0)
+        return false;
+    const int breaks =
+        gemCapBreaks[static_cast<std::size_t>(static_cast<int>(id))];
+    if (breaks >= 3)
+        return false;
+    if (levelOf(id) < def.maxLevel + breaks)
+        return false;
+    const GemType gem = gemTypeForUpgrade(id);
+    return gemCount(gem) >= capBreakGemCost(id);
+}
+
+bool GameState::buyCapBreak(UpgradeID id) {
+    if (!canCapBreak(id))
+        return false;
+    const GemType gem = gemTypeForUpgrade(id);
+    if (!spendGems(gem, capBreakGemCost(id)))
+        return false;
+    gemCapBreaks[static_cast<std::size_t>(static_cast<int>(id))]++;
+    return true;
+}
+
+bool GameState::isGemCraftable(GemType from) const {
+    const int fi = static_cast<int>(from);
+    return fi >= 0 && fi < GEM_TYPE_COUNT_INT - 1
+        && gems[static_cast<std::size_t>(fi)] >= 5
+        && highestZoneReached >= GEM_DEFS[fi + 1].unlockZone;
+}
+
+bool GameState::craftGem(GemType from) {
+    const int fi = static_cast<int>(from);
+    const int ti = fi + 1;
+    if (ti >= GEM_TYPE_COUNT_INT)
+        return false;
+    if (highestZoneReached < GEM_DEFS[ti].unlockZone)
+        return false;
+    if (gems[static_cast<std::size_t>(fi)] < 5)
+        return false;
+    gems[static_cast<std::size_t>(fi)] -= 5;
+    gems[static_cast<std::size_t>(ti)]++;
+    gemEverFound[static_cast<std::size_t>(ti)] = true;
+    return true;
+}
+
+float GameState::gemCollectionBonus() const {
+    float b = 1.f;
+    if (gemEverFound[static_cast<std::size_t>(static_cast<int>(GemType::RUBY))])
+        b *= 1.02f;
+    if (gemEverFound[static_cast<std::size_t>(static_cast<int>(GemType::SAPPHIRE))])
+        b *= 1.03f;
+    if (gemEverFound[static_cast<std::size_t>(static_cast<int>(GemType::EMERALD))])
+        b *= 1.02f;
+    if (gemEverFound[static_cast<std::size_t>(static_cast<int>(GemType::TOPAZ))])
+        b *= 1.03f;
+    if (gemEverFound[static_cast<std::size_t>(static_cast<int>(GemType::AMETHYST))])
+        b *= 1.04f;
+    if (gemEverFound[static_cast<std::size_t>(
+            static_cast<int>(GemType::AQUAMARINE))])
+        b *= 1.05f;
+    if (gemEverFound[static_cast<std::size_t>(static_cast<int>(GemType::DIAMOND))])
+        b *= 1.10f;
+    if (gemEverFound[static_cast<std::size_t>(static_cast<int>(GemType::OBSIDIAN))])
+        b *= 1.15f;
+    return b;
+}
+
+// ═════════════════════════════════════════════════════════════
 //  Save / Load
 // ═════════════════════════════════════════════════════════════
 bool GameState::save(const std::string& path) const {
@@ -1222,6 +1504,19 @@ bool GameState::save(const std::string& path) const {
     f.write(reinterpret_cast<const char*>(&meteorB), sizeof(meteorB));
     const uint8_t tm = static_cast<uint8_t>(targetMode);
     f.write(reinterpret_cast<const char*>(&tm), sizeof(tm));
+    if (ver >= 24) {
+        f.write(reinterpret_cast<const char*>(gems.data()),
+                gems.size() * sizeof(int));
+        f.write(reinterpret_cast<const char*>(gemCapBreaks.data()),
+                gemCapBreaks.size() * sizeof(int));
+        for (bool b : gemEverFound) {
+            const uint8_t byte = b ? 1u : 0u;
+            f.write(reinterpret_cast<const char*>(&byte), sizeof(byte));
+        }
+        f.write(reinterpret_cast<const char*>(&warpStreak), sizeof(warpStreak));
+        f.write(reinterpret_cast<const char*>(&pendingGemDrop),
+                sizeof(pendingGemDrop));
+    }
     return f.good();
 }
 
@@ -1290,8 +1585,10 @@ void sanitizeLoadedState(GameState& s) {
             lv = 0;
         const auto& def =
             GameState::upgradeCatalog[static_cast<std::size_t>(i)];
-        if (def.maxLevel > 0 && lv > def.maxLevel)
-            lv = def.maxLevel;
+        const int effMax =
+            s.effectiveMaxLevel(static_cast<UpgradeID>(i));
+        if (effMax > 0 && lv > effMax)
+            lv = effMax;
         if (lv > 50'000)
             lv = 0;
     }
@@ -1324,6 +1621,11 @@ void sanitizeLoadedState(GameState& s) {
     const int maxMode = s.unlockedTargetModeCount();
     if (static_cast<int>(s.targetMode) >= maxMode)
         s.targetMode = TargetMode::NEAREST;
+
+    for (int& c : s.gems)
+        c = std::max(0, c);
+    for (int& b : s.gemCapBreaks)
+        b = std::clamp(b, 0, 3);
 }
 
 } // namespace
@@ -1470,6 +1772,25 @@ bool GameState::load(const std::string& path) {
         if (tm < static_cast<uint8_t>(TargetMode::TARGET_MODE_COUNT))
             targetMode = static_cast<TargetMode>(tm);
     }
+    gems.fill(0);
+    gemCapBreaks.fill(0);
+    gemEverFound.fill(false);
+    warpStreak     = 0;
+    pendingGemDrop = -1;
+    if (ver >= 24) {
+        f.read(reinterpret_cast<char*>(gems.data()),
+               gems.size() * sizeof(int));
+        f.read(reinterpret_cast<char*>(gemCapBreaks.data()),
+               gemCapBreaks.size() * sizeof(int));
+        for (bool& b : gemEverFound) {
+            uint8_t byte = 0;
+            f.read(reinterpret_cast<char*>(&byte), sizeof(byte));
+            b = (byte != 0);
+        }
+        f.read(reinterpret_cast<char*>(&warpStreak), sizeof(warpStreak));
+        f.read(reinterpret_cast<char*>(&pendingGemDrop),
+               sizeof(pendingGemDrop));
+    }
     highestZoneReached = std::max(1, currentLevel);
     if (ver >= 20)
         f.read(reinterpret_cast<char*>(&highestZoneReached),
@@ -1497,5 +1818,7 @@ void GameState::gameOver() {
     lives        = maxLives();
     isBonusZone     = false;
     bonusZoneRarity = OreRarity::COMMON;
+    warpStreak      = 0;
+    pendingGemDrop  = -1;
     // upgrades blijven staan
 }

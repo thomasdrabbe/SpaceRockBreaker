@@ -59,6 +59,7 @@ set(SOURCES
     src/Satellite.cpp
     src/Ore.cpp
     src/KeyPickup.cpp
+    src/Gem.cpp
     src/Plinko.cpp
     src/SkillTree.cpp
     src/ChestScreen.cpp
@@ -83,6 +84,7 @@ set(HEADERS
     src/Satellite.h
     src/Ore.h
     src/KeyPickup.h
+    src/Gem.h
     src/Plinko.h
     src/SkillTree.h
     src/ChestScreen.h

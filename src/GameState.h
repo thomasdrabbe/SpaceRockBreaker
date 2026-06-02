@@ -252,6 +252,32 @@ public:
     bool isNodeUnlocked(const UpgradeNodeDef& node) const;
     bool isNodeVisible(const UpgradeNodeDef& node)  const;
 
+    [[nodiscard]] bool isOreTierUnlockAvailable(UpgradeID id) const;
+    [[nodiscard]] int  oreTierUnlockRequiredZone(UpgradeID id) const;
+
+    // ── Gems ──────────────────────────────────────────────
+    std::array<int, GEM_TYPE_COUNT_INT> gems{};
+    std::array<int, static_cast<int>(UpgradeID::UPGRADE_COUNT)> gemCapBreaks{};
+    std::array<bool, GEM_TYPE_COUNT_INT> gemEverFound{};
+    int  warpStreak     = 0;
+    int  pendingGemDrop = -1;
+
+    void addGem(GemType type, int count = 1);
+    bool spendGems(GemType type, int count);
+    int  gemCount(GemType type) const;
+    [[nodiscard]] GemType rollWarpGem() const;
+    void tryRollWarpGemDrop();
+    void grantBossGemDrop();
+    [[nodiscard]] int  effectiveMaxLevel(UpgradeID id) const;
+  [[nodiscard]] GemType gemTypeForUpgrade(UpgradeID id) const;
+    [[nodiscard]] bool gemMatchesUpgrade(UpgradeID id, GemType gem) const;
+    [[nodiscard]] bool canCapBreak(UpgradeID id) const;
+    bool buyCapBreak(UpgradeID id);
+    bool craftGem(GemType from);
+    [[nodiscard]] bool isGemCraftable(GemType from) const;
+    [[nodiscard]] float gemCollectionBonus() const;
+    [[nodiscard]] int   capBreakGemCost(UpgradeID id) const;
+
     // ── Prestige ──────────────────────────────────────────
     double crystalsOnPrestige() const;
     void   doPrestige();

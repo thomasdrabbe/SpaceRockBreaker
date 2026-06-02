@@ -8,6 +8,7 @@
 #include "Turret.h"
 #include "Ore.h"
 #include "KeyPickup.h"
+#include "Gem.h"
 #include "Particle.h"
 #include "Player.h"
 #include "Satellite.h"
@@ -97,6 +98,10 @@ public:
 
     /// Verzamel alle losse ore (Vacuum Warp).
     void collectAllLooseOre(GameState& state);
+    void spawnGemPickup(GameState& state, sf::Vector2f pos);
+    void tickPendingGemSpawn(GameState& state);
+    void collectAllGems(GameState& state);
+    void pullGemPickupNotif(int& countOut, GemType& typeOut, bool& isNewOut);
 
     /// Meteor-timer + shower-queue starten. Wordt vanuit Game aangeroepen.
     void tickMeteorShower(float dt, GameState& state, float asteroidHpMult);
@@ -104,6 +109,8 @@ public:
     void advanceMeteorsOnly(float dt);
     void tickMeteorSpawnQueue();
     void setAudioBus(IAudioBus* audioBus);
+    void setGemTextures(
+        const std::array<const sf::Texture*, GEM_TYPE_COUNT_INT>* tex);
 
     // ── Sub-system toegang ────────────────────────────────
     OreManager&     ores()      { return m_ores;      }
@@ -126,6 +133,10 @@ private:
     SatelliteManager   m_satellites;
     OreManager      m_ores;
     KeyPickupManager m_keyPickups;
+    GemPickupManager m_gemPickups;
+    int     m_gemPickNotifCount = 0;
+    GemType m_gemPickNotifType  = GemType::RUBY;
+    bool    m_gemPickNotifNew   = false;
     ParticleSystem  m_particles;
     Player          m_player;
 

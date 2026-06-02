@@ -41,5 +41,6 @@ void RunFlowController::collectRunOreToState() {
     double orePick = 0.0;
     std::array<double, ORE_TIER_COUNT> oreByTier{};
     m_mining.collectAllOre(orePick, oreByTier, m_state);
+    m_mining.collectAllGems(m_state);
     m_state.addOreTiered(oreByTier, true);
 }

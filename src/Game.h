@@ -63,6 +63,9 @@ private:
     bool          m_keyTexLoaded = false;
     sf::Texture m_chestTex;
     bool        m_chestTexLoaded = false;
+    std::array<sf::Texture, GEM_TYPE_COUNT_INT> m_gemTex{};
+    std::array<bool, GEM_TYPE_COUNT_INT>        m_gemTexLoaded{};
+    std::array<const sf::Texture*, GEM_TYPE_COUNT_INT> m_gemTexPtrs{};
 
     // ── Sub-systems ───────────────────────────────────────
     MiningScreen m_mining;
@@ -100,6 +103,23 @@ private:
     void beginRunEndOutro(RunEndReason reason);
     void finishRunEndOutro();
     void drawRunEndOutroOverlay() const;
+
+    void processGemPickupNotifs();
+    void loadGemTextures();
+    void updateTutorial();
+    void drawTutorialOverlay() const;
+
+    enum class TutorialPhase : std::uint8_t {
+        INACTIVE = 0,
+        TAB_SKILL,
+        SECTION_ASTEROIDS,
+        NODE_ORE_VALUE,
+        SECTION_SHIP,
+        NODE_WARP_DRIVE,
+        MINING_START,
+        DONE
+    };
+    TutorialPhase m_tutorial = TutorialPhase::INACTIVE;
 
     bool m_mainMenuPickDifficulty = false;
     struct SaveSlotPreview {

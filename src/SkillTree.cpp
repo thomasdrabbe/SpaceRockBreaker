@@ -462,9 +462,14 @@ void SkillTreeScreen::drawNode(sf::RenderTarget&     target,
     const auto& def =
         GameState::upgradeCatalog[static_cast<std::size_t>(
             static_cast<int>(node.id))];
-    const bool maxed = def.maxLevel > 0
-        && state.levelOf(node.id) >= def.maxLevel;
-    const bool affordable = state.canBuy(node.id);
+    const int  maxLv = state.effectiveMaxLevel(node.id);
+    const bool maxed =
+        maxLv > 0 && state.levelOf(node.id) >= maxLv;
+    const bool zoneLocked =
+        node.id >= UpgradeID::UNLOCK_BRONZE
+        && node.id <= UpgradeID::UNLOCK_IRIDIUM
+        && !state.isOreTierUnlockAvailable(node.id);
+    const bool affordable = !zoneLocked && state.canBuy(node.id);
     const bool hovered    = rect.contains(m_mousePos);
     if (hovered)
         m_hoveredNode = &node;
@@ -535,7 +540,16 @@ void SkillTreeScreen::drawNode(sf::RenderTarget&     target,
         return;
     }
 
-    if (unlocked && !maxed) {
+    if (unlocked && zoneLocked) {
+        sf::Text zoneText(*m_font);
+        zoneText.setString(
+            "Zone " + std::to_string(state.oreTierUnlockRequiredZone(node.id))
+            + " vereist");
+        zoneText.setCharacterSize(fontSz(11));
+        zoneText.setFillColor(sf::Color(255, 160, 90));
+        zoneText.setPosition({ pos.x + padIn, pos.y + line3 });
+        target.draw(zoneText);
+    } else if (unlocked && !maxed) {
         sf::Text priceText(*m_font);
         priceText.setString("$" + formatBig(state.costOf(node.id)));
         priceText.setCharacterSize(fontSz(12));
@@ -627,8 +641,9 @@ void SkillTreeScreen::drawTooltip(sf::RenderTarget&     target,
 
     const int lv = state.levelOf(node.id);
     std::string lvStr = "Level: " + std::to_string(lv);
-    if (def.maxLevel > 0)
-        lvStr += " / " + std::to_string(def.maxLevel);
+    const int maxLv = state.effectiveMaxLevel(node.id);
+    if (maxLv > 0)
+        lvStr += " / " + std::to_string(maxLv);
     sf::Text lvInfo(*m_font);
     lvInfo.setString(lvStr);
     lvInfo.setCharacterSize(fontSz(13));
@@ -644,7 +659,17 @@ void SkillTreeScreen::drawTooltip(sf::RenderTarget&     target,
     target.draw(costInfo);
 }
 
-bool SkillTreeScreen::handleClick(sf::Vector2f pos, GameState& state) {
+void SkillTreeScreen::setTutorialHighlight(UpgradeID id) {
+    m_tutorialHighlight = id;
+}
+
+void SkillTreeScreen::setActiveSection(SkillTreeSection section) {
+    m_activeSection = section;
+    resetScroll();
+}
+
+bool SkillTreeScreen::handleClick(sf::Vector2f pos, GameState& state,
+                                  bool shiftHeld) {
     const int tab = sectionTabAt(pos);
     if (tab >= 0) {
         const auto next = static_cast<SkillTreeSection>(tab);
@@ -664,6 +689,13 @@ bool SkillTreeScreen::handleClick(sf::Vector2f pos, GameState& state) {
             continue;
         if (!nodeRect(node).contains(pos))
             continue;
+
+        const int maxLv = state.effectiveMaxLevel(node.id);
+        const bool maxed =
+            maxLv > 0 && state.levelOf(node.id) >= maxLv;
+        if (shiftHeld && maxed && state.canCapBreak(node.id)) {
+            return state.buyCapBreak(node.id);
+        }
         if (!state.canBuy(node.id))
             continue;
         state.buy(node.id);
