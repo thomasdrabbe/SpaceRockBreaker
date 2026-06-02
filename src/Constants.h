@@ -239,6 +239,10 @@ constexpr int     LEGACY_UPGRADE_SAVE_COUNT_V20 = 32;
 /// Eerste zone-boss en daarna elke N zones (5, 10, 15, …).
 constexpr int     FIRST_BOSS_ZONE       = 5;
 constexpr int     BOSS_ZONE_INTERVAL    = 5;
+/// Auto-Plinko (gratis tier + koopbaar) pas vanaf 2e boss-zone (niet na 1e boss).
+constexpr int     AUTO_PLINKO_UNLOCK_ZONE = FIRST_BOSS_ZONE + BOSS_ZONE_INTERVAL;
+/// Gratis boss-auto na 1e boss: zelfde 1 bal, maar dit veelvoud op fire-interval.
+constexpr float   AUTO_PLINKO_HALF_INTERVAL_MULT = 2.f;
 /// Zone-knoppen per rij op het basis-paneel (meerdere rijen vanaf zone 6+).
 constexpr int     START_ZONE_BUTTONS_PER_ROW = 8;
 /// Max zones in start-kiezer (voorkomt freeze bij corrupte save).

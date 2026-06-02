@@ -688,17 +688,43 @@ int GameState::bulkProcess() const {
     return 1 + levelOf(UpgradeID::BULK_PROCESS);
 }
 
+bool GameState::isAutoPlinkoUnlocked() const {
+    return prestigeCount > 0
+        || highestZoneReached >= AUTO_PLINKO_UNLOCK_ZONE;
+}
+
+bool GameState::autoPlinkoUnlockedByBoss() const {
+    return prestigeCount > 0
+        || nextBossMilestone > AUTO_PLINKO_UNLOCK_ZONE;
+}
+
+bool GameState::autoPlinkoHalfUnlockedByBoss() const {
+    if (autoPlinkoUnlockedByBoss())
+        return false;
+    return nextBossMilestone > FIRST_BOSS_ZONE;
+}
+
 bool GameState::autoPlinkoEnabled() const {
-    return levelOf(UpgradeID::AUTO_PLINKO) > 0 || autoPlinkoUnlockedByBoss();
+    return levelOf(UpgradeID::AUTO_PLINKO) > 0
+        || autoPlinkoUnlockedByBoss()
+        || autoPlinkoHalfUnlockedByBoss();
 }
 
 int GameState::autoPlinkoBallsPerTick() const {
     const int lv = levelOf(UpgradeID::AUTO_PLINKO);
     if (lv > 0)
         return lv;
-    if (autoPlinkoUnlockedByBoss())
+    if (autoPlinkoUnlockedByBoss() || autoPlinkoHalfUnlockedByBoss())
         return 1;
     return 0;
+}
+
+float GameState::autoPlinkoIntervalMult() const {
+    if (levelOf(UpgradeID::AUTO_PLINKO) > 0 || autoPlinkoUnlockedByBoss())
+        return 1.f;
+    if (autoPlinkoHalfUnlockedByBoss())
+        return AUTO_PLINKO_HALF_INTERVAL_MULT;
+    return 1.f;
 }
 
 // ═════════════════════════════════════════════════════════════
@@ -930,6 +956,8 @@ bool GameState::canBuy(UpgradeID id) const {
     if ((id == UpgradeID::METEOR_DAMAGE || id == UpgradeID::METEOR_SIZE)
         && !meteorDestroyerUnlocked)
         return false;
+    if (id == UpgradeID::AUTO_PLINKO && !isAutoPlinkoUnlocked())
+        return false;
     if (id >= UpgradeID::UNLOCK_BRONZE && id <= UpgradeID::UNLOCK_IRIDIUM
         && !isOreTierUnlockAvailable(id))
         return false;
@@ -1037,7 +1065,9 @@ void migrateBossMilestoneToEveryFive(GameState& s) {
 void GameState::registerBossDefeated() {
     const int z = nextBossMilestone;
     if (z == FIRST_BOSS_ZONE)
-        pendingAutoPlinkoBossNotif = true;
+        pendingAutoPlinkoBossNotif = PendingAutoPlinkoBossNotif::Half;
+    else if (z == AUTO_PLINKO_UNLOCK_ZONE)
+        pendingAutoPlinkoBossNotif = PendingAutoPlinkoBossNotif::Full;
     const double bonus =
         4.0 + static_cast<double>(z) * 0.8
         + std::floor(std::sqrt(static_cast<double>(z)));

@@ -105,10 +105,20 @@ UnlockNextHint computeUnlockNextHint(const GameState& s) {
             return h;
         case 5:
             h.phaseName = "Auto-Plinko";
-            h.progressDetail =
-                "Credits: $" + fmtCredits(s.credits) + " / $100";
-            h.progress01 = static_cast<float>(
-                std::clamp(s.credits / 100.0, 0.0, 1.0));
+            if (s.highestZoneReached >= AUTO_PLINKO_UNLOCK_ZONE) {
+                h.progressDetail =
+                    "Credits: $" + fmtCredits(s.credits) + " / $100";
+                h.progress01 = static_cast<float>(
+                    std::clamp(s.credits / 100.0, 0.0, 1.0));
+            } else {
+                h.progressDetail =
+                    "Bereik zone " + std::to_string(AUTO_PLINKO_UNLOCK_ZONE)
+                    + " (nu " + std::to_string(s.highestZoneReached) + ")";
+                h.progress01 = static_cast<float>(std::clamp(
+                    static_cast<double>(s.highestZoneReached)
+                        / static_cast<double>(AUTO_PLINKO_UNLOCK_ZONE),
+                    0.0, 0.99));
+            }
             return h;
         case 6:
             h.phaseName = "Chests & sleutels";
@@ -218,6 +228,7 @@ void UnlockSystem::update(GameState&           state,
     }
 
     if (!state.unlockPhaseDone[toIndex(UnlockPhase::AUTO_PLINKO)]
+        && state.isAutoPlinkoUnlocked()
         && state.credits >= 100.0) {
         notifications.push(
             "Auto-Plinko beschikbaar! Open de skill tree (tab 3) en koop Auto-Plinko.",

@@ -124,11 +124,16 @@ public:
     void beginRunAtZone(int startZone);
     void endRunRestoreZone();
 
-    bool autoPlinkoUnlockedByBoss() const {
-        return prestigeCount > 0 || nextBossMilestone > FIRST_BOSS_ZONE;
-    }
+    /// Zone 10+ bereikt of 2e boss verslagen (prestige telt ook).
+    bool isAutoPlinkoUnlocked() const;
+    /// Volle gratis auto (2e boss of prestige).
+    bool autoPlinkoUnlockedByBoss() const;
+    /// Halve snelheid na 1e boss (geen prestige-volle tier).
+    bool autoPlinkoHalfUnlockedByBoss() const;
 
-    bool pendingAutoPlinkoBossNotif = false;
+    enum class PendingAutoPlinkoBossNotif { None, Half, Full };
+    PendingAutoPlinkoBossNotif pendingAutoPlinkoBossNotif =
+        PendingAutoPlinkoBossNotif::None;
 
     // ── New computed stats ────────────────────────────────
     OreTier maxOreTier()    const;   // highest unlocked ore tier
@@ -225,6 +230,7 @@ public:
     bool  autoPlinkoEnabled() const;
     /// Ballen per auto-interval (1 bij Lv1, +1 per extra level).
     int   autoPlinkoBallsPerTick() const;
+    float autoPlinkoIntervalMult() const;
 
     float crystalAmp()        const;
 

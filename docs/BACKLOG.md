@@ -53,7 +53,7 @@ Living document for planned work. Check off items as they ship.
 | BAL1 | Zachtere crystal-curve vroege bosses | S | P1 | done |
 | BAL1b | Ore tier zone-gates + plinko/credit soft caps | S | P1 | done |
 | GEM | Gem drops, cap-break, crafting, save v24 | L | P1 | done |
-| BAL2 | Auto-Plinko unlock later (niet 1e boss) | S | P1 | planned |
+| BAL2 | Auto-Plinko: halve na 1e boss, vol na 2e | S | P1 | done |
 | BAL3 | Upgrade-prijzen / credits na boss temperen | M | P2 | planned |
 | BAL4 | Max upgrades per terugkeer basis (soft cap) | M | P3 | planned |
 

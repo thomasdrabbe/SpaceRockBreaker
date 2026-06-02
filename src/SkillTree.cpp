@@ -528,10 +528,31 @@ void SkillTreeScreen::drawNode(sf::RenderTarget&     target,
         target.draw(lvText);
     }
 
+    if (node.id == UpgradeID::AUTO_PLINKO
+        && !state.isAutoPlinkoUnlocked()) {
+        if (state.autoPlinkoHalfUnlockedByBoss() && lv == 0) {
+            sf::Text halfLabel(*m_font);
+            halfLabel.setString("1e boss: halve auto");
+            halfLabel.setCharacterSize(fontSz(11));
+            halfLabel.setFillColor(sf::Color(180, 200, 255));
+            halfLabel.setPosition({ pos.x + padIn, pos.y + line3 });
+            target.draw(halfLabel);
+            return;
+        }
+        sf::Text zoneText(*m_font);
+        zoneText.setString(
+            "Zone " + std::to_string(AUTO_PLINKO_UNLOCK_ZONE) + " vereist");
+        zoneText.setCharacterSize(fontSz(11));
+        zoneText.setFillColor(sf::Color(255, 160, 90));
+        zoneText.setPosition({ pos.x + padIn, pos.y + line3 });
+        target.draw(zoneText);
+        return;
+    }
+
     if (node.id == UpgradeID::AUTO_PLINKO && state.autoPlinkoUnlockedByBoss()
         && lv == 0) {
         sf::Text bossLabel(*m_font);
-        bossLabel.setString("Boss Reward!");
+        bossLabel.setString("2e boss: volle auto");
         bossLabel.setCharacterSize(fontSz(12));
         bossLabel.setStyle(sf::Text::Bold);
         bossLabel.setFillColor(sf::Color(255, 170, 0));

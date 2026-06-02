@@ -600,10 +600,17 @@ void Game::update(float dt) {
                           sf::Color(200, 150, 255));
                 m_state.bossCrystalPopup = 0.0;
             }
-            if (m_state.pendingAutoPlinkoBossNotif) {
-                m_state.pendingAutoPlinkoBossNotif = false;
-                pushNotif("Auto-Plinko unlocked!",
-                          sf::Color(120, 220, 255));
+            if (m_state.pendingAutoPlinkoBossNotif
+                    != GameState::PendingAutoPlinkoBossNotif::None) {
+                const auto kind = m_state.pendingAutoPlinkoBossNotif;
+                m_state.pendingAutoPlinkoBossNotif =
+                    GameState::PendingAutoPlinkoBossNotif::None;
+                if (kind == GameState::PendingAutoPlinkoBossNotif::Half)
+                    pushNotif("Halve Auto-Plinko (1e boss)!",
+                              sf::Color(180, 200, 255));
+                else
+                    pushNotif("Volle Auto-Plinko (2e boss)!",
+                              sf::Color(120, 220, 255));
             }
 
             if (m_runEndOutroRemain > 0.f) {
@@ -796,9 +803,12 @@ void Game::update(float dt) {
         const double thresh = m_state.autoSellOreThreshold();
         const bool   oreOk  = thresh <= 0.0 || m_state.ore >= thresh;
         if (oreOk && m_state.ore >= m_state.plinkoBallOreCost())
-            m_plinko.updateAuto(dt, m_state, 1.f / m_state.fireRatePerSec(),
-                                m_state.autoPlinkoBallsPerTick(),
-                                m_state.maxPlinkoBalls());
+            m_plinko.updateAuto(
+                dt, m_state,
+                (1.f / m_state.fireRatePerSec())
+                    * m_state.autoPlinkoIntervalMult(),
+                m_state.autoPlinkoBallsPerTick(),
+                m_state.maxPlinkoBalls());
     }
 
     {
